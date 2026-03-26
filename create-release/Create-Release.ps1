@@ -80,8 +80,8 @@ try {
     $statusIcon = switch ($Status.ToLower()) {
         "deployed" { "🚀" }
         "prerelease" { "📦" }
-        "approved" { "✍️✅" }
-        "rejected" { "✍️❌" }
+        "approved" { "🧑‍💻" }
+        "rejected" { "🧑‍💻" }
         default { "📊" }
     }
 
