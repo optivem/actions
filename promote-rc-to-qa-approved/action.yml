@@ -8,7 +8,7 @@ inputs:
 
 outputs:
   version:
-    description: 'The generated signoff status version (e.g., v1.0.4-rc-qa-success)'
+    description: 'The generated signoff status version (e.g., v1.0.4-rc-qa-approved)'
     value: ${{ steps.generate-status-version.outputs.version }}
 
 runs:
@@ -20,7 +20,7 @@ runs:
       with:
         version: ${{ inputs.version }}
         environment: qa
-        status: success
+        status: approved
 
     - name: Create Signoff Release
       id: create-release
@@ -29,7 +29,7 @@ runs:
         base-version: ${{ inputs.version }}
         release-version: ${{ steps.generate-status-version.outputs.version }}
         environment: qa
-        status: success
+        status: approved
         is-prerelease: true
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}

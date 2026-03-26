@@ -79,8 +79,9 @@ try {
     # Determine status icon and description
     $statusIcon = switch ($Status.ToLower()) {
         "deployed" { "🚀" }
-        "passed" { "✅" }
-        "failed" { "❌" }
+        "prerelease" { "📦" }
+        "approved" { "✍️✅" }
+        "rejected" { "✍️❌" }
         default { "📊" }
     }
 
