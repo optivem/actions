@@ -1,0 +1,60 @@
+name: 'Simulate Deployment'
+description: 'Simulate deployment using Docker Compose and wait for system to be ready'
+inputs:
+  environment:
+    description: 'Target deployment environment (e.g., qa, staging, production)'
+    required: true
+  version:
+    description: 'Release version to deploy (e.g., v1.0.4-rc)'
+    required: true
+  image-urls:
+    description: 'Docker image URLs to deploy (JSON array format)'
+    required: true
+  url:
+    description: 'Health check URL to wait for (e.g., http://localhost:8080/)'
+    required: true
+  working-directory:
+    description: 'Working directory containing the Docker Compose file'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy System
+      run: |
+        echo "🚀 Deploying system version ${{ inputs.version }} to ${{ inputs.environment }} environment..."
+        echo ""
+
+        # List Docker images being deployed
+        if [[ -n "${{ inputs.image-urls }}" ]]; then
+          echo "📦 Deploying the following Docker images:"
+
+          # Parse JSON array and iterate through each URL
+          echo '${{ inputs.image-urls }}' | jq -r '.[]' | while IFS= read -r image_url; do
+            if [[ -n "$image_url" ]]; then
+              echo "   🐳 Deploying: $image_url"
+            fi
+          done
+          echo ""
+        fi
+
+        echo "📝 Note: We are simulating deployment using Docker Compose Up for testing purposes."
+        echo "🏭 In real applications, this is where you would deploy to:"
+        echo "   - AWS (ECS, EKS, Lambda, EC2)"
+        echo "   - Azure (Container Instances, AKS, App Service)"
+        echo "   - GCP (Cloud Run, GKE, Compute Engine)"
+        echo "   - On-premise (Kubernetes, Docker Swarm, VMs)"
+        echo "   - Other cloud providers (DigitalOcean, Linode, etc.)"
+        echo ""
+        echo "🐳 Starting Docker Compose for simulated deployment..."
+        docker compose up -d
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+
+    - name: Wait for Application to be Ready
+      uses: optivem/actions/wait-for-docker-compose@v1
+      with:
+        url: ${{ inputs.url }}
+        max-attempts: '30'
+        wait-seconds: '10'
+        working-directory: ${{ inputs.working-directory }}
