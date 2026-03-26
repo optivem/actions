@@ -10,7 +10,7 @@ inputs:
   image-urls:
     description: 'Docker image URLs to deploy (JSON array format)'
     required: true
-  url:
+  system-url:
     description: 'Health check URL to wait for (e.g., http://localhost:8080/)'
     required: true
   working-directory:
@@ -54,7 +54,7 @@ runs:
     - name: Wait for Application to be Ready
       uses: optivem/actions/wait-for-docker-compose@v1
       with:
-        url: ${{ inputs.url }}
+        url: ${{ inputs.system-url }}
         max-attempts: '30'
         wait-seconds: '10'
         working-directory: ${{ inputs.working-directory }}
