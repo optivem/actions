@@ -76,7 +76,7 @@ try {
         }
     }
 
-    # Determine status icon and description
+    # Determine status icon
     $statusIcon = switch ($Status.ToLower()) {
         "deployed" { "🚀" }
         "prerelease" { "📦" }
@@ -85,11 +85,33 @@ try {
         default { "📊" }
     }
 
+    # Map environment to short uppercase label
+    $envLabel = switch ($Environment.ToLower()) {
+        "acceptance" { "ACC" }
+        "qa" { "QA" }
+        "prod" { "PROD" }
+        default { $Environment.ToUpper() }
+    }
+
+    # Determine display version (use original version for signoff, status version otherwise)
+    $displayVersion = switch ($Status.ToLower()) {
+        "approved" { $OriginalVersion }
+        "rejected" { $OriginalVersion }
+        default { $StatusVersion }
+    }
+
+    # Build title: status suffix only for signoff actions
+    $statusSuffix = switch ($Status.ToLower()) {
+        "approved" { " APPROVED" }
+        "rejected" { " REJECTED" }
+        default { "" }
+    }
+
     # Create release title and body
-    $releaseTitle = "$statusIcon $Environment $Status - $StatusVersion"
+    $releaseTitle = "$statusIcon $displayVersion $envLabel$statusSuffix"
     
     $releaseBody = @"
-# $statusIcon $Environment $Status
+# $statusIcon $displayVersion $envLabel$statusSuffix
 
 **Original Version:** $OriginalVersion  
 **Status Version:** $StatusVersion  
