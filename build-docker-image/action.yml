@@ -28,6 +28,14 @@ inputs:
     description: 'Tag to apply for the latest image (single value, e.g., "latest")'
     required: false
     default: 'latest'
+  component-version:
+    description: 'Component version (e.g., "1.0.0"). If provided along with build-number, image is tagged with version-dev.N format.'
+    required: false
+    default: ''
+  build-number:
+    description: 'Build number for dev tagging (e.g., github.run_number). Used with component-version to create tags like v1.0.0-dev.3.'
+    required: false
+    default: ''
   dockerfile:
     description: 'Path to Dockerfile relative to working directory'
     required: false
@@ -39,6 +47,9 @@ outputs:
   image-latest-url:
     description: 'Full image reference tagged with latest tag'
     value: '${{ steps.tag.outputs.image-latest-url }}'
+  image-version-tag:
+    description: 'Full image reference tagged with component version (empty if component-version not provided)'
+    value: '${{ steps.tag.outputs.image-version-tag }}'
 runs:
   using: 'composite'
   steps:
@@ -78,6 +89,18 @@ runs:
         docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$IMAGE_LATEST_URL"
         echo "image-latest-url=$IMAGE_LATEST_URL" >> $GITHUB_OUTPUT
         echo "🏷️ Tagged with: $IMAGE_LATEST_URL"
+
+        # Tag with component version (if provided)
+        if [ -n "${{ inputs.component-version }}" ]; then
+          VERSION_SUFFIX=""
+          if [ -n "${{ inputs.build-number }}" ]; then
+            VERSION_SUFFIX="-dev.${{ inputs.build-number }}"
+          fi
+          IMAGE_VERSION_TAG="${BASE_IMAGE}:v${{ inputs.component-version }}${VERSION_SUFFIX}"
+          docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$IMAGE_VERSION_TAG"
+          echo "image-version-tag=$IMAGE_VERSION_TAG" >> $GITHUB_OUTPUT
+          echo "🏷️ Tagged with version: $IMAGE_VERSION_TAG"
+        fi
       shell: bash
 
     - name: Output Summary
@@ -86,5 +109,8 @@ runs:
         echo "========================="
         echo "🏷️ SHA Tag: ${{ steps.tag.outputs.image-sha-tag }}"
         echo "🏷️ Latest URL: ${{ steps.tag.outputs.image-latest-url }}"
+        if [ -n "${{ steps.tag.outputs.image-version-tag }}" ]; then
+          echo "🏷️ Version Tag: ${{ steps.tag.outputs.image-version-tag }}"
+        fi
         echo "========================="
       shell: bash

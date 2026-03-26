@@ -15,6 +15,10 @@ inputs:
     description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io)'
     required: false
     default: 'ghcr.io'
+  image-version-tag:
+    description: 'Full image reference tagged with component version (output from build-docker-image). Optional.'
+    required: false
+    default: ''
   registry-username:
     description: 'Username for registry authentication'
     required: false
@@ -31,6 +35,9 @@ runs:
         echo "📤 Starting Docker push action"
         echo "🏷️ SHA Tag: ${{ inputs.image-sha-tag }}"
         echo "🏷️ Latest URL: ${{ inputs.image-latest-url }}"
+        if [ -n "${{ inputs.image-version-tag }}" ]; then
+          echo "🏷️ Version Tag: ${{ inputs.image-version-tag }}"
+        fi
         echo "🌐 Registry: ${{ inputs.registry }}"
         echo "👤 Username: ${{ inputs.registry-username }}"
       shell: bash
@@ -58,6 +65,12 @@ runs:
         docker push "${{ inputs.image-latest-url }}"
         echo "✅ Pushed tagged image: ${{ inputs.image-latest-url }}"
 
+        # Push version tagged image (if provided)
+        if [ -n "${{ inputs.image-version-tag }}" ]; then
+          docker push "${{ inputs.image-version-tag }}"
+          echo "✅ Pushed version tagged image: ${{ inputs.image-version-tag }}"
+        fi
+
         # Extract base image (everything before the last colon)
         BASE_IMAGE=$(echo "${{ inputs.image-sha-tag }}" | sed 's/:[^:]*$//')
         IMAGE_DIGEST_URL="${BASE_IMAGE}@${DIGEST}"
@@ -72,6 +85,9 @@ runs:
         echo "========================="
         echo "🔗 SHA Tag: ${{ inputs.image-sha-tag }}"
         echo "🔗 Latest URL: ${{ inputs.image-latest-url }}"
+        if [ -n "${{ inputs.image-version-tag }}" ]; then
+          echo "🔗 Version Tag: ${{ inputs.image-version-tag }}"
+        fi
         echo "🔗 Digest URL: ${{ steps.push.outputs.image-digest-url }}"
         echo "========================="
       shell: bash
