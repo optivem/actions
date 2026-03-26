@@ -31,7 +31,7 @@ runs:
           exit 1
         fi
     - name: Generate Commit Stage Summary
-      uses: optivem/summarize-stage-action@v1
+      uses: optivem/actions/summarize-stage@v1
       with:
         stage-result: ${{ inputs.stage-result }}
         stage-name: '${{ inputs.stage-name }}'

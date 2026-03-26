@@ -41,7 +41,7 @@ runs:
       shell: pwsh
 
     - name: Generate System Stage Summary
-      uses: optivem/summarize-stage-action@v1
+      uses: optivem/actions/summarize-stage@v1
       with:
         stage-name: ${{ inputs.stage-name }}
         stage-result: ${{ inputs.stage-result }}
