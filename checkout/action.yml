@@ -1,0 +1,16 @@
+name: Checkout Repository
+description: Checks out the repository with configurable fetch depth
+
+inputs:
+  deep:
+    description: Fetch full git history when set to true
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: ${{ inputs.deep == 'true' && 0 || 1 }}
