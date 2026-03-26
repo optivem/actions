@@ -1,22 +1,16 @@
 name: 'Generate Prerelease Version'
-description: 'Generates prerelease version by appending -<label>.N suffix to base version'
+description: 'Generate semantic version (patch increment) with prerelease suffix'
 
 inputs:
-  base-version:
-    description: 'Base semantic version (e.g., 1.0.0)'
-    required: true
-  prerelease-label:
-    description: 'Prerelease label (e.g., rc, beta, alpha)'
+  suffix:
+    description: 'Prerelease suffix (e.g., rc, alpha, beta)'
     required: false
     default: 'rc'
-  prerelease-number:
-    description: 'Prerelease number for prerelease suffix'
-    required: false
 
 outputs:
-  prerelease-version:
-    description: 'Generated prerelease version (e.g., 1.0.0-rc.12)'
-    value: ${{ steps.generate.outputs.prerelease-version }}
+  version:
+    description: 'The prerelease version (e.g., v1.2.3-rc)'
+    value: ${{ steps.generate.outputs.version }}
 
 runs:
   using: 'composite'
@@ -25,4 +19,5 @@ runs:
       id: generate
       shell: pwsh
       run: |
-        ${{ github.action_path }}/generate-prerelease-version.ps1 -BaseVersion "${{ inputs.base-version }}" -PrereleaseLabel "${{ inputs.prerelease-label }}" -PrereleaseNumber "${{ inputs.prerelease-number }}"
+        & "${{ github.action_path }}/generate-prerelease-version.ps1" `
+          -PrereleaseSuffix '${{ inputs.suffix }}'
