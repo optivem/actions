@@ -14,7 +14,7 @@ try {
     $releaseVersion = $PrereleaseVersion
     
     # Remove -rc, -alpha, -beta, -preview suffixes (case insensitive)
-    $releaseVersion = $releaseVersion -replace '-rc(\d+)?$', '' -replace '-alpha(\d+)?$', '' -replace '-beta(\d+)?$', '' -replace '-preview(\d+)?$', ''
+    $releaseVersion = $releaseVersion -replace '-rc\.\d+$', '' -replace '-alpha\.\d+$', '' -replace '-beta\.\d+$', '' -replace '-preview\.\d+$', ''
     
     # Validate that we have a valid version
     if ([string]::IsNullOrWhiteSpace($releaseVersion)) {

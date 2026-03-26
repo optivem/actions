@@ -2,13 +2,16 @@ name: 'Promote to RC'
 description: 'Generates a prerelease version, tags Docker images, and creates a prerelease GitHub release'
 
 inputs:
+  target-version:
+    description: 'Target semantic version from VERSION file (e.g., 1.0.0)'
+    required: true
   image-urls:
     description: 'JSON array of Docker image digest URLs to tag'
     required: true
 
 outputs:
   version:
-    description: 'The generated prerelease version (e.g., v1.2.3-rc)'
+    description: 'The generated prerelease version (e.g., v1.0.0-rc.1)'
     value: ${{ steps.generate-version.outputs.version }}
   image-urls:
     description: 'JSON array of Docker image URLs with the prerelease tag applied'
@@ -20,6 +23,8 @@ runs:
     - name: Generate Prerelease Version
       id: generate-version
       uses: optivem/actions/generate-prerelease-version@v1
+      with:
+        target-version: ${{ inputs.target-version }}
 
     - name: Tag Docker Images for Prerelease
       id: tag-images

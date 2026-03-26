@@ -1,7 +1,10 @@
 name: 'Generate Prerelease Version'
-description: 'Generate semantic version (patch increment) with prerelease suffix'
+description: 'Generate prerelease version from target version with incrementing RC number'
 
 inputs:
+  target-version:
+    description: 'Target semantic version from VERSION file (e.g., 1.0.0)'
+    required: true
   suffix:
     description: 'Prerelease suffix (e.g., rc, alpha, beta)'
     required: false
@@ -9,7 +12,7 @@ inputs:
 
 outputs:
   version:
-    description: 'The prerelease version (e.g., v1.2.3-rc)'
+    description: 'The prerelease version (e.g., v1.0.0-rc.1)'
     value: ${{ steps.generate.outputs.version }}
 
 runs:
@@ -20,4 +23,5 @@ runs:
       shell: pwsh
       run: |
         & "${{ github.action_path }}/generate-prerelease-version.ps1" `
+          -TargetVersion '${{ inputs.target-version }}' `
           -PrereleaseSuffix '${{ inputs.suffix }}'

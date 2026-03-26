@@ -2,71 +2,65 @@
 
 <#
 .SYNOPSIS
-    Generate semantic version (patch increment) with prerelease suffix
+    Generate prerelease version from target version with incrementing RC number
+
+.PARAMETER TargetVersion
+    Target semantic version from VERSION file (e.g., 1.0.0)
 
 .PARAMETER PrereleaseSuffix
     Prerelease suffix (e.g., rc, alpha, beta)
 
 .EXAMPLE
-    .\generate-prerelease-version.ps1 -PrereleaseSuffix "rc"
-    Output: v0.0.1-rc
+    .\generate-prerelease-version.ps1 -TargetVersion "1.0.0" -PrereleaseSuffix "rc"
+    Output: v1.0.0-rc.1
 #>
 
 param(
+    [Parameter(Mandatory = $true)]
+    [string]$TargetVersion,
     [string]$PrereleaseSuffix = "rc",
     [string]$GitHubOutput = $env:GITHUB_OUTPUT
 )
 
-Write-Host "🏷️ Generating semantic prerelease version..."
+Write-Host "🏷️ Generating prerelease version..."
 Write-Host ""
 Write-Host "📋 Input Parameters:"
+Write-Host "   Target Version: $TargetVersion"
 Write-Host "   Prerelease Suffix: $PrereleaseSuffix"
 Write-Host ""
 
-# Get the latest semantic version tag (including prerelease tags)
-Write-Host "📋 Finding latest semantic version tag..."
-$latestTag = & git tag -l "v*.*.*" --sort=-version:refname | Select-Object -First 1
-
-if ([string]::IsNullOrEmpty($latestTag)) {
-    Write-Host "🆕 No existing semantic version tags found, starting with v0.0.0"
-    $latestTag = "v0.0.0"
-}
-
-Write-Host "📌 Latest tag: $latestTag"
-
-# Parse current version - handle both stable and prerelease tags
-$versionPart = $latestTag -replace "v", ""
-
-if ($versionPart -match "^(\d+)\.(\d+)\.(\d+)(-.*)?$") {
-    $currentMajor = [int]$matches[1]
-    $currentMinor = [int]$matches[2]
-    $currentPatch = [int]$matches[3]
-    $prereleaseInfo = $matches[4]
-
-    if ($prereleaseInfo) {
-        Write-Host "📊 Current version: $currentMajor.$currentMinor.$currentPatch (prerelease: $prereleaseInfo)"
-    } else {
-        Write-Host "📊 Current version: $currentMajor.$currentMinor.$currentPatch (stable)"
-    }
-} else {
-    Write-Error "❌ Invalid semantic version format: $latestTag. Expected format: v1.2.3 or v1.2.3-suffix"
+# Validate target version format
+if ($TargetVersion -notmatch '^\d+\.\d+\.\d+$') {
+    Write-Error "❌ Invalid version format: $TargetVersion. Expected: X.Y.Z (e.g., 1.0.0)"
     exit 1
 }
 
-# Always increment patch version
-$newMajor = $currentMajor
-$newMinor = $currentMinor
-$newPatch = $currentPatch + 1
+# Find existing RC tags for this target version
+$pattern = "v$TargetVersion-$PrereleaseSuffix.*"
+Write-Host "📋 Finding existing tags matching: $pattern"
+$existingTags = & git tag -l $pattern
 
-Write-Host "🐛 Patch version bump: $currentMajor.$currentMinor.$currentPatch -> $newMajor.$newMinor.$newPatch"
+$maxRc = 0
 
-# Generate version strings
-$nextVersion = "v$newMajor.$newMinor.$newPatch"
-$prereleaseVersion = "$nextVersion-$PrereleaseSuffix"
+if ($existingTags) {
+    foreach ($tag in $existingTags) {
+        if ($tag -match "-$([regex]::Escape($PrereleaseSuffix))\.(\d+)") {
+            $rcNum = [int]$matches[1]
+            if ($rcNum -gt $maxRc) {
+                $maxRc = $rcNum
+            }
+        }
+    }
+    Write-Host "📌 Found existing tags, highest RC number: $maxRc"
+} else {
+    Write-Host "🆕 No existing RC tags found for v$TargetVersion"
+}
 
-Write-Host "📦 Generated versions:"
-Write-Host "   Next release: $nextVersion"
-Write-Host "   Prerelease: $prereleaseVersion"
+$nextRc = $maxRc + 1
+$prereleaseVersion = "v$TargetVersion-$PrereleaseSuffix.$nextRc"
+
+Write-Host ""
+Write-Host "📦 Generated prerelease version: $prereleaseVersion"
 
 # Output the version
 if ($GitHubOutput) {
