@@ -1,0 +1,27 @@
+name: Setup Java Gradle
+description: Sets up Java with Gradle for building projects
+
+inputs:
+  java-version:
+    description: Java version to install
+    required: true
+  working-directory:
+    description: Working directory containing the Gradle wrapper
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: temurin
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Make Gradle Wrapper executable
+      run: chmod +x ./gradlew
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
