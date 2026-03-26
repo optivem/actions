@@ -1,0 +1,35 @@
+name: 'Promote RC to QA Approved'
+description: 'Records a successful QA signoff by generating a status version and creating an approval release'
+
+inputs:
+  version:
+    description: 'The RC version that was tested (e.g., v1.0.4-rc)'
+    required: true
+
+outputs:
+  version:
+    description: 'The generated signoff status version (e.g., v1.0.4-rc-qa-success)'
+    value: ${{ steps.generate-status-version.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate Status Version
+      id: generate-status-version
+      uses: optivem/actions/generate-status-version@v1
+      with:
+        version: ${{ inputs.version }}
+        environment: qa
+        status: success
+
+    - name: Create Signoff Release
+      id: create-release
+      uses: optivem/actions/create-release@v1
+      with:
+        base-version: ${{ inputs.version }}
+        release-version: ${{ steps.generate-status-version.outputs.version }}
+        environment: qa
+        status: success
+        is-prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}

@@ -1,0 +1,46 @@
+name: 'Promote RC to Production Deployed'
+description: 'Promotes an RC to production by generating a release version, tagging Docker images, and creating a production release'
+
+inputs:
+  version:
+    description: 'The RC version that was deployed (e.g., v1.0.4-rc)'
+    required: true
+  artifact-urls:
+    description: 'JSON array of Docker image URLs that were deployed'
+    required: true
+
+outputs:
+  version:
+    description: 'The generated production release version (e.g., v1.0.4)'
+    value: ${{ steps.generate-release-version.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate Release Version
+      id: generate-release-version
+      uses: optivem/actions/generate-release-version@v1
+      with:
+        prerelease-version: ${{ inputs.version }}
+
+    - name: Tag Docker Images
+      id: tag-images
+      uses: optivem/actions/tag-docker-images@v1
+      with:
+        image-urls: ${{ inputs.artifact-urls }}
+        tag: ${{ steps.generate-release-version.outputs.version }}
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+    - name: Create Production Release
+      id: create-release
+      uses: optivem/actions/create-release@v1
+      with:
+        base-version: ${{ inputs.version }}
+        release-version: ${{ steps.generate-release-version.outputs.version }}
+        environment: prod
+        status: deployed
+        artifact-urls: ${{ steps.tag-images.outputs.image-urls }}
+        is-prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
