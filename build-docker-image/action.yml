@@ -1,0 +1,90 @@
+name: 'Build Docker Image'
+description: 'Builds and tags a Docker image locally without pushing to a registry'
+author: 'Optivem'
+branding:
+  icon: 'package'
+  color: 'blue'
+inputs:
+  working-directory:
+    description: 'Working directory where Dockerfile is located'
+    required: false
+    default: '.'
+  image-name:
+    description: 'Name of the Docker image (without registry prefix)'
+    required: true
+  registry:
+    description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io)'
+    required: false
+    default: 'ghcr.io'
+  image-namespace:
+    description: 'Namespace/organization for the image (e.g., github.repository for GHCR)'
+    required: false
+    default: '${{ github.repository }}'
+  commit-sha:
+    description: 'Git commit SHA for image tagging'
+    required: false
+    default: '${{ github.sha }}'
+  image-latest-tag:
+    description: 'Tag to apply for the latest image (single value, e.g., "latest")'
+    required: false
+    default: 'latest'
+  dockerfile:
+    description: 'Path to Dockerfile relative to working directory'
+    required: false
+    default: 'Dockerfile'
+outputs:
+  image-sha-tag:
+    description: 'Full image reference tagged with commit SHA'
+    value: '${{ steps.tag.outputs.image-sha-tag }}'
+  image-latest-url:
+    description: 'Full image reference tagged with latest tag'
+    value: '${{ steps.tag.outputs.image-latest-url }}'
+runs:
+  using: 'composite'
+  steps:
+    - name: Echo Information
+      run: |
+        echo "🐳 Starting Docker build action"
+        echo "📦 Image name: ${{ inputs.image-name }}"
+        echo "📁 Working directory: ${{ inputs.working-directory }}"
+        echo "🐳 Dockerfile: ${{ inputs.dockerfile }}"
+        echo "🔖 Git SHA: ${{ inputs.commit-sha }}"
+        echo "🏷️ Latest tag: ${{ inputs.image-latest-tag }}"
+        echo "🌐 Registry: ${{ inputs.registry }}"
+        echo "📍 Namespace: ${{ inputs.image-namespace }}"
+      shell: bash
+
+    - name: Build the Docker image
+      run: |
+        echo "🔨 Building Docker image..."
+        docker build . --file ${{ inputs.dockerfile }} --tag ${{ inputs.image-name }}:${{ inputs.commit-sha }}
+        echo "✅ Docker image built successfully"
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+
+    - name: Tag Docker image
+      id: tag
+      run: |
+        BASE_IMAGE="${{ inputs.registry }}/${{ inputs.image-namespace }}/${{ inputs.image-name }}"
+
+        # Tag with SHA
+        IMAGE_SHA_TAG="${BASE_IMAGE}:${{ inputs.commit-sha }}"
+        docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$IMAGE_SHA_TAG"
+        echo "image-sha-tag=$IMAGE_SHA_TAG" >> $GITHUB_OUTPUT
+        echo "🏷️ Tagged with SHA: $IMAGE_SHA_TAG"
+
+        # Tag with latest tag
+        IMAGE_LATEST_URL="${BASE_IMAGE}:${{ inputs.image-latest-tag }}"
+        docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$IMAGE_LATEST_URL"
+        echo "image-latest-url=$IMAGE_LATEST_URL" >> $GITHUB_OUTPUT
+        echo "🏷️ Tagged with: $IMAGE_LATEST_URL"
+      shell: bash
+
+    - name: Output Summary
+      run: |
+        echo "📋 Build Outputs Summary:"
+        echo "========================="
+        echo "🏷️ SHA Tag: ${{ steps.tag.outputs.image-sha-tag }}"
+        echo "🏷️ Latest URL: ${{ steps.tag.outputs.image-latest-url }}"
+        echo "========================="
+      shell: bash
