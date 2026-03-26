@@ -10,9 +10,18 @@ inputs:
   image-urls:
     description: 'Docker image URLs to deploy (JSON array format)'
     required: true
+  compose-file:
+    description: 'Docker Compose file to use (e.g., docker-compose.yml)'
+    required: false
+    default: ''
   system-url:
-    description: 'Health check URL to wait for (e.g., http://localhost:8080/)'
-    required: true
+    description: 'Health check URL to wait for (e.g., http://localhost:8080/). Use this for a single system.'
+    required: false
+    default: ''
+  systems:
+    description: 'JSON array of systems to health check, each with name and url (e.g., [{"name": "API", "url": "http://localhost:8080/health"}]). Use this for multiple systems.'
+    required: false
+    default: ''
   working-directory:
     description: 'Working directory containing the Docker Compose file'
     required: true
@@ -20,7 +29,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Deploy System
+    - name: Simulate Deployment with Docker Compose
       run: |
         echo "🚀 Deploying system version ${{ inputs.version }} to ${{ inputs.environment }} environment..."
         echo ""
@@ -47,14 +56,81 @@ runs:
         echo "   - Other cloud providers (DigitalOcean, Linode, etc.)"
         echo ""
         echo "🐳 Starting Docker Compose for simulated deployment..."
-        docker compose up -d
+
+        COMPOSE_FILE="${{ inputs.compose-file }}"
+        if [[ -n "$COMPOSE_FILE" ]]; then
+          echo "📄 Using compose file: $COMPOSE_FILE"
+          docker compose -f "$COMPOSE_FILE" up -d
+        else
+          docker compose up -d
+        fi
       shell: bash
       working-directory: ${{ inputs.working-directory }}
 
-    - name: Wait for Application to be Ready
-      uses: optivem/actions/wait-for-docker-compose@v1
-      with:
-        url: ${{ inputs.system-url }}
-        max-attempts: '30'
-        wait-seconds: '10'
-        working-directory: ${{ inputs.working-directory }}
+    - name: Wait for Systems to be Ready
+      run: |
+        SYSTEM_URL="${{ inputs.system-url }}"
+        SYSTEM_URLS='${{ inputs.systems }}'
+
+        # Build a unified list of systems to check
+        SYSTEMS="[]"
+
+        if [[ -n "$SYSTEM_URL" ]]; then
+          SYSTEMS=$(echo "$SYSTEMS" | jq --arg url "$SYSTEM_URL" '. + [{"name": "Application", "url": $url}]')
+        fi
+
+        if [[ -n "$SYSTEM_URLS" ]]; then
+          SYSTEMS=$(echo "$SYSTEMS" | jq --argjson urls "$SYSTEM_URLS" '. + $urls')
+        fi
+
+        COUNT=$(echo "$SYSTEMS" | jq 'length')
+
+        if [[ "$COUNT" -eq 0 ]]; then
+          echo "⚠️ No system URLs provided, skipping health checks"
+          exit 0
+        fi
+
+        echo "⏳ Waiting for $COUNT system(s) to be ready..."
+        echo ""
+
+        FAILED=0
+
+        for i in $(seq 0 $((COUNT - 1))); do
+          NAME=$(echo "$SYSTEMS" | jq -r ".[$i].name")
+          URL=$(echo "$SYSTEMS" | jq -r ".[$i].url")
+
+          echo "⏳ Waiting for $NAME at $URL..."
+
+          max_attempts=30
+          wait_seconds=10
+          attempt=1
+
+          while [ $attempt -le $max_attempts ]; do
+            if curl -f "$URL" > /dev/null 2>&1; then
+              echo "✅ $NAME is ready!"
+              break
+            fi
+            echo "🔄 Attempt $attempt/$max_attempts: $NAME not ready yet, waiting $wait_seconds seconds..."
+            sleep $wait_seconds
+            attempt=$((attempt + 1))
+          done
+
+          if [ $attempt -gt $max_attempts ]; then
+            echo "❌ $NAME failed to become ready after $max_attempts attempts"
+            FAILED=1
+          fi
+
+          echo ""
+        done
+
+        if [ $FAILED -eq 1 ]; then
+          echo "🔍 Checking Docker Compose container logs:"
+          docker compose logs --timestamps
+          echo "🐳 Docker Compose container status:"
+          docker compose ps
+          exit 1
+        fi
+
+        echo "✅ All systems are ready!"
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
