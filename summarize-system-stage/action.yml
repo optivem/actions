@@ -1,0 +1,53 @@
+name: 'Summarize System Stage'
+description: 'Creates a comprehensive summary of system stage execution results for CI/CD pipelines'
+author: 'Optivem'
+
+branding:
+  icon: 'clipboard'
+  color: 'blue'
+
+inputs:
+  stage-name:
+    description: 'The name of the stage (e.g., Acceptance, QA, Production)'
+    required: true
+  stage-result:
+    description: 'Overall result of the stage (success/failure/skipped)'
+    required: true
+  environment:
+    description: 'The environment name for this stage'
+    required: true
+  success-version:
+    description: 'The version created on success (e.g., prerelease version)'
+    required: false
+  success-artifact-ids:
+    description: 'The artifact IDs created on success as JSON array. Single artifacts must also be in array format: ["artifact"]. Multiple artifacts: ["artifact1", "artifact2"]'
+    required: false
+
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate Inputs
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "scripts/Validate-Inputs.ps1"
+        & $scriptPath -StageResult "${{ inputs.stage-result }}" -SuccessVersion "${{ inputs.success-version }}"
+      shell: pwsh
+
+    - name: Process Artifact IDs
+      id: process-artifacts
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "scripts/Process-Artifacts.ps1"
+        & $scriptPath -ArtifactsInput '${{ inputs.success-artifact-ids }}'
+      shell: pwsh
+
+    - name: Generate System Stage Summary
+      uses: optivem/summarize-stage-action@v1
+      with:
+        stage-name: ${{ inputs.stage-name }}
+        stage-result: ${{ inputs.stage-result }}
+        stage-content: |
+          🌍 **Environment:** ${{ inputs.environment }}
+        stage-success-content: |
+          🎯 **Release Candidate:** ${{ inputs.success-version }}
+          
+          ${{ steps.process-artifacts.outputs.artifacts-formatted && format('🔗 **Artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-artifacts.outputs.artifacts-formatted) || '' }}

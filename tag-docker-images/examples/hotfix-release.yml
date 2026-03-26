@@ -1,0 +1,52 @@
+# Example: Hotfix Release
+# This workflow quickly tags and releases a hotfix
+
+name: Hotfix Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      hotfix_version:
+        description: 'Hotfix version (e.g., v1.2.3-hotfix.1)'
+        required: true
+
+jobs:
+  hotfix-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ github.event.inputs.hotfix_version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-hotfix\.[0-9]+$ ]]; then
+            echo "❌ Invalid hotfix version format. Expected: v1.2.3-hotfix.1"
+            exit 1
+          fi
+
+      - name: Tag Hotfix Images
+        uses: optivem/tag-docker-images-action@v1
+        with:
+          image-urls: |
+            [
+              "ghcr.io/myorg/app:production",
+              "ghcr.io/myorg/api:production"
+            ]
+          tag: ${{ github.event.inputs.hotfix_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.hotfix_version }}
+          release_name: 'Hotfix ${{ github.event.inputs.hotfix_version }}'
+          body: |
+            🚨 **Hotfix Release**
+            
+            This is a hotfix release containing critical bug fixes.
+            
+            **Docker Images:**
+            - `ghcr.io/myorg/app:${{ github.event.inputs.hotfix_version }}`
+            - `ghcr.io/myorg/api:${{ github.event.inputs.hotfix_version }}`
+          draft: false
+          prerelease: true

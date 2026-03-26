@@ -1,0 +1,66 @@
+# Example: Multi-Environment Deployment Matrix
+
+name: Multi-Environment Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        environment: [qa, staging, production]
+        include:
+          - environment: qa
+            approval_required: false
+          - environment: staging
+            approval_required: false
+          - environment: production
+            approval_required: true
+            
+    environment: 
+      name: ${{ matrix.environment }}
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Deploy to ${{ matrix.environment }}
+        run: |
+          echo "Deploying to ${{ matrix.environment }}..."
+          # Simulate deployment process
+          sleep 5
+          
+      - name: Check deployment status
+        id: deploy_status
+        run: |
+          # Simulate deployment verification
+          if [[ "${{ matrix.environment }}" == "production" ]]; then
+            # More strict checks for production
+            echo "status=deployed" >> $GITHUB_OUTPUT
+          else
+            echo "status=deployed" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Generate version with status
+        id: version
+        uses: optivem/generate-status-version-action@v1
+        with:
+          version: ${{ github.event.inputs.version }}
+          environment: ${{ matrix.environment }}
+          status: ${{ steps.deploy_status.outputs.status }}
+          
+      - name: Record deployment
+        run: |
+          echo "Deployment completed:"
+          echo "- Version: ${{ steps.version.outputs.version }}"
+          echo "- Environment: ${{ matrix.environment }}"
+          echo "- Status: ${{ steps.deploy_status.outputs.status }}"
+          echo "- Timestamp: $(date)"

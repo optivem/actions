@@ -1,0 +1,40 @@
+name: 'Summarize Commit Stage'
+description: 'Generate a comprehensive summary of the commit stage results including build status and Docker image information'
+author: 'Optivem'
+
+branding:
+  icon: 'file-text'
+  color: 'blue'
+
+inputs:
+  stage-name:
+    description: 'Name of the stage being summarized'
+    required: false
+    default: 'Commit Stage'
+  stage-result:
+    description: 'Result of the stage job (success, failure, cancelled, etc.)'
+    required: true
+  success-artifact-url:
+    description: 'URL of the published artifact (e.g., Docker image, installer, package)'
+    required: false
+
+
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [[ "${{ inputs.stage-result }}" == "success" && -z "${{ inputs.success-artifact-url }}" ]]; then
+          echo "::error::When stage-result is 'success', success-artifact-url must be provided"
+          exit 1
+        fi
+    - name: Generate Commit Stage Summary
+      uses: optivem/summarize-stage-action@v1
+      with:
+        stage-result: ${{ inputs.stage-result }}
+        stage-name: '${{ inputs.stage-name }}'
+        stage-success-content: |
+          **Artifact URL:**
+          `${{ inputs.success-artifact-url }}`

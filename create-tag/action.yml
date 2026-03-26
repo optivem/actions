@@ -1,0 +1,19 @@
+name: 'Create Tag'
+description: 'Creates and pushes a Git tag'
+
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  tag-name:
+    description: 'Git tag name to create (e.g., v1.0.3)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create Git tag
+      shell: pwsh
+      run: |
+        ${{ github.action_path }}/create-tag.ps1 -TagName "${{ inputs.tag-name }}"

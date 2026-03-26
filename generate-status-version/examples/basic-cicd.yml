@@ -1,0 +1,64 @@
+# Example: Basic CI/CD Pipeline with Version Generation
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Build application
+        run: |
+          echo "Building application..."
+          # Add your build steps here
+          
+      - name: Run tests
+        id: tests
+        run: |
+          echo "Running tests..."
+          # Add your test steps here
+          # For demo purposes, we'll assume tests pass
+          echo "status=passed" >> $GITHUB_OUTPUT
+          
+      - name: Generate deployment version
+        id: version
+        uses: optivem/generate-status-version-action@v1
+        with:
+          version: ${{ github.sha }}
+          environment: ${{ steps.env.outputs.environment }}
+          status: ${{ steps.tests.outputs.status }}
+          
+      - name: Deploy application
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          echo "Deploying version: ${{ steps.version.outputs.version }}"
+          echo "Environment: ${{ steps.env.outputs.environment }}"
+          # Add your deployment steps here
+          
+      - name: Create deployment tag
+        if: github.ref == 'refs/heads/main' && steps.tests.outputs.status == 'passed'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag ${{ steps.version.outputs.version }}
+          git push origin ${{ steps.version.outputs.version }}

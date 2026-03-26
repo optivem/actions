@@ -1,0 +1,25 @@
+name: 'Find Latest Docker Images'
+description: 'Finds Docker images and resolves their digests from any container registry'
+author: 'Optivem'
+branding:
+  icon: 'search'
+  color: 'blue'
+inputs:
+  image-urls:
+    description: 'Image URLs to resolve digests for. Supports both newline-separated list or JSON array format'
+    required: true
+outputs:
+  image-digest-urls:
+    description: 'JSON array of digest URLs in the same order as input'
+    value: ${{ steps.get-digests.outputs.digests }}
+  latest-image-timestamp:
+    description: 'Timestamp of the most recently created image among all processed images'
+    value: ${{ steps.get-digests.outputs.latest-timestamp }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve image digests
+      id: get-digests
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/action.ps1" -ImageUrls '${{ inputs.image-urls }}'

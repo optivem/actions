@@ -1,0 +1,31 @@
+name: 'Generate Status Version'
+description: 'Generates a version string by appending environment and status to base version'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  version:
+    description: 'Version to build from (e.g., v1.0.4-rc)'
+    required: true
+  environment:
+    description: 'Environment name (e.g., qa, staging, prod)'
+    required: true
+  status:
+    description: 'Status (e.g., deployed, passed, failed)'
+    required: true
+
+outputs:
+  version:
+    description: 'Built version string'
+    value: ${{ steps.build.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate Status Version
+      id: build
+      run: .\Generate-StatusVersion.ps1 -BaseVersion "${{ inputs.version }}" -Environment "${{ inputs.environment }}" -Status "${{ inputs.status }}"
+      working-directory: ${{ github.action_path }}
+      shell: pwsh

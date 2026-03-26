@@ -1,0 +1,67 @@
+# Example: Release Workflow with Version Tracking
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Extract version from tag
+        id: tag
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "version=$TAG" >> $GITHUB_OUTPUT
+          
+      - name: Build release
+        run: |
+          echo "Building release for ${{ steps.tag.outputs.version }}..."
+          # Add your build steps here
+          
+      - name: Run release tests
+        id: tests
+        run: |
+          echo "Running release tests..."
+          # Add your test steps here
+          echo "status=passed" >> $GITHUB_OUTPUT
+          
+      - name: Generate release version
+        id: release_version
+        uses: optivem/generate-status-version-action@v1
+        with:
+          version: ${{ steps.tag.outputs.version }}
+          environment: 'production'
+          status: ${{ steps.tests.outputs.status }}
+          
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          release_name: Release ${{ steps.release_version.outputs.version }}
+          body: |
+            Release Notes for ${{ steps.release_version.outputs.version }}
+            
+            This release has been built and tested successfully.
+            
+            Version Details:
+            - Base Version: ${{ steps.tag.outputs.version }}
+            - Environment: production
+            - Status: ${{ steps.tests.outputs.status }}
+            - Full Version: ${{ steps.release_version.outputs.version }}
+          draft: false
+          prerelease: false
+          
+      - name: Deploy to production
+        run: |
+          echo "Deploying ${{ steps.release_version.outputs.version }} to production..."
+          # Add your production deployment steps here

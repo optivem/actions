@@ -1,0 +1,34 @@
+name: 'Find Latest Prerelease'
+description: 'Find the latest prerelease version of a GitHub repository'
+author: 'Optivem'
+branding:
+  icon: 'search'
+  color: 'blue'
+
+inputs:
+  repo-owner:
+    description: 'Repository owner (organization or username)'
+    required: true
+  repo-name:
+    description: 'Repository name'
+    required: true
+  token:
+    description: 'GitHub token for authentication'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  latest-prerelease:
+    value: ${{ steps.find.outputs.latest-prerelease }}
+    description: 'Tag name of the latest prerelease version'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Find Latest Prerelease Tag
+      id: find
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        & "${{ github.action_path }}/action.ps1" -RepoOwner "${{ inputs.repo-owner }}" -RepoName "${{ inputs.repo-name }}"

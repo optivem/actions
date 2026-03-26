@@ -1,0 +1,22 @@
+name: 'Generate Release Version'
+description: 'Converts prerelease version to release version by removing prerelease suffix'
+
+inputs:
+  prerelease-version:
+    description: 'Prerelease version to convert (e.g., v1.0.4-rc, v1.0.4-alpha, v1.0.4-beta)'
+    required: true
+
+outputs:
+  version:
+    description: 'Release version with prerelease suffix removed (e.g., v1.0.4)'
+    value: ${{ steps.convert-version.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Convert Prerelease to Release Version
+      id: convert-version
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "Generate-ReleaseVersion.ps1"
+        & $scriptPath -PrereleaseVersion "${{ inputs.prerelease-version }}"
+      shell: pwsh

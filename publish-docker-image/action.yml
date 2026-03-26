@@ -1,0 +1,126 @@
+name: 'Publish Docker Image'
+description: 'Builds Docker image and pushes to container registry with automatic tagging'
+author: 'Optivem'
+branding:
+  icon: 'upload-cloud'  # Choose from Feather icons
+  color: 'blue'         # Brand color
+inputs:
+  working-directory:
+    description: 'Working directory where Dockerfile is located'
+    required: false
+    default: '.'
+  image-name:
+    description: 'Name of the Docker image (without registry prefix)'
+    required: true
+  registry:
+    description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io)'
+    required: false
+    default: 'ghcr.io'
+  registry-username:
+    description: 'Username for registry authentication'
+    required: false
+    default: '${{ github.actor }}'
+  image-namespace:
+    description: 'Namespace/organization for the image (e.g., github.repository for GHCR)'
+    required: false
+    default: '${{ github.repository }}'
+  commit-sha:
+    description: 'Git commit SHA for image tagging'
+    required: false
+    default: '${{ github.sha }}'
+  image-latest-tag:
+    description: 'Tag to apply for the latest image (single value, e.g., "latest")'
+    required: false
+    default: 'latest'
+  dockerfile:
+    description: 'Path to Dockerfile relative to working directory'
+    required: false
+    default: 'Dockerfile'
+outputs:
+  image-latest-url:
+    description: 'Full URL of the pushed Docker image with latest tag'
+    value: '${{ steps.tag.outputs.latest-image-url }}'
+  image-digest-url:
+    description: 'Full URL with SHA256 digest of the pushed image'
+    value: '${{ inputs.registry }}/${{ inputs.image-namespace }}/${{ inputs.image-name }}@${{ steps.push.outputs.digest }}'
+runs:
+  using: 'composite'
+  steps:
+    - name: Echo Information
+      run: |
+        echo "🐳 Starting Docker build and push action"
+        echo "📦 Image name: ${{ inputs.image-name }}"
+        echo "📁 Working directory: ${{ inputs.working-directory }}"
+        echo "🐳 Dockerfile: ${{ inputs.dockerfile }}"
+        echo "🔖 Git SHA: ${{ inputs.commit-sha }}"
+        echo "🏷️ Latest tag: ${{ inputs.image-latest-tag }}"
+        echo "🌐 Registry: ${{ inputs.registry }}"
+        echo "📍 Namespace: ${{ inputs.image-namespace }}"
+        echo "👤 Username: ${{ inputs.registry-username }}"
+      shell: bash
+
+    - name: Build the Docker image
+      run: |
+        echo "🔨 Building Docker image..."
+        docker build . --file ${{ inputs.dockerfile }} --tag ${{ inputs.image-name }}:${{ inputs.commit-sha }}
+        echo "✅ Docker image built successfully"
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+
+    - name: Log in to Container Registry
+      run: |
+        echo "🔐 Logging in to ${{ inputs.registry }}..."
+        echo $REGISTRY_PASSWORD | docker login ${{ inputs.registry }} -u ${{ inputs.registry-username }} --password-stdin
+        echo "✅ Successfully logged in to registry"
+      shell: bash
+      env:
+        REGISTRY_PASSWORD: ${{ env.REGISTRY_PASSWORD }}
+
+    - name: Tag Docker image
+      id: tag
+      run: |
+        # Create base image reference
+        BASE_IMAGE="${{ inputs.registry }}/${{ inputs.image-namespace }}/${{ inputs.image-name }}"
+        
+        # Construct the latest image URL
+        LATEST_IMAGE_URL="${BASE_IMAGE}:${{ inputs.image-latest-tag }}"
+        echo "latest-image-url=$LATEST_IMAGE_URL" >> $GITHUB_OUTPUT
+        
+        # Tag with SHA
+        docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "${BASE_IMAGE}:${{ inputs.commit-sha }}"
+        echo "🏷️ Tagged with SHA: ${BASE_IMAGE}:${{ inputs.commit-sha }}"
+        
+        # Tag with latest tag
+        docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$LATEST_IMAGE_URL"
+        echo "🏷️ Tagged with: $LATEST_IMAGE_URL"
+      shell: bash
+
+    - name: Push Docker image
+      id: push
+      run: |
+        BASE_IMAGE="${{ inputs.registry }}/${{ inputs.image-namespace }}/${{ inputs.image-name }}"
+        
+        echo "📤 Pushing Docker images..."
+        
+        # Push SHA tagged image and capture digest
+        DIGEST=$(docker push "${BASE_IMAGE}:${{ inputs.commit-sha }}" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
+        echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+        echo "✅ Pushed SHA tagged image: ${BASE_IMAGE}:${{ inputs.commit-sha }}"
+        echo "📝 Image digest: $DIGEST"
+        
+        # Push latest tagged image
+        docker push "${{ steps.tag.outputs.latest-image-url }}"
+        echo "✅ Pushed tagged image: ${{ steps.tag.outputs.latest-image-url }}"
+        
+        echo "🎉 Successfully pushed all Docker images to ${{ inputs.registry }}"
+        echo "📦 Main image URL: ${{ steps.tag.outputs.latest-image-url }}"
+      shell: bash
+
+    - name: Output Summary
+      run: |
+        echo "📋 Action Outputs Summary:"
+        echo "========================="
+        echo "🔗 Image Latest URL: ${{ steps.tag.outputs.latest-image-url }}"
+        echo "🔗 Image Digest URL: ${{ inputs.registry }}/${{ inputs.image-namespace }}/${{ inputs.image-name }}@${{ steps.push.outputs.digest }}"
+        echo "========================="
+      shell: bash

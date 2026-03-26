@@ -1,0 +1,30 @@
+# Example: Production Release
+# This workflow tags staging images for production when a release is published
+
+name: Production Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  promote-to-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tag Docker Images for Production
+        uses: optivem/tag-docker-images-action@v1
+        with:
+          image-urls: |
+            [
+              "ghcr.io/myorg/frontend:staging",
+              "ghcr.io/myorg/backend:staging",
+              "ghcr.io/myorg/worker:staging"
+            ]
+          tag: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to Production
+        run: |
+          echo "Deploying images with tag: ${{ github.event.release.tag_name }}"
+          # Add your deployment logic here

@@ -1,0 +1,28 @@
+name: 'Find Docker Images'
+description: 'Finds Docker images and resolves their digests from any container registry'
+author: 'Optivem'
+branding:
+  icon: 'search'
+  color: 'blue'
+inputs:
+  image-urls:
+    description: 'Image URLs to resolve digests for. Supports both newline-separated list or JSON array format'
+    required: true
+outputs:
+  image-digest-urls:
+    description: 'JSON array of digest URLs in the same order as input'
+    value: ${{ steps.get-digests.outputs.digests }}
+  image-inspect-results:
+    description: 'JSON array of full Docker inspect results for each image in the same order as input'
+    value: ${{ steps.get-digests.outputs.inspect-data }}
+  image-created-timestamps:
+    description: 'JSON array of image creation timestamps in the same order as input'
+    value: ${{ steps.get-digests.outputs.created-timestamps }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve image digests
+      id: get-digests
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/action.ps1" -ImageUrls '${{ inputs.image-urls }}'

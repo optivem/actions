@@ -1,0 +1,46 @@
+name: 'Should Run Acceptance Stage'
+description: 'Determines if acceptance stage should run based on Docker image creation timestamp or force run flag. Accepts Docker inspect JSON data to compare image creation time with last successful workflow run.'
+author: 'Optivem'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+inputs:
+  latest-image-timestamp:
+    description: 'Timestamp of the latest Docker image creation (ISO 8601 format)'
+    required: true
+  acceptance-stage-repo-owner:
+    description: 'Repository owner (organization or username)'
+    required: false
+    default: ${{ github.repository_owner }}
+  acceptance-stage-repo-name:
+    description: 'Repository name'
+    required: false
+    default: ${{ github.event.repository.name }}
+  acceptance-stage-workflow-name:
+    description: 'Name of the acceptance stage workflow'
+    required: false
+    default: 'acceptance-stage'
+  force-run:
+    description: 'Force run even if no new images (bypasses image detection)'
+    required: false
+    default: 'false'
+outputs:
+  should-run:
+    description: 'Whether the acceptance stage should run (true/false)'
+    value: ${{ steps.check.outputs.should-run }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Check if acceptance stage should run
+      id: check
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/action.ps1" `
+          -RepoOwner "${{ inputs.acceptance-stage-repo-owner }}" `
+          -RepoName "${{ inputs.acceptance-stage-repo-name }}" `
+          -WorkflowName "${{ inputs.acceptance-stage-workflow-name }}" `
+          -ForceRun ([System.Convert]::ToBoolean("${{ inputs.force-run }}"))
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_SHA: ${{ github.sha }}
+        LATEST_IMAGE_TIMESTAMP: ${{ inputs.latest-image-timestamp }}

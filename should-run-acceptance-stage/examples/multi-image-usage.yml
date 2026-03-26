@@ -1,0 +1,81 @@
+name: Multi-Image Usage Example
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      docker-inspect: ${{ steps.inspect.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build and push Docker images
+        run: |
+          # Build multiple images
+          docker build -t myregistry/web-app:latest -f Dockerfile.web .
+          docker build -t myregistry/api-app:latest -f Dockerfile.api .
+          docker build -t myregistry/worker-app:latest -f Dockerfile.worker .
+          
+          # Push all images
+          docker push myregistry/web-app:latest
+          docker push myregistry/api-app:latest
+          docker push myregistry/worker-app:latest
+          
+      - name: Inspect all Docker images
+        id: inspect
+        run: |
+          # Get inspect data for each image
+          WEB_INSPECT=$(docker inspect myregistry/web-app:latest)
+          API_INSPECT=$(docker inspect myregistry/api-app:latest)
+          WORKER_INSPECT=$(docker inspect myregistry/worker-app:latest)
+          
+          # Combine into JSON array (remove outer brackets and combine)
+          WEB_DATA=$(echo "$WEB_INSPECT" | jq '.[0]')
+          API_DATA=$(echo "$API_INSPECT" | jq '.[0]')
+          WORKER_DATA=$(echo "$WORKER_INSPECT" | jq '.[0]')
+          
+          # Create final array
+          COMBINED_RESULTS="[$WEB_DATA, $API_DATA, $WORKER_DATA]"
+          echo "result=$COMBINED_RESULTS" >> $GITHUB_OUTPUT
+          
+  check-acceptance:
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      reason: ${{ steps.check.outputs.reason }}
+      new-images-count: ${{ steps.check.outputs.new-images-count }}
+      latest-image-id: ${{ steps.check.outputs.latest-image-id }}
+    steps:
+      - name: Check if acceptance should run
+        id: check
+        uses: optivem/should-run-acceptance-stage-action@v1
+        with:
+          latest-image-inspect-results: '${{ needs.build.outputs.docker-inspect }}'
+          acceptance-stage-workflow-name: 'acceptance.yml'
+          
+  acceptance-tests:
+    needs: check-acceptance
+    if: needs.check-acceptance.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run acceptance tests
+        run: |
+          echo "Running acceptance tests..."
+          echo "Reason: ${{ needs.check-acceptance.outputs.reason }}"
+          echo "New images found: ${{ needs.check-acceptance.outputs.new-images-count }}"
+          echo "Latest image ID: ${{ needs.check-acceptance.outputs.latest-image-id }}"
+          
+          # Run your acceptance tests here
+          # These tests would typically test the entire system
+          # with all the newly built images

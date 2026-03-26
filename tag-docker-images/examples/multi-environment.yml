@@ -1,0 +1,46 @@
+# Example: Multi-Environment Promotion
+# This workflow promotes images through development -> staging -> production
+
+name: Multi-Environment Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: 'Source tag to promote'
+        required: true
+        default: 'dev'
+      target_environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  promote-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get source images
+        id: get-images
+        run: |
+          # In real scenario, you might query your registry or use a service
+          SOURCE_IMAGES='[
+            "ghcr.io/myorg/app:${{ github.event.inputs.source_tag }}",
+            "ghcr.io/myorg/api:${{ github.event.inputs.source_tag }}"
+          ]'
+          echo "images=$SOURCE_IMAGES" >> $GITHUB_OUTPUT
+
+      - name: Promote Images
+        uses: optivem/tag-docker-images-action@v1
+        with:
+          image-urls: ${{ steps.get-images.outputs.images }}
+          tag: ${{ github.event.inputs.target_environment }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update deployment config
+        run: |
+          echo "Images promoted to: ${{ github.event.inputs.target_environment }}"
+          # Update your deployment configurations here

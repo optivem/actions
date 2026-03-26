@@ -1,0 +1,35 @@
+name: 'Tag Docker Images'
+description: 'Tags Docker images with new tags for production releases and versioning workflows'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  image-urls:
+    description: 'JSON array of source Docker image URLs with existing tags'
+    required: true
+  tag:
+    description: 'Target tag to apply to images (e.g., v1.0.5, latest, production)'
+    required: true
+
+outputs:
+  image-urls:
+    description: 'JSON array of Docker image URLs with new tags applied'
+    value: ${{ steps.tag-images.outputs.image-urls }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Log in to GitHub Container Registry
+      run: echo "${{ env.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      shell: bash
+
+    - name: Tag Docker Images
+      id: tag-images
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "Tag-DockerImages.ps1"
+        & $scriptPath `
+          -ImageUrls '${{ inputs.image-urls }}' `
+          -TargetTag "${{ inputs.tag }}"
+      shell: pwsh

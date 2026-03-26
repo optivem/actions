@@ -1,0 +1,29 @@
+name: 'Resolve Docker Images'
+description: 'Resolves base image URLs to versioned URLs and validates they exist'
+author: 'Optivem'
+branding:
+  icon: 'package'
+  color: 'blue'
+
+inputs:
+  tag:
+    description: 'Tag to append to base image URLs (e.g., v1.0.4-rc)'
+    required: true
+  base-image-urls:
+    description: 'Base image URLs (without tag). Accepts either JSON array format or newline-separated list'
+    required: true
+
+outputs:
+  image-urls:
+    description: 'JSON array of resolved image URLs with tags'
+    value: ${{ steps.resolve-images.outputs.image-urls }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve Docker Images
+      id: resolve-images
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "Resolve-DockerImages.ps1"
+        & $scriptPath -Tag "${{ inputs.tag }}" -ImageUrls "${{ inputs.base-image-urls }}"
+      shell: pwsh
