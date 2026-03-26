@@ -1,0 +1,21 @@
+name: 'Read Target Version'
+description: 'Reads the target semantic version from a VERSION file'
+
+inputs:
+  file:
+    description: 'Path to the VERSION file'
+    required: false
+    default: 'VERSION'
+
+outputs:
+  target-version:
+    description: 'The target semantic version (e.g., 1.0.0)'
+    value: ${{ steps.read.outputs.target-version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read Target Version
+      id: read
+      shell: bash
+      run: echo "target-version=$(cat ${{ inputs.file }})" >> "$GITHUB_OUTPUT"
