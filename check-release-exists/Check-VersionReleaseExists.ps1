@@ -37,10 +37,10 @@ function Test-ReleaseExists {
                 Message = "Release found"
             }
         } else {
-            Write-Host "Release $Version not found" -ForegroundColor Yellow
+            Write-Host "::error::Release '$Version' does not exist in repository '$Repository'. Make sure the version is correct and the release was created by a previous stage." -ForegroundColor Red
             return @{
                 Exists = $false
-                Success = $true
+                Success = $false
                 Message = "Release not found"
             }
         }
@@ -69,10 +69,10 @@ try {
     # Exit 0 when we successfully determined the result (exists or not); only exit 1 on script error
     if ($result.Exists) {
         Write-Host "✅ Release found" -ForegroundColor Green
+        exit 0
     } else {
-        Write-Host "Release not found (exists=false)" -ForegroundColor Yellow
+        exit 1
     }
-    exit 0
 }
 catch {
     Write-Host "❌ Script execution failed: $($_.Exception.Message)" -ForegroundColor Red
