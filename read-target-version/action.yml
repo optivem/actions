@@ -18,4 +18,9 @@ runs:
     - name: Read Target Version
       id: read
       shell: bash
-      run: echo "target-version=$(cat ${{ inputs.file }})" >> "$GITHUB_OUTPUT"
+      run: |
+        if [ ! -f "${{ inputs.file }}" ]; then
+          echo "::error::VERSION file not found at '${{ inputs.file }}'. Make sure to include the VERSION file in your repository."
+          exit 1
+        fi
+        echo "target-version=$(cat ${{ inputs.file }})" >> "$GITHUB_OUTPUT"
