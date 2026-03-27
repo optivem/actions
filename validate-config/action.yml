@@ -1,0 +1,33 @@
+name: 'Validate Config'
+description: 'Validates that required variables and secrets are defined before workflow execution. Pass a JSON object mapping config names to values via the VALIDATE_CONFIG environment variable.'
+author: 'Optivem'
+branding:
+  icon: 'shield'
+  color: 'red'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate Config
+      run: |
+        if [ -z "$VALIDATE_CONFIG" ]; then
+          echo "::error::VALIDATE_CONFIG environment variable is not set"
+          exit 1
+        fi
+
+        missing=()
+
+        for name in $(echo "$VALIDATE_CONFIG" | jq -r 'keys[]'); do
+          value=$(echo "$VALIDATE_CONFIG" | jq -r --arg k "$name" '.[$k]')
+          if [ -z "$value" ]; then
+            missing+=("$name")
+          fi
+        done
+
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "::error::Missing required config: ${missing[*]}"
+          exit 1
+        fi
+
+        echo "All required config values are defined."
+      shell: bash
