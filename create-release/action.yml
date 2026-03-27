@@ -7,10 +7,10 @@ branding:
 
 inputs:
   base-version:
-    description: 'Original version that triggered the workflow (e.g., v1.0.4-rc)'
+    description: 'Original version that triggered the workflow (e.g., v1.0.0-rc.1)'
     required: true
   release-version:
-    description: 'Release version tag to create (e.g., v1.0.4-rc-qa-deployed)'
+    description: 'Release version tag to create (e.g., v1.0.0-rc.1-qa-deployed)'
     required: true
   environment:
     description: 'Environment name (e.g., qa, staging, prod)'

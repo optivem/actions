@@ -3,12 +3,12 @@ description: 'Converts prerelease version to release version by removing prerele
 
 inputs:
   prerelease-version:
-    description: 'Prerelease version to convert (e.g., v1.0.4-rc, v1.0.4-alpha, v1.0.4-beta)'
+    description: 'Prerelease version to convert (e.g., v1.0.0-rc.1, v1.0.0-alpha.1, v1.0.0-beta.1)'
     required: true
 
 outputs:
   version:
-    description: 'Release version with prerelease suffix removed (e.g., v1.0.4)'
+    description: 'Release version with prerelease suffix removed (e.g., v1.0.0)'
     value: ${{ steps.convert-version.outputs.version }}
 
 runs:

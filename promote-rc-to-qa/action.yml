@@ -3,7 +3,7 @@ description: 'Marks an RC as deployed to QA by generating a status version and c
 
 inputs:
   version:
-    description: 'The RC version that was deployed (e.g., v1.0.4-rc)'
+    description: 'The RC version that was deployed (e.g., v1.0.0-rc.1)'
     required: true
   artifact-urls:
     description: 'JSON array of Docker image URLs that were deployed'
@@ -11,7 +11,7 @@ inputs:
 
 outputs:
   version:
-    description: 'The generated deployment status version (e.g., v1.0.4-rc-qa-deployed)'
+    description: 'The generated deployment status version (e.g., v1.0.0-rc.1-qa-deployed)'
     value: ${{ steps.generate-status-version.outputs.version }}
 
 runs:

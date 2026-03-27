@@ -3,7 +3,7 @@ description: 'Promotes an RC to production by generating a release version, tagg
 
 inputs:
   version:
-    description: 'The RC version that was deployed (e.g., v1.0.4-rc)'
+    description: 'The RC version that was deployed (e.g., v1.0.0-rc.1)'
     required: true
   artifact-urls:
     description: 'JSON array of Docker image URLs that were deployed'
@@ -11,7 +11,7 @@ inputs:
 
 outputs:
   version:
-    description: 'The generated production release version (e.g., v1.0.4)'
+    description: 'The generated production release version (e.g., v1.0.0)'
     value: ${{ steps.generate-release-version.outputs.version }}
 
 runs:

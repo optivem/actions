@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: 'Release version to validate (e.g., v1.0.4, v2.1.0-rc)'
+    description: 'Release version to validate (e.g., v1.0.0-rc.1, v1.0.0)'
     required: true
   github-token:
     description: 'GitHub token for API access'

@@ -3,12 +3,12 @@ description: 'Records a failed QA signoff by generating a status version and cre
 
 inputs:
   version:
-    description: 'The RC version that was tested (e.g., v1.0.4-rc)'
+    description: 'The RC version that was tested (e.g., v1.0.0-rc.1)'
     required: true
 
 outputs:
   version:
-    description: 'The generated signoff status version (e.g., v1.0.4-rc-qa-rejected)'
+    description: 'The generated signoff status version (e.g., v1.0.0-rc.1-qa-rejected)'
     value: ${{ steps.generate-status-version.outputs.version }}
 
 runs:

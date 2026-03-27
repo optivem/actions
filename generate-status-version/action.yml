@@ -7,7 +7,7 @@ branding:
 
 inputs:
   version:
-    description: 'Version to build from (e.g., v1.0.4-rc)'
+    description: 'Version to build from (e.g., v1.0.0-rc.1)'
     required: true
   environment:
     description: 'Environment name (e.g., qa, staging, prod)'

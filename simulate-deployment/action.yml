@@ -5,7 +5,7 @@ inputs:
     description: 'Target deployment environment (e.g., qa, staging, production)'
     required: true
   version:
-    description: 'Release version to deploy (e.g., v1.0.4-rc)'
+    description: 'Release version to deploy (e.g., v1.0.0-rc.1)'
     required: true
   image-urls:
     description: 'Docker image URLs to deploy (JSON array format)'
