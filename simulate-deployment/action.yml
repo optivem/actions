@@ -69,6 +69,7 @@ runs:
 
     - name: Wait for Systems to be Ready
       run: |
+        COMPOSE_FILE="${{ inputs.compose-file }}"
         SYSTEM_URL="${{ inputs.system-url }}"
         SYSTEM_URLS='${{ inputs.systems }}'
 
