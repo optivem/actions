@@ -126,9 +126,17 @@ runs:
 
         if [ $FAILED -eq 1 ]; then
           echo "🔍 Checking Docker Compose container logs:"
-          docker compose logs --timestamps
+          if [[ -n "$COMPOSE_FILE" ]]; then
+            docker compose -f "$COMPOSE_FILE" logs --timestamps
+          else
+            docker compose logs --timestamps
+          fi
           echo "🐳 Docker Compose container status:"
-          docker compose ps
+          if [[ -n "$COMPOSE_FILE" ]]; then
+            docker compose -f "$COMPOSE_FILE" ps
+          else
+            docker compose ps
+          fi
           exit 1
         fi
 
