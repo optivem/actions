@@ -1,0 +1,87 @@
+name: 'Trigger and Wait for Workflow'
+description: 'Trigger a workflow_dispatch workflow, poll for completion, and fail if the triggered run fails. Includes GitHub API rate-limit protection.'
+inputs:
+  workflow:
+    description: 'Workflow filename to trigger (e.g., monolith-java-commit-stage.yml)'
+    required: true
+  repo:
+    description: 'Repository in owner/repo format'
+    required: false
+    default: ${{ github.repository }}
+  ref:
+    description: 'Git ref to trigger the workflow on'
+    required: false
+    default: main
+  inputs:
+    description: 'JSON object of workflow inputs (e.g., {"version": "v1.0.0-rc.1"})'
+    required: false
+    default: '{}'
+  poll-interval:
+    description: 'Seconds between status polls (default: 120)'
+    required: false
+    default: '120'
+  rate-limit-threshold:
+    description: 'Pause when remaining API requests fall below this number (default: 50)'
+    required: false
+    default: '50'
+outputs:
+  run-id:
+    description: 'The database ID of the triggered workflow run'
+    value: ${{ steps.trigger.outputs.run_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Trigger ${{ inputs.workflow }}
+      id: trigger
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        # --- Rate limit check ---
+        remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
+        threshold=${{ inputs.rate-limit-threshold }}
+        if [ "$remaining" -lt "$threshold" ]; then
+          reset=$(gh api rate_limit --jq ".resources.core.reset" 2>/dev/null || echo "0")
+          wait=$(( reset - $(date +%s) + 5 ))
+          if [ "$wait" -gt 0 ]; then
+            echo "::warning::Rate limit low ($remaining remaining). Waiting ${wait}s for reset..."
+            sleep "$wait"
+          fi
+        fi
+
+        # --- Build input flags ---
+        input_flags=""
+        inputs_json='${{ inputs.inputs }}'
+        if [ "$inputs_json" != "{}" ] && [ -n "$inputs_json" ]; then
+          input_flags=$(echo "$inputs_json" | jq -r 'to_entries[] | "-f \(.key)=\(.value)"' | tr '\n' ' ')
+        fi
+
+        # --- Trigger workflow ---
+        gh workflow run "${{ inputs.workflow }}" \
+          --repo "${{ inputs.repo }}" \
+          --ref "${{ inputs.ref }}" \
+          $input_flags
+
+        echo "Triggered ${{ inputs.workflow }}"
+        sleep 10
+
+        # --- Capture run ID ---
+        run_id=$(gh run list \
+          --workflow="${{ inputs.workflow }}" \
+          --repo "${{ inputs.repo }}" \
+          --branch "${{ inputs.ref }}" \
+          --limit 1 --json databaseId --jq '.[0].databaseId')
+        echo "run_id=$run_id" >> $GITHUB_OUTPUT
+
+    - name: Wait for ${{ inputs.workflow }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        run_id="${{ steps.trigger.outputs.run_id }}"
+        echo "Waiting for run $run_id..."
+        gh run watch "$run_id" \
+          --repo "${{ inputs.repo }}" \
+          --exit-status \
+          --interval ${{ inputs.poll-interval }}
