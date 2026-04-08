@@ -1,0 +1,76 @@
+name: 'Wait for Commit-Triggered Run'
+description: 'Wait for a workflow run triggered by a specific commit SHA. Includes GitHub API rate-limit protection.'
+inputs:
+  workflow:
+    description: 'Workflow filename to wait for (e.g., java-commit-stage.yml)'
+    required: true
+  commit-sha:
+    description: 'The commit SHA to match against'
+    required: true
+  repo:
+    description: 'Repository in owner/repo format'
+    required: false
+    default: ${{ github.repository }}
+  poll-interval:
+    description: 'Seconds between discovery polls (default: 30)'
+    required: false
+    default: '30'
+  watch-interval:
+    description: 'Seconds between gh run watch polls (default: 120)'
+    required: false
+    default: '120'
+  rate-limit-threshold:
+    description: 'Pause when remaining API requests fall below this number (default: 50)'
+    required: false
+    default: '50'
+outputs:
+  run-id:
+    description: 'The database ID of the matched workflow run'
+    value: ${{ steps.wait.outputs.run_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Wait for ${{ inputs.workflow }}
+      id: wait
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        commit_sha="${{ inputs.commit-sha }}"
+        echo "Waiting for ${{ inputs.workflow }} (commit: $commit_sha)..."
+
+        while true; do
+          # --- Rate limit check ---
+          remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
+          threshold=${{ inputs.rate-limit-threshold }}
+          if [ "$remaining" -lt "$threshold" ]; then
+            reset=$(gh api rate_limit --jq ".resources.core.reset" 2>/dev/null || echo "0")
+            wait_secs=$(( reset - $(date +%s) + 5 ))
+            if [ "$wait_secs" -gt 0 ]; then
+              echo "::warning::Rate limit low ($remaining remaining). Waiting ${wait_secs}s for reset..."
+              sleep "$wait_secs"
+            fi
+          fi
+
+          # --- Find run by commit SHA ---
+          run_id=$(gh run list \
+            --workflow="${{ inputs.workflow }}" \
+            --repo "${{ inputs.repo }}" \
+            --limit 5 \
+            --json databaseId,headSha \
+            --jq "[.[] | select(.headSha == \"$commit_sha\")] | .[0].databaseId")
+
+          if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
+            echo "Found run $run_id, watching..."
+            echo "run_id=$run_id" >> $GITHUB_OUTPUT
+            gh run watch "$run_id" \
+              --repo "${{ inputs.repo }}" \
+              --exit-status \
+              --interval ${{ inputs.watch-interval }}
+            break
+          fi
+
+          echo "Run not found yet, waiting ${{ inputs.poll-interval }}s..."
+          sleep ${{ inputs.poll-interval }}
+        done
