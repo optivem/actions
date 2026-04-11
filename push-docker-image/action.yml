@@ -60,8 +60,13 @@ runs:
         push_with_retry() {
           local image="$1"
           local max_attempts=3
+          local attempt
           for attempt in $(seq 1 $max_attempts); do
-            if docker push "$image" 2>&1; then
+            set +e
+            docker push "$image"
+            local rc=$?
+            set -e
+            if [ $rc -eq 0 ]; then
               return 0
             fi
             if [ $attempt -lt $max_attempts ]; then
