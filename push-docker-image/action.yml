@@ -56,18 +56,35 @@ runs:
       run: |
         echo "📤 Pushing Docker images..."
 
+        # Retry helper: retries a command up to 3 times with a delay
+        push_with_retry() {
+          local image="$1"
+          local max_attempts=3
+          for attempt in $(seq 1 $max_attempts); do
+            if docker push "$image" 2>&1; then
+              return 0
+            fi
+            if [ $attempt -lt $max_attempts ]; then
+              echo "⚠️ Push failed (attempt $attempt/$max_attempts), retrying in 10s..."
+              sleep 10
+            fi
+          done
+          echo "❌ Push failed after $max_attempts attempts"
+          return 1
+        }
+
         # Push SHA tagged image and capture digest
         DIGEST=$(docker push "${{ inputs.image-sha-tag }}" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
         echo "✅ Pushed SHA tagged image: ${{ inputs.image-sha-tag }}"
         echo "📝 Image digest: $DIGEST"
 
-        # Push latest tagged image
-        docker push "${{ inputs.image-latest-url }}"
+        # Push latest tagged image (with retry for transient GHCR permission issues)
+        push_with_retry "${{ inputs.image-latest-url }}"
         echo "✅ Pushed tagged image: ${{ inputs.image-latest-url }}"
 
         # Push version tagged image (if provided)
         if [ -n "${{ inputs.image-version-tag }}" ]; then
-          docker push "${{ inputs.image-version-tag }}"
+          push_with_retry "${{ inputs.image-version-tag }}"
           echo "✅ Pushed version tagged image: ${{ inputs.image-version-tag }}"
         fi
 
