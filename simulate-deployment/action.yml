@@ -1,5 +1,5 @@
 name: 'Simulate Deployment'
-description: 'Simulate deployment using Docker Compose and wait for system to be ready'
+description: '[Deprecated] Use deploy-to-docker instead. Wrapper for backward compatibility.'
 inputs:
   environment:
     description: 'Target deployment environment (e.g., qa, staging, production)'
@@ -29,117 +29,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Simulate Deployment with Docker Compose
-      run: |
-        echo "🚀 Deploying system version ${{ inputs.version }} to ${{ inputs.environment }} environment..."
-        echo ""
-
-        # List Docker images being deployed
-        if [[ -n "${{ inputs.image-urls }}" ]]; then
-          echo "📦 Deploying the following Docker images:"
-
-          # Parse JSON array and iterate through each URL
-          echo '${{ inputs.image-urls }}' | jq -r '.[]' | while IFS= read -r image_url; do
-            if [[ -n "$image_url" ]]; then
-              echo "   🐳 Deploying: $image_url"
-            fi
-          done
-          echo ""
-        fi
-
-        echo "📝 Note: We are simulating deployment using Docker Compose Up for testing purposes."
-        echo "🏭 In real applications, this is where you would deploy to:"
-        echo "   - AWS (ECS, EKS, Lambda, EC2)"
-        echo "   - Azure (Container Instances, AKS, App Service)"
-        echo "   - GCP (Cloud Run, GKE, Compute Engine)"
-        echo "   - On-premise (Kubernetes, Docker Swarm, VMs)"
-        echo "   - Other cloud providers (DigitalOcean, Linode, etc.)"
-        echo ""
-        echo "🐳 Starting Docker Compose for simulated deployment..."
-
-        COMPOSE_FILE="${{ inputs.compose-file }}"
-        if [[ -n "$COMPOSE_FILE" ]]; then
-          echo "📄 Using compose file: $COMPOSE_FILE"
-          docker compose -f "$COMPOSE_FILE" up -d
-        else
-          docker compose up -d
-        fi
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
-
-    - name: Wait for Systems to be Ready
-      run: |
-        COMPOSE_FILE="${{ inputs.compose-file }}"
-        SYSTEM_URL="${{ inputs.system-url }}"
-        SYSTEM_URLS='${{ inputs.systems }}'
-
-        # Build a unified list of systems to check
-        SYSTEMS="[]"
-
-        if [[ -n "$SYSTEM_URL" ]]; then
-          SYSTEMS=$(echo "$SYSTEMS" | jq --arg url "$SYSTEM_URL" '. + [{"name": "Application", "url": $url}]')
-        fi
-
-        if [[ -n "$SYSTEM_URLS" ]]; then
-          SYSTEMS=$(echo "$SYSTEMS" | jq --argjson urls "$SYSTEM_URLS" '. + $urls')
-        fi
-
-        COUNT=$(echo "$SYSTEMS" | jq 'length')
-
-        if [[ "$COUNT" -eq 0 ]]; then
-          echo "⚠️ No system URLs provided, skipping health checks"
-          exit 0
-        fi
-
-        echo "⏳ Waiting for $COUNT system(s) to be ready..."
-        echo ""
-
-        FAILED=0
-
-        for i in $(seq 0 $((COUNT - 1))); do
-          NAME=$(echo "$SYSTEMS" | jq -r ".[$i].name")
-          URL=$(echo "$SYSTEMS" | jq -r ".[$i].url")
-
-          echo "⏳ Waiting for $NAME at $URL..."
-
-          max_attempts=30
-          wait_seconds=10
-          attempt=1
-
-          while [ $attempt -le $max_attempts ]; do
-            if curl -f "$URL" > /dev/null 2>&1; then
-              echo "✅ $NAME is ready!"
-              break
-            fi
-            echo "🔄 Attempt $attempt/$max_attempts: $NAME not ready yet, waiting $wait_seconds seconds..."
-            sleep $wait_seconds
-            attempt=$((attempt + 1))
-          done
-
-          if [ $attempt -gt $max_attempts ]; then
-            echo "❌ $NAME failed to become ready after $max_attempts attempts"
-            FAILED=1
-          fi
-
-          echo ""
-        done
-
-        if [ $FAILED -eq 1 ]; then
-          echo "🔍 Checking Docker Compose container logs:"
-          if [[ -n "$COMPOSE_FILE" ]]; then
-            docker compose -f "$COMPOSE_FILE" logs --timestamps
-          else
-            docker compose logs --timestamps
-          fi
-          echo "🐳 Docker Compose container status:"
-          if [[ -n "$COMPOSE_FILE" ]]; then
-            docker compose -f "$COMPOSE_FILE" ps
-          else
-            docker compose ps
-          fi
-          exit 1
-        fi
-
-        echo "✅ All systems are ready!"
-      shell: bash
-      working-directory: ${{ inputs.working-directory }}
+    - name: Deploy to Docker (via deprecated simulate-deployment)
+      uses: optivem/actions/deploy-to-docker@v1
+      with:
+        environment: ${{ inputs.environment }}
+        version: ${{ inputs.version }}
+        image-urls: ${{ inputs.image-urls }}
+        compose-file: ${{ inputs.compose-file }}
+        system-url: ${{ inputs.system-url }}
+        systems: ${{ inputs.systems }}
+        working-directory: ${{ inputs.working-directory }}

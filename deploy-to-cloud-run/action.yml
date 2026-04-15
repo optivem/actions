@@ -1,0 +1,143 @@
+name: 'Deploy to Cloud Run'
+description: 'Deploy a Docker image to Google Cloud Run and wait for the service to be ready'
+inputs:
+  environment:
+    description: 'Target deployment environment (e.g., acceptance, qa, production)'
+    required: true
+  version:
+    description: 'Release version to deploy (e.g., v1.0.0-rc.1 or latest)'
+    required: true
+  image-url:
+    description: 'Docker image URL to deploy (e.g., ghcr.io/org/repo/service:tag)'
+    required: true
+  project-id:
+    description: 'GCP project ID'
+    required: true
+  region:
+    description: 'GCP region for Cloud Run deployment'
+    required: false
+    default: 'us-central1'
+  service-name:
+    description: 'Cloud Run service name (e.g., shop-monolith-java)'
+    required: true
+  port:
+    description: 'Container port to expose'
+    required: false
+    default: '8080'
+  env-vars:
+    description: 'Environment variables to set on the Cloud Run service (KEY=VALUE format, one per line)'
+    required: false
+    default: ''
+  secrets:
+    description: 'Secret environment variables to set (KEY=SECRET_NAME:VERSION format, one per line)'
+    required: false
+    default: ''
+  memory:
+    description: 'Memory limit for the Cloud Run service'
+    required: false
+    default: '512Mi'
+  cpu:
+    description: 'CPU limit for the Cloud Run service'
+    required: false
+    default: '1'
+  min-instances:
+    description: 'Minimum number of instances (0 for scale-to-zero)'
+    required: false
+    default: '0'
+  max-instances:
+    description: 'Maximum number of instances'
+    required: false
+    default: '3'
+  allow-unauthenticated:
+    description: 'Allow unauthenticated access to the service'
+    required: false
+    default: 'true'
+
+outputs:
+  service-url:
+    description: 'The URL of the deployed Cloud Run service'
+    value: ${{ steps.deploy.outputs.service-url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy to Cloud Run
+      id: deploy
+      run: |
+        echo "🚀 Deploying version ${{ inputs.version }} to Cloud Run (${{ inputs.environment }} environment)..."
+        echo ""
+        echo "📦 Image: ${{ inputs.image-url }}"
+        echo "🌍 Service: ${{ inputs.service-name }}-${{ inputs.environment }}"
+        echo "📍 Region: ${{ inputs.region }}"
+        echo ""
+
+        SERVICE_NAME="${{ inputs.service-name }}-${{ inputs.environment }}"
+
+        # Build the deploy command
+        DEPLOY_CMD="gcloud run deploy $SERVICE_NAME \
+          --image=${{ inputs.image-url }} \
+          --project=${{ inputs.project-id }} \
+          --region=${{ inputs.region }} \
+          --port=${{ inputs.port }} \
+          --memory=${{ inputs.memory }} \
+          --cpu=${{ inputs.cpu }} \
+          --min-instances=${{ inputs.min-instances }} \
+          --max-instances=${{ inputs.max-instances }} \
+          --platform=managed \
+          --quiet"
+
+        # Add environment variables if provided
+        if [[ -n "${{ inputs.env-vars }}" ]]; then
+          ENV_VARS=$(echo "${{ inputs.env-vars }}" | tr '\n' ',' | sed 's/,$//')
+          DEPLOY_CMD="$DEPLOY_CMD --set-env-vars=$ENV_VARS"
+        fi
+
+        # Add secrets if provided
+        if [[ -n "${{ inputs.secrets }}" ]]; then
+          SECRETS=$(echo "${{ inputs.secrets }}" | tr '\n' ',' | sed 's/,$//')
+          DEPLOY_CMD="$DEPLOY_CMD --set-secrets=$SECRETS"
+        fi
+
+        # Add unauthenticated access flag
+        if [[ "${{ inputs.allow-unauthenticated }}" == "true" ]]; then
+          DEPLOY_CMD="$DEPLOY_CMD --allow-unauthenticated"
+        fi
+
+        echo "🐳 Running deployment..."
+        eval $DEPLOY_CMD
+
+        # Get the service URL
+        SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" \
+          --project=${{ inputs.project-id }} \
+          --region=${{ inputs.region }} \
+          --format='value(status.url)')
+
+        echo "service-url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
+        echo ""
+        echo "✅ Deployed to: $SERVICE_URL"
+      shell: bash
+
+    - name: Wait for Service to be Ready
+      run: |
+        SERVICE_URL="${{ steps.deploy.outputs.service-url }}"
+
+        echo "⏳ Waiting for service to be ready at $SERVICE_URL..."
+
+        max_attempts=30
+        wait_seconds=10
+        attempt=1
+
+        while [ $attempt -le $max_attempts ]; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL" 2>/dev/null || echo "000")
+          if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 400 ]]; then
+            echo "✅ Service is ready! (HTTP $HTTP_STATUS)"
+            exit 0
+          fi
+          echo "🔄 Attempt $attempt/$max_attempts: Service returned HTTP $HTTP_STATUS, waiting $wait_seconds seconds..."
+          sleep $wait_seconds
+          attempt=$((attempt + 1))
+        done
+
+        echo "❌ Service failed to become ready after $max_attempts attempts"
+        exit 1
+      shell: bash
