@@ -35,6 +35,14 @@ if ($TargetVersion -notmatch '^\d+\.\d+\.\d+$') {
     exit 1
 }
 
+# Check if the final version already exists
+$finalTag = "v$TargetVersion"
+$existingFinalTag = & git tag -l $finalTag
+if ($existingFinalTag) {
+    Write-Error "❌ Version $finalTag is already released. Cannot create release candidates for an existing release. Bump the version in your VERSION file first."
+    exit 1
+}
+
 # Find existing RC tags for this target version
 $pattern = "v$TargetVersion-$PrereleaseSuffix.*"
 Write-Host "📋 Finding existing tags matching: $pattern"

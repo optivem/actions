@@ -1,0 +1,68 @@
+name: 'Bump Patch Versions'
+description: 'Finds VERSION files where the final release tag already exists and bumps the patch version. Commits and pushes if any changes are made.'
+
+inputs:
+  version-files:
+    description: 'Newline-separated list of VERSION file paths to check'
+    required: true
+
+outputs:
+  bumped:
+    description: 'Whether any versions were bumped (true or false)'
+    value: ${{ steps.bump.outputs.bumped }}
+  summary:
+    description: 'Summary of bumped versions'
+    value: ${{ steps.bump.outputs.summary }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Bump Patch Versions
+      id: bump
+      shell: bash
+      run: |
+        bumped=false
+        summary=""
+
+        while IFS= read -r file; do
+          # Skip empty lines
+          [[ -z "$file" ]] && continue
+
+          if [[ ! -f "$file" ]]; then
+            echo "::warning::VERSION file not found: $file"
+            continue
+          fi
+
+          version=$(cat "$file" | tr -d '[:space:]')
+          tag="v${version}"
+
+          if git tag -l "$tag" | grep -q "$tag"; then
+            # Parse version components
+            major=$(echo "$version" | cut -d. -f1)
+            minor=$(echo "$version" | cut -d. -f2)
+            patch=$(echo "$version" | cut -d. -f3)
+            new_version="${major}.${minor}.$((patch + 1))"
+
+            echo "$new_version" > "$file"
+            echo "Bumped $file: $version -> $new_version (tag $tag already exists)"
+            summary="${summary}${file}: ${version} -> ${new_version}\n"
+            bumped=true
+          else
+            echo "Skipped $file: $version (tag $tag does not exist)"
+          fi
+        done <<< "${{ inputs.version-files }}"
+
+        echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
+        echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+        echo -e "$summary" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
+    - name: Commit and Push
+      if: steps.bump.outputs.bumped == 'true'
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -m "Bump released versions to next patch"
+        git push

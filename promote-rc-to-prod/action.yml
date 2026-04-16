@@ -44,3 +44,34 @@ runs:
         is-prerelease: false
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+    - name: Bump Patch Versions
+      shell: bash
+      run: |
+        released_version="${{ steps.generate-release-version.outputs.version }}"
+        # Strip leading 'v' to match VERSION file contents
+        target="${released_version#v}"
+
+        bumped=false
+        for file in $(find . -name VERSION -not -path '*node_modules*' -not -path '*/.git/*'); do
+          version=$(cat "$file" | tr -d '[:space:]')
+          if [[ "$version" == "$target" ]]; then
+            major=$(echo "$version" | cut -d. -f1)
+            minor=$(echo "$version" | cut -d. -f2)
+            patch=$(echo "$version" | cut -d. -f3)
+            new_version="${major}.${minor}.$((patch + 1))"
+            echo "$new_version" > "$file"
+            echo "Bumped $file: $version -> $new_version"
+            bumped=true
+          fi
+        done
+
+        if [[ "$bumped" == "true" ]]; then
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Bump patch versions after $released_version release"
+          git push
+        else
+          echo "No VERSION files needed bumping."
+        fi
