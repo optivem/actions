@@ -24,6 +24,9 @@
     Comma-separated list of container package names to clean up Docker image
     tags from (e.g., "myapp,myapp-worker"). If empty, Docker cleanup is skipped.
 
+.PARAMETER DeleteDelaySeconds
+    Seconds to wait between each API delete call to avoid GitHub rate limiting. Default: 10
+
 .PARAMETER DryRun
     If true, only log what would be deleted without actually deleting anything.
 
@@ -34,6 +37,7 @@
 param(
     [int]$RetentionDays = 30,
     [string]$ContainerPackages = "",
+    [int]$DeleteDelaySeconds = 10,
     [bool]$DryRun = $false,
     [string]$Repository = $env:GITHUB_REPOSITORY
 )
@@ -47,6 +51,7 @@ Write-Host ""
 Write-Host "Repository:         $Repository"
 Write-Host "Retention Days:     $RetentionDays"
 Write-Host "Container Packages: $(if ($ContainerPackages) { $ContainerPackages } else { '(none - Docker cleanup skipped)' })"
+Write-Host "Delete Delay:       ${DeleteDelaySeconds}s"
 Write-Host "Dry Run:            $DryRun"
 Write-Host ""
 
@@ -132,6 +137,7 @@ function Remove-GitTag {
     & git tag -d $Tag 2>$null
 
     Write-Host "  Deleted git tag: $Tag" -ForegroundColor Green
+    Start-Sleep -Seconds $DeleteDelaySeconds
 }
 
 function Remove-GitHubRelease {
@@ -153,6 +159,7 @@ function Remove-GitHubRelease {
     } else {
         Write-Host "  Warning: Could not delete release $Tag" -ForegroundColor Yellow
     }
+    Start-Sleep -Seconds $DeleteDelaySeconds
 }
 
 function Remove-DockerImageTag {
@@ -184,6 +191,7 @@ function Remove-DockerImageTag {
             } else {
                 Write-Host "  Warning: Could not delete Docker image version $($version.id)" -ForegroundColor Yellow
             }
+            Start-Sleep -Seconds $DeleteDelaySeconds
             return
         }
     }

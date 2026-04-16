@@ -14,6 +14,10 @@ inputs:
     description: 'Comma-separated list of container package names for Docker image tag cleanup (e.g., "myapp,myapp-worker"). If empty, Docker cleanup is skipped.'
     required: false
     default: ''
+  delete-delay-seconds:
+    description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
+    required: false
+    default: '10'
   dry-run:
     description: 'If true, only log what would be deleted without actually deleting anything'
     required: false
@@ -34,6 +38,7 @@ runs:
           -RetentionDays ${{ inputs.retention-days }} `
           -ContainerPackages "${{ inputs.container-packages }}" `
           -DryRun ([System.Convert]::ToBoolean("${{ inputs.dry-run }}")) `
+          -DeleteDelaySeconds ${{ inputs.delete-delay-seconds }} `
           -Repository "${{ github.repository }}"
       env:
         GH_TOKEN: ${{ env.GITHUB_TOKEN }}
