@@ -8,6 +8,10 @@ inputs:
   artifact-urls:
     description: 'JSON array of Docker image URLs that were deployed'
     required: true
+  component-versions:
+    description: 'Newline-separated list of component-name:version-file-path pairs (e.g., multitier-backend-java:system/multitier/backend-java/VERSION)'
+    required: false
+    default: ''
 
 outputs:
   version:
@@ -45,6 +49,32 @@ runs:
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
+    - name: Tag Component Versions
+      if: inputs.component-versions != ''
+      shell: bash
+      run: |
+        while IFS= read -r line; do
+          [[ -z "$line" ]] && continue
+          component_name="${line%%:*}"
+          version_file="${line#*:}"
+
+          if [[ ! -f "$version_file" ]]; then
+            echo "::warning::VERSION file not found: $version_file"
+            continue
+          fi
+
+          version=$(cat "$version_file" | tr -d '[:space:]')
+          component_tag="${component_name}-v${version}"
+
+          if git tag -l "$component_tag" | grep -q "$component_tag"; then
+            echo "Skipped $component_name: tag $component_tag already exists"
+          else
+            git tag "$component_tag"
+            git push origin "$component_tag"
+            echo "Created component tag: $component_tag"
+          fi
+        done <<< "${{ inputs.component-versions }}"
+
     - name: Bump Patch Versions
       shell: bash
       run: |
@@ -53,6 +83,8 @@ runs:
         target="${released_version#v}"
 
         bumped=false
+
+        # Bump system VERSION files matching the released version
         for file in $(find . -name VERSION -not -path '*node_modules*' -not -path '*/.git/*'); do
           version=$(cat "$file" | tr -d '[:space:]')
           if [[ "$version" == "$target" ]]; then
@@ -65,6 +97,38 @@ runs:
             bumped=true
           fi
         done
+
+        # Bump component VERSION files that were just tagged
+        COMPONENT_VERSIONS="${{ inputs.component-versions }}"
+        if [[ -n "$COMPONENT_VERSIONS" ]]; then
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            version_file="${line#*:}"
+
+            if [[ ! -f "$version_file" ]]; then
+              continue
+            fi
+
+            version=$(cat "$version_file" | tr -d '[:space:]')
+            # Skip if already bumped by the system bump above
+            if [[ "$version" == "$target" ]]; then
+              continue
+            fi
+
+            component_name="${line%%:*}"
+            component_tag="${component_name}-v${version}"
+            # Only bump if we just created the tag (version was released)
+            if git tag -l "$component_tag" | grep -q "$component_tag"; then
+              major=$(echo "$version" | cut -d. -f1)
+              minor=$(echo "$version" | cut -d. -f2)
+              patch=$(echo "$version" | cut -d. -f3)
+              new_version="${major}.${minor}.$((patch + 1))"
+              echo "$new_version" > "$version_file"
+              echo "Bumped $version_file: $version -> $new_version"
+              bumped=true
+            fi
+          done <<< "$COMPONENT_VERSIONS"
+        fi
 
         if [[ "$bumped" == "true" ]]; then
           git config user.name "github-actions[bot]"
