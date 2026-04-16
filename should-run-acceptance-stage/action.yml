@@ -18,8 +18,7 @@ inputs:
     default: ${{ github.event.repository.name }}
   acceptance-stage-workflow-name:
     description: 'Name of the acceptance stage workflow'
-    required: false
-    default: 'acceptance-stage'
+    required: true
   force-run:
     description: 'Force run even if no new images (bypasses image detection)'
     required: false
