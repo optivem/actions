@@ -237,7 +237,14 @@ $deletedCount = 0
 Write-Host ""
 Write-Host "--- Released Versions ---" -ForegroundColor Cyan
 
-foreach ($version in $finalReleases.Keys) {
+# Sort versions oldest-first so least useful artifacts are cleaned up first
+$sortedReleasedVersions = $finalReleases.Keys | Sort-Object {
+    $tag = $finalReleases[$_]
+    $date = Get-TagCreationDate -Tag $tag
+    if ($date) { $date } else { [DateTime]::MaxValue }
+}
+
+foreach ($version in $sortedReleasedVersions) {
     $releaseTag = $finalReleases[$version]
     $releaseDate = Get-TagCreationDate -Tag $releaseTag
     $dockerEligible = $releaseDate -and ($releaseDate -lt $cutoffDate)
@@ -279,7 +286,14 @@ foreach ($version in $finalReleases.Keys) {
 Write-Host ""
 Write-Host "--- Superseded Prereleases ---" -ForegroundColor Cyan
 
-foreach ($version in $prereleaseTags.Keys) {
+# Sort versions oldest-first
+$sortedPrereleaseVersions = $prereleaseTags.Keys | Sort-Object {
+    $tags = $prereleaseTags[$_]
+    $dates = $tags | ForEach-Object { Get-TagCreationDate -Tag $_ } | Where-Object { $_ }
+    if ($dates) { ($dates | Measure-Object -Minimum).Minimum } else { [DateTime]::MaxValue }
+}
+
+foreach ($version in $sortedPrereleaseVersions) {
     if ($finalReleases.ContainsKey($version)) {
         continue  # Already handled in Scenario 1
     }
@@ -289,13 +303,13 @@ foreach ($version in $prereleaseTags.Keys) {
         continue  # Only one RC, nothing superseded
     }
 
-    # Sort RC tags by RC number descending
+    # Sort RC tags by RC number ascending (oldest first for cleanup)
     $sortedRcTags = $rcTags | Sort-Object {
         if ($_ -match '\.(\d+)$') { [int]$matches[1] } else { 0 }
-    } -Descending
+    }
 
-    $latestRc = $sortedRcTags[0]
-    $olderRcs = $sortedRcTags | Select-Object -Skip 1
+    $latestRc = $sortedRcTags[-1]
+    $olderRcs = $sortedRcTags | Select-Object -SkipLast 1
 
     Write-Host ""
     Write-Host "Version $version (unreleased, latest: $latestRc)" -ForegroundColor White
