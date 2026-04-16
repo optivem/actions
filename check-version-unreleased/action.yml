@@ -1,0 +1,24 @@
+name: 'Check Version Unreleased'
+description: 'Checks whether the version in the VERSION file has already been released (i.e. a matching git tag exists). Fails early if it has, so downstream steps like promote-to-rc do not waste time.'
+
+inputs:
+  file:
+    description: 'Path to the VERSION file'
+    required: false
+    default: 'VERSION'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check Version Unreleased
+      shell: bash
+      run: |
+        version=$(cat "${{ inputs.file }}" | tr -d '[:space:]')
+        tag="v${version}"
+
+        if git tag -l "$tag" | grep -q "$tag"; then
+          echo "::error::Version $tag is already released. Cannot create release candidates for an existing release. Bump the version in your VERSION file first."
+          exit 1
+        else
+          echo "Version $tag has not been released yet. OK to proceed."
+        fi
