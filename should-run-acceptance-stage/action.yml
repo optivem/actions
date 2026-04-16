@@ -16,8 +16,8 @@ inputs:
     description: 'Repository name'
     required: false
     default: ${{ github.event.repository.name }}
-  acceptance-stage-workflow-name:
-    description: 'Name of the acceptance stage workflow'
+  workflow-name:
+    description: 'Name of the workflow to check last successful run against'
     required: true
   force-run:
     description: 'Force run even if no new images (bypasses image detection)'
@@ -37,7 +37,7 @@ runs:
         & "${{ github.action_path }}/action.ps1" `
           -RepoOwner "${{ inputs.acceptance-stage-repo-owner }}" `
           -RepoName "${{ inputs.acceptance-stage-repo-name }}" `
-          -WorkflowName "${{ inputs.acceptance-stage-workflow-name }}" `
+          -WorkflowName "${{ inputs.workflow-name }}" `
           -ForceRun ([System.Convert]::ToBoolean("${{ inputs.force-run }}"))
       env:
         GITHUB_TOKEN: ${{ github.token }}
