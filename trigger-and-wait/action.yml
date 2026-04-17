@@ -35,7 +35,7 @@ runs:
     - name: Trigger ${{ inputs.workflow }}
       id: trigger
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ env.GH_TOKEN || github.token }}
       shell: bash
       run: |
         # --- Rate limit check ---
@@ -76,7 +76,7 @@ runs:
 
     - name: Wait for ${{ inputs.workflow }}
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ env.GH_TOKEN || github.token }}
       shell: bash
       run: |
         run_id="${{ steps.trigger.outputs.run_id }}"
