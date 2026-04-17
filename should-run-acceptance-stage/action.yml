@@ -1,5 +1,5 @@
 name: 'Should Run Acceptance Stage'
-description: 'Determines if acceptance stage should run based on Docker image creation timestamp or force run flag. Accepts Docker inspect JSON data to compare image creation time with last successful workflow run.'
+description: 'Determines if acceptance stage should run by comparing the latest update timestamp of the subject under test against the last successful run of the target workflow.'
 author: 'Optivem'
 branding:
   icon: 'check-circle'
@@ -24,10 +24,6 @@ inputs:
   workflow-name:
     description: 'Name of the workflow to check last successful run against'
     required: true
-  force-run:
-    description: 'Force run even if no new images (bypasses image detection)'
-    required: false
-    default: 'false'
 outputs:
   should-run:
     description: 'Whether the acceptance stage should run (true/false)'
@@ -42,8 +38,7 @@ runs:
         & "${{ github.action_path }}/action.ps1" `
           -RepoOwner "${{ inputs.acceptance-stage-repo-owner }}" `
           -RepoName "${{ inputs.acceptance-stage-repo-name }}" `
-          -WorkflowName "${{ inputs.workflow-name }}" `
-          -ForceRun ([System.Convert]::ToBoolean("${{ inputs.force-run }}"))
+          -WorkflowName "${{ inputs.workflow-name }}"
       env:
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_SHA: ${{ github.sha }}

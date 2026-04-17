@@ -4,9 +4,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$RepoName,
     [Parameter(Mandatory=$true)]
-    [string]$WorkflowName,
-    [Parameter(Mandatory=$false)]
-    [bool]$ForceRun = $false
+    [string]$WorkflowName
 )
 
 # Helper function to safely write to GitHub output
@@ -23,7 +21,6 @@ function Write-GitHubOutput {
 Write-Host "🔍 Checking if acceptance stage should run..."
 Write-Host "Repository: $RepoOwner/$RepoName"
 Write-Host "Acceptance Workflow: $WorkflowName"
-Write-Host "Force Run: $ForceRun"
 
 # Resolve last-updated-at timestamp: prefer new input, fall back to deprecated alias.
 $LastUpdatedAt = $env:LAST_UPDATED_AT
@@ -37,15 +34,6 @@ if ([string]::IsNullOrWhiteSpace($LastUpdatedAt)) {
     Write-Host "❌ 'last-updated-at' input is required (or the deprecated 'latest-image-timestamp')"
     Write-GitHubOutput "error-message" "'last-updated-at' input is required"
     exit 1
-}
-
-# If force run is enabled, always run
-if ($ForceRun) {
-    Write-Host "🚀 Force run enabled - acceptance stage will run"
-    Write-GitHubOutput "should-run" "true"
-    Write-GitHubOutput "reason" "force-run"
-    Write-GitHubOutput "latest-commit" "$env:GITHUB_SHA"
-    exit 0
 }
 
 # Get timestamp from last successful acceptance workflow run
