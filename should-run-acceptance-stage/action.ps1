@@ -25,11 +25,17 @@ Write-Host "Repository: $RepoOwner/$RepoName"
 Write-Host "Acceptance Workflow: $WorkflowName"
 Write-Host "Force Run: $ForceRun"
 
-# Get latest image timestamp from environment variable
-$LatestImageTimestamp = $env:LATEST_IMAGE_TIMESTAMP
-if ([string]::IsNullOrWhiteSpace($LatestImageTimestamp)) {
-    Write-Host "❌ LATEST_IMAGE_TIMESTAMP environment variable is empty or not set"
-    Write-GitHubOutput "error-message" "LATEST_IMAGE_TIMESTAMP environment variable is required"
+# Resolve last-updated-at timestamp: prefer new input, fall back to deprecated alias.
+$LastUpdatedAt = $env:LAST_UPDATED_AT
+if ([string]::IsNullOrWhiteSpace($LastUpdatedAt)) {
+    $LastUpdatedAt = $env:LATEST_IMAGE_TIMESTAMP
+    if (-not [string]::IsNullOrWhiteSpace($LastUpdatedAt)) {
+        Write-Host "⚠️  'latest-image-timestamp' input is deprecated — use 'last-updated-at' instead."
+    }
+}
+if ([string]::IsNullOrWhiteSpace($LastUpdatedAt)) {
+    Write-Host "❌ 'last-updated-at' input is required (or the deprecated 'latest-image-timestamp')"
+    Write-GitHubOutput "error-message" "'last-updated-at' input is required"
     exit 1
 }
 
@@ -52,27 +58,27 @@ if ($lastWorkflowRun) {
     Write-Host "No previous acceptance runs found, using fallback: $LastCheckedTimestamp"
 }
 
-Write-Host "Latest image timestamp: $LatestImageTimestamp"
-Write-Host "Checking if image is newer than: $LastCheckedTimestamp"
+Write-Host "Last updated at: $LastUpdatedAt"
+Write-Host "Checking if subject is newer than: $LastCheckedTimestamp"
 
 try {
     # Parse timestamps
-    $imageCreated = [DateTime]::Parse($LatestImageTimestamp)
+    $subjectUpdated = [DateTime]::Parse($LastUpdatedAt)
     $lastChecked = [DateTime]::Parse($LastCheckedTimestamp)
 
-    Write-Host "Image created: $($imageCreated.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+    Write-Host "Subject updated: $($subjectUpdated.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
     Write-Host "Last checked: $($lastChecked.ToString('yyyy-MM-ddTHH:mm:ssZ'))"
 
     $shouldRun = $false
     $reason = ""
 
-    # Check if image is newer than last acceptance run
-    if ($imageCreated -gt $lastChecked) {
-        Write-Host "✅ Image is newer than last acceptance run"
+    # Check if subject is newer than last acceptance run
+    if ($subjectUpdated -gt $lastChecked) {
+        Write-Host "✅ Subject is newer than last acceptance run"
         $shouldRun = $true
-        $reason = "new-image-available"
+        $reason = "subject-updated"
     } else {
-        Write-Host "ℹ️ Image is not newer than last acceptance run"
+        Write-Host "ℹ️ Subject is not newer than last acceptance run"
     }
 
     # Check if acceptance test repo has newer commits
@@ -102,7 +108,7 @@ try {
         Write-GitHubOutput "should-run" "true"
         Write-GitHubOutput "reason" $reason
         Write-GitHubOutput "latest-commit" "$env:GITHUB_SHA"
-        Write-GitHubOutput "latest-image-created-at" $LatestImageTimestamp
+        Write-GitHubOutput "last-updated-at" $LastUpdatedAt
         exit 0
     } else {
         Write-Host "❌ No acceptance stage run needed (no new image, no new test changes)"

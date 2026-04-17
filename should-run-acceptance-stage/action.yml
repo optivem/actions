@@ -5,9 +5,14 @@ branding:
   icon: 'check-circle'
   color: 'green'
 inputs:
+  last-updated-at:
+    description: 'Timestamp (ISO 8601) of the latest change to the subject being checked — e.g. Docker image creation time, or the latest commit timestamp of a source repo.'
+    required: false
+    default: ''
   latest-image-timestamp:
-    description: 'Timestamp of the latest Docker image creation (ISO 8601 format)'
-    required: true
+    description: 'DEPRECATED — use last-updated-at. Kept as an alias for backwards compatibility.'
+    required: false
+    default: ''
   acceptance-stage-repo-owner:
     description: 'Repository owner (organization or username)'
     required: false
@@ -42,4 +47,5 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_SHA: ${{ github.sha }}
+        LAST_UPDATED_AT: ${{ inputs.last-updated-at }}
         LATEST_IMAGE_TIMESTAMP: ${{ inputs.latest-image-timestamp }}
