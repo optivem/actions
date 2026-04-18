@@ -6,15 +6,25 @@ inputs:
     description: 'Path to the VERSION file'
     required: false
     default: 'VERSION'
+  prefix:
+    description: 'Optional tag prefix. When set, the tag checked is "{prefix}-v{version}"; when empty, "v{version}". Must match the prefix passed to promote-to-rc.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
   steps:
     - name: Check Version Unreleased
       shell: bash
+      env:
+        PREFIX: ${{ inputs.prefix }}
       run: |
         version=$(cat "${{ inputs.file }}" | tr -d '[:space:]')
-        tag="v${version}"
+        if [ -n "$PREFIX" ]; then
+          tag="${PREFIX}-v${version}"
+        else
+          tag="v${version}"
+        fi
 
         if git tag -l "$tag" | grep -q "$tag"; then
           echo "::error::Version $tag is already released. Cannot create release candidates for an existing release. Bump the version in your VERSION file first."
