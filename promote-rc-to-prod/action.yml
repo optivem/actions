@@ -66,76 +66,21 @@ runs:
           version=$(cat "$version_file" | tr -d '[:space:]')
           component_tag="${component_name}-v${version}"
 
-          if git tag -l "$component_tag" | grep -q "$component_tag"; then
-            echo "Skipped $component_name: tag $component_tag already exists"
+          if git ls-remote --tags --exit-code origin "refs/tags/$component_tag" >/dev/null 2>&1; then
+            echo "Skipped $component_name: tag $component_tag already exists on remote"
           else
             git tag "$component_tag"
-            git push origin "$component_tag"
-            echo "Created component tag: $component_tag"
+            if git push origin "$component_tag" 2>/dev/null; then
+              echo "Created component tag: $component_tag"
+            else
+              remote_sha=$(git ls-remote --tags origin "refs/tags/$component_tag" | cut -f1)
+              local_sha=$(git rev-parse "$component_tag")
+              if [[ -n "$remote_sha" && "$remote_sha" == "$local_sha" ]]; then
+                echo "Tag $component_tag created by concurrent run (same commit)"
+              else
+                echo "::error::Failed to push tag $component_tag (remote: $remote_sha, local: $local_sha)"
+                exit 1
+              fi
+            fi
           fi
         done <<< "${{ inputs.component-versions }}"
-
-    - name: Bump Patch Versions
-      shell: bash
-      run: |
-        released_version="${{ steps.generate-release-version.outputs.version }}"
-        # Strip leading 'v' to match VERSION file contents
-        target="${released_version#v}"
-
-        bumped=false
-
-        # Bump system VERSION files matching the released version
-        for file in $(find . -name VERSION -not -path '*node_modules*' -not -path '*/.git/*'); do
-          version=$(cat "$file" | tr -d '[:space:]')
-          if [[ "$version" == "$target" ]]; then
-            major=$(echo "$version" | cut -d. -f1)
-            minor=$(echo "$version" | cut -d. -f2)
-            patch=$(echo "$version" | cut -d. -f3)
-            new_version="${major}.${minor}.$((patch + 1))"
-            echo "$new_version" > "$file"
-            echo "Bumped $file: $version -> $new_version"
-            bumped=true
-          fi
-        done
-
-        # Bump component VERSION files that were just tagged
-        COMPONENT_VERSIONS="${{ inputs.component-versions }}"
-        if [[ -n "$COMPONENT_VERSIONS" ]]; then
-          while IFS= read -r line; do
-            [[ -z "$line" ]] && continue
-            version_file="${line#*:}"
-
-            if [[ ! -f "$version_file" ]]; then
-              continue
-            fi
-
-            version=$(cat "$version_file" | tr -d '[:space:]')
-            # Skip if already bumped by the system bump above
-            if [[ "$version" == "$target" ]]; then
-              continue
-            fi
-
-            component_name="${line%%:*}"
-            component_tag="${component_name}-v${version}"
-            # Only bump if we just created the tag (version was released)
-            if git tag -l "$component_tag" | grep -q "$component_tag"; then
-              major=$(echo "$version" | cut -d. -f1)
-              minor=$(echo "$version" | cut -d. -f2)
-              patch=$(echo "$version" | cut -d. -f3)
-              new_version="${major}.${minor}.$((patch + 1))"
-              echo "$new_version" > "$version_file"
-              echo "Bumped $version_file: $version -> $new_version"
-              bumped=true
-            fi
-          done <<< "$COMPONENT_VERSIONS"
-        fi
-
-        if [[ "$bumped" == "true" ]]; then
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Bump patch versions after $released_version release"
-          git push
-        else
-          echo "No VERSION files needed bumping."
-        fi
