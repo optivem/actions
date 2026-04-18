@@ -249,8 +249,11 @@ foreach ($version in $sortedReleasedVersions) {
     $releaseDate = Get-TagCreationDate -Tag $releaseTag
     $dockerEligible = $releaseDate -and ($releaseDate -lt $cutoffDate)
 
-    $rcTags = if ($prereleaseTags.ContainsKey($version)) { $prereleaseTags[$version] } else { @() }
-    $stTags = if ($statusTags.ContainsKey($version)) { $statusTags[$version] } else { @() }
+    # @(...) forces array type — a hashtable value with one element would otherwise
+    # unwrap to a scalar through the `if` pipeline, turning `$rcTags + $stTags` into
+    # string concatenation and producing malformed tag names.
+    $rcTags = @(if ($prereleaseTags.ContainsKey($version)) { $prereleaseTags[$version] } else { @() })
+    $stTags = @(if ($statusTags.ContainsKey($version)) { $statusTags[$version] } else { @() })
 
     if ($rcTags.Count -eq 0 -and $stTags.Count -eq 0) {
         continue  # Already cleaned up
@@ -356,3 +359,8 @@ if ($DryRun) {
     Write-Host "  Cleanup complete. $deletedCount item(s) deleted." -ForegroundColor Green
 }
 Write-Host "========================================" -ForegroundColor Cyan
+
+# External commands (e.g. `git tag -d` when the tag was already removed by
+# `gh release delete --cleanup-tag`) leave $LASTEXITCODE non-zero. Without
+# an explicit exit, pwsh propagates that and the job fails despite success.
+exit 0
