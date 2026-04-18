@@ -3,7 +3,7 @@ description: 'Finds VERSION files where the final release tag already exists and
 
 inputs:
   version-files:
-    description: 'Newline-separated list of VERSION file paths to check'
+    description: 'Newline-separated list of "path:tag-prefix" entries. Each VERSION file is bumped only if a tag named "{tag-prefix}{current-version}" exists on the remote. Example: "VERSION:meta-v"'
     required: true
   branch:
     description: 'Branch to update (default: main)'
@@ -38,8 +38,19 @@ runs:
         bumped=false
         summary=""
 
-        while IFS= read -r file; do
-          [[ -z "$file" ]] && continue
+        while IFS= read -r entry; do
+          [[ -z "$entry" ]] && continue
+
+          if [[ "$entry" != *:* ]]; then
+            echo "::error::Invalid version-files entry: '$entry'. Expected 'path:tag-prefix' format (e.g. 'VERSION:meta-v')."
+            exit 1
+          fi
+          file="${entry%%:*}"
+          tag_prefix="${entry#*:}"
+          if [[ -z "$file" || -z "$tag_prefix" ]]; then
+            echo "::error::Invalid version-files entry: '$entry'. Both path and tag-prefix are required."
+            exit 1
+          fi
 
           # Fetch file metadata via Contents API (gets current content + blob SHA)
           if ! response=$(gh api "repos/${REPO}/contents/${file}?ref=${BRANCH}" 2>/dev/null); then
@@ -52,7 +63,7 @@ runs:
           current_version=$(echo "$current_b64" | base64 -d | tr -d '[:space:]')
 
           # Only bump if the final release tag for this version exists on the remote
-          release_tag="v${current_version}"
+          release_tag="${tag_prefix}${current_version}"
           if ! git ls-remote --tags --exit-code origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
             echo "Skipped $file: $current_version (tag $release_tag does not exist on remote)"
             continue
