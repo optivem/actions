@@ -30,3 +30,29 @@ Cleans up prerelease git tags, GitHub releases, and Docker image tags that are n
 **Superseded prereleases** (no final release yet):
 - After retention period: older RCs + their status tags + Docker image tags
 - Never deletes the latest RC
+
+## cleanup-deployments
+
+Cleans up superseded GitHub deployments that are no longer needed.
+
+### Inputs
+
+| Input | Description | Default |
+|---|---|---|
+| `retention-days` | Days to retain superseded deployments before deletion | `30` |
+| `delete-delay-seconds` | Seconds to wait between each API delete call to avoid GitHub rate limiting | `10` |
+| `dry-run` | If true, only log what would be deleted without actually deleting anything | `false` |
+
+### Usage
+
+```yaml
+- uses: optivem/actions/cleanup-deployments@v1
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### What it deletes
+
+For each environment:
+- Always keeps the latest deployment
+- After retention period: all older (superseded) deployments

@@ -1,0 +1,35 @@
+name: 'Cleanup Deployments'
+description: 'Cleans up superseded GitHub deployments that are no longer needed'
+author: 'Optivem'
+branding:
+  icon: 'trash-2'
+  color: 'orange'
+
+inputs:
+  retention-days:
+    description: 'Number of days to retain superseded deployments before deletion'
+    required: false
+    default: '30'
+  delete-delay-seconds:
+    description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
+    required: false
+    default: '10'
+  dry-run:
+    description: 'If true, only log what would be deleted without actually deleting anything'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cleanup Deployments
+      shell: pwsh
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "Cleanup-Deployments.ps1"
+        & $scriptPath `
+          -RetentionDays ${{ inputs.retention-days }} `
+          -DryRun ([System.Convert]::ToBoolean("${{ inputs.dry-run }}")) `
+          -DeleteDelaySeconds ${{ inputs.delete-delay-seconds }} `
+          -Repository "${{ github.repository }}"
+      env:
+        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
