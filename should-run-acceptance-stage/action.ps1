@@ -3,8 +3,8 @@ param(
     [string]$RepoOwner,
     [Parameter(Mandatory=$true)]
     [string]$RepoName,
-    [Parameter(Mandatory=$true)]
-    [string]$WorkflowName
+    [Parameter(Mandatory=$false)]
+    [string]$WorkflowName = ''
 )
 
 # Helper function to safely write to GitHub output
@@ -20,6 +20,62 @@ function Write-GitHubOutput {
 
 Write-Host "🔍 Checking if acceptance stage should run..."
 Write-Host "Repository: $RepoOwner/$RepoName"
+
+# SHA-identity mode: skip if the acceptance HEAD already carries a success
+# status with the given context and description matching the subject SHA.
+# Opt-in via the subject-sha input — callers using timestamp mode are unaffected.
+$SubjectSha = $env:SUBJECT_SHA
+$StatusContext = $env:STATUS_CONTEXT
+
+if (-not [string]::IsNullOrWhiteSpace($SubjectSha)) {
+    if ([string]::IsNullOrWhiteSpace($StatusContext)) {
+        Write-Host "❌ 'status-context' is required when 'subject-sha' is set"
+        Write-GitHubOutput "error-message" "'status-context' is required when 'subject-sha' is set"
+        exit 1
+    }
+    if ([string]::IsNullOrWhiteSpace($env:GITHUB_SHA)) {
+        Write-Host "❌ GITHUB_SHA is not set"
+        Write-GitHubOutput "error-message" "GITHUB_SHA is not set"
+        exit 1
+    }
+
+    Write-Host "Mode: SHA-identity check"
+    Write-Host "Subject SHA: $SubjectSha"
+    Write-Host "Status context: $StatusContext"
+    Write-Host "Acceptance HEAD: $env:GITHUB_SHA"
+
+    $statusesJson = gh api "repos/$RepoOwner/$RepoName/commits/$env:GITHUB_SHA/statuses" --paginate 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        # Fail open: run the stage rather than silently skipping on transient API errors.
+        Write-Host "⚠️ Could not fetch commit statuses: $statusesJson"
+        Write-Host "Defaulting to should-run=true"
+        Write-GitHubOutput "should-run" "true"
+        Write-GitHubOutput "reason" "status-check-failed"
+        exit 0
+    }
+
+    $statuses = $statusesJson | ConvertFrom-Json
+    $match = $statuses | Where-Object {
+        $_.context -eq $StatusContext -and
+        $_.description -eq $SubjectSha -and
+        $_.state -eq 'success'
+    } | Select-Object -First 1
+
+    if ($match) {
+        Write-Host "ℹ️ Subject already verified on this HEAD (status created $($match.created_at))"
+        Write-Host "❌ ACCEPTANCE SKIPPED — already verified"
+        Write-GitHubOutput "should-run" "false"
+        Write-GitHubOutput "reason" "already-verified"
+        exit 0
+    }
+
+    Write-Host "✅ No matching verified status on HEAD — ACCEPTANCE SHOULD RUN"
+    Write-GitHubOutput "should-run" "true"
+    Write-GitHubOutput "reason" "not-verified"
+    Write-GitHubOutput "latest-commit" $env:GITHUB_SHA
+    exit 0
+}
+
 Write-Host "Acceptance Workflow: $WorkflowName"
 
 # Resolve last-updated-at timestamp: prefer new input, fall back to deprecated alias.
@@ -33,6 +89,11 @@ if ([string]::IsNullOrWhiteSpace($LastUpdatedAt)) {
 if ([string]::IsNullOrWhiteSpace($LastUpdatedAt)) {
     Write-Host "❌ 'last-updated-at' input is required (or the deprecated 'latest-image-timestamp')"
     Write-GitHubOutput "error-message" "'last-updated-at' input is required"
+    exit 1
+}
+if ([string]::IsNullOrWhiteSpace($WorkflowName)) {
+    Write-Host "❌ 'workflow-name' input is required in timestamp mode"
+    Write-GitHubOutput "error-message" "'workflow-name' input is required in timestamp mode"
     exit 1
 }
 

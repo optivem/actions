@@ -6,11 +6,19 @@ branding:
   color: 'green'
 inputs:
   last-updated-at:
-    description: 'Timestamp (ISO 8601) of the latest change to the subject being checked — e.g. Docker image creation time, or the latest commit timestamp of a source repo.'
+    description: 'Timestamp (ISO 8601) of the latest change to the subject being checked — e.g. Docker image creation time, or the latest commit timestamp of a source repo. Used in timestamp mode (ignored if subject-sha is set).'
     required: false
     default: ''
   latest-image-timestamp:
     description: 'DEPRECATED — use last-updated-at. Kept as an alias for backwards compatibility.'
+    required: false
+    default: ''
+  subject-sha:
+    description: 'Identity of the subject under test (e.g. a resolved shop commit SHA). When set, activates SHA-identity mode: the action skips if the current acceptance HEAD already carries a success commit status with context=<status-context> and description=<subject-sha>.'
+    required: false
+    default: ''
+  status-context:
+    description: 'Commit status context that records prior verification of a subject (e.g. "verified-shop-sha"). Required when subject-sha is set.'
     required: false
     default: ''
   acceptance-stage-repo-owner:
@@ -22,8 +30,9 @@ inputs:
     required: false
     default: ${{ github.event.repository.name }}
   workflow-name:
-    description: 'Name of the workflow to check last successful run against'
-    required: true
+    description: 'Name of the workflow to check last successful run against. Required in timestamp mode; ignored in SHA-identity mode.'
+    required: false
+    default: ''
 outputs:
   should-run:
     description: 'Whether the acceptance stage should run (true/false)'
@@ -44,3 +53,5 @@ runs:
         GITHUB_SHA: ${{ github.sha }}
         LAST_UPDATED_AT: ${{ inputs.last-updated-at }}
         LATEST_IMAGE_TIMESTAMP: ${{ inputs.latest-image-timestamp }}
+        SUBJECT_SHA: ${{ inputs.subject-sha }}
+        STATUS_CONTEXT: ${{ inputs.status-context }}
