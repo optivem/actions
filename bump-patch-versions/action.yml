@@ -3,7 +3,7 @@ description: 'Finds VERSION files where the final release tag already exists and
 
 inputs:
   version-files:
-    description: 'Newline-separated list of "path:tag-prefix" entries. Each VERSION file is bumped only if a tag named "{tag-prefix}{current-version}" exists on the remote. Example: "VERSION:meta-v"'
+    description: 'Newline-separated list of "path:tag-prefix1,tag-prefix2,..." entries. Each VERSION file is bumped if ANY tag "{prefix}{current-version}" exists on the remote. Example: "VERSION:meta-v,monolith-java-v"'
     required: true
   branch:
     description: 'Branch to update (default: main)'
@@ -42,15 +42,16 @@ runs:
           [[ -z "$entry" ]] && continue
 
           if [[ "$entry" != *:* ]]; then
-            echo "::error::Invalid version-files entry: '$entry'. Expected 'path:tag-prefix' format (e.g. 'VERSION:meta-v')."
+            echo "::error::Invalid version-files entry: '$entry'. Expected 'path:tag-prefix[,tag-prefix...]' format (e.g. 'VERSION:meta-v,monolith-java-v')."
             exit 1
           fi
           file="${entry%%:*}"
-          tag_prefix="${entry#*:}"
-          if [[ -z "$file" || -z "$tag_prefix" ]]; then
-            echo "::error::Invalid version-files entry: '$entry'. Both path and tag-prefix are required."
+          tag_prefixes_csv="${entry#*:}"
+          if [[ -z "$file" || -z "$tag_prefixes_csv" ]]; then
+            echo "::error::Invalid version-files entry: '$entry'. Both path and at least one tag-prefix are required."
             exit 1
           fi
+          IFS=',' read -ra tag_prefixes <<< "$tag_prefixes_csv"
 
           # Fetch file metadata via Contents API (gets current content + blob SHA)
           if ! response=$(gh api "repos/${REPO}/contents/${file}?ref=${BRANCH}" 2>/dev/null); then
@@ -62,12 +63,20 @@ runs:
           current_b64=$(echo "$response" | jq -r '.content' | tr -d '\n')
           current_version=$(echo "$current_b64" | base64 -d | tr -d '[:space:]')
 
-          # Only bump if the final release tag for this version exists on the remote
-          release_tag="${tag_prefix}${current_version}"
-          if ! git ls-remote --tags --exit-code origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
-            echo "Skipped $file: $current_version (tag $release_tag does not exist on remote)"
+          # Bump if ANY of the configured release tags exists on the remote
+          matched_tag=""
+          for prefix in "${tag_prefixes[@]}"; do
+            candidate="${prefix}${current_version}"
+            if git ls-remote --tags --exit-code origin "refs/tags/${candidate}" >/dev/null 2>&1; then
+              matched_tag="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$matched_tag" ]]; then
+            echo "Skipped $file: $current_version (no matching release tag exists on remote for prefixes: ${tag_prefixes_csv})"
             continue
           fi
+          release_tag="$matched_tag"
 
           major=$(echo "$current_version" | cut -d. -f1)
           minor=$(echo "$current_version" | cut -d. -f2)
