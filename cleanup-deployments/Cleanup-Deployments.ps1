@@ -5,14 +5,21 @@
     Cleans up superseded GitHub deployments that are no longer needed.
 
 .DESCRIPTION
-    Mirrors the "superseded prereleases" logic from cleanup-prereleases:
+    Mirrors cleanup-prereleases logic, adapted for deployments:
 
-    For each environment:
-      - Always keep the latest deployment (never deleted)
-      - Delete older deployments that are past the retention period
+    Scenario 1 — Released versions (final tag vX.Y.Z exists):
+      - Immediately delete deployments whose SHA corresponds to any
+        vX.Y.Z-rc.* tag (bypassing the retention window)
+
+    Scenario 2 — Superseded per environment:
+      - For each environment, always keep the latest deployment
+      - Delete older deployments past the retention period
 
     GitHub requires a deployment to be inactive before deletion, so each
     deployment gets a new "inactive" status created before the DELETE call.
+
+    IMPORTANT: run this action BEFORE cleanup-prereleases — Scenario 1
+    relies on the RC git tags still being present to resolve SHAs.
 
 .PARAMETER RetentionDays
     Number of days to retain superseded deployments before deletion. Default: 30
@@ -48,7 +55,51 @@ Write-Host ""
 
 $cutoffDate = (Get-Date).AddDays(-$RetentionDays)
 
-# ── Step 1: Fetch all deployments (paginated) ───────────────────────
+# ── Step 1: Categorize tags (local, no API calls) ───────────────────
+
+Write-Host "Categorizing tags..." -ForegroundColor Cyan
+$allTags = & git tag -l "v*"
+
+$finalReleases = @{}     # "1.0.0" -> tag "v1.0.0"
+$prereleaseTags = @{}    # "1.0.0" -> @("v1.0.0-rc.1", "v1.0.0-rc.2", ...)
+
+if ($allTags) {
+    foreach ($tag in $allTags) {
+        if ($tag -match '^v(\d+\.\d+\.\d+)$') {
+            $finalReleases[$matches[1]] = $tag
+        }
+        elseif ($tag -match '^v(\d+\.\d+\.\d+)-\w+\.\d+$') {
+            $version = $matches[1]
+            if (-not $prereleaseTags.ContainsKey($version)) {
+                $prereleaseTags[$version] = @()
+            }
+            $prereleaseTags[$version] += $tag
+        }
+    }
+    Write-Host "  Final releases:  $($finalReleases.Count)" -ForegroundColor Green
+    Write-Host "  RC versions:     $($prereleaseTags.Count)" -ForegroundColor Green
+} else {
+    Write-Host "  No version tags found" -ForegroundColor Yellow
+}
+
+# ── Step 2: Build set of "released-RC SHAs" ─────────────────────────
+# SHAs of any RC tag whose version has a final release.
+# Deployments matching these SHAs are deleted immediately (Scenario 1).
+
+$releasedRcShas = @{}
+foreach ($version in $finalReleases.Keys) {
+    if (-not $prereleaseTags.ContainsKey($version)) { continue }
+    foreach ($rcTag in $prereleaseTags[$version]) {
+        $sha = & git rev-list -n 1 $rcTag 2>$null
+        if ($LASTEXITCODE -eq 0 -and $sha) {
+            $releasedRcShas[$sha.Trim()] = $rcTag
+        }
+    }
+}
+Write-Host "  Released-RC SHAs: $($releasedRcShas.Count)" -ForegroundColor Green
+Write-Host ""
+
+# ── Step 3: Fetch all deployments (paginated) ───────────────────────
 
 Write-Host "Fetching all deployments..." -ForegroundColor Cyan
 $deploymentsJson = & gh api "/repos/$Repository/deployments" --paginate 2>$null
@@ -63,40 +114,23 @@ $allDeployments = $deploymentsJson | ConvertFrom-Json
 Write-Host "  Found $($allDeployments.Count) deployment(s)" -ForegroundColor Green
 Write-Host ""
 
-# ── Step 2: Group deployments by environment ────────────────────────
-
-$byEnvironment = @{}
-foreach ($deployment in $allDeployments) {
-    $env = $deployment.environment
-    if (-not $byEnvironment.ContainsKey($env)) {
-        $byEnvironment[$env] = @()
-    }
-    $byEnvironment[$env] += $deployment
-}
-
-Write-Host "Environments: $($byEnvironment.Count)" -ForegroundColor Cyan
-foreach ($env in $byEnvironment.Keys | Sort-Object) {
-    Write-Host "  ${env}: $($byEnvironment[$env].Count) deployment(s)" -ForegroundColor Gray
-}
-Write-Host ""
-
 # ── Helpers ─────────────────────────────────────────────────────────
 
 function Remove-Deployment {
-    param($Deployment)
+    param($Deployment, [string]$Reason)
 
     $id = $Deployment.id
     $env = $Deployment.environment
     $sha = $Deployment.sha.Substring(0, 7)
 
     if ($DryRun) {
-        Write-Host "  [DRY RUN] Would delete deployment ${id} (env=${env}, sha=${sha})" -ForegroundColor Yellow
+        Write-Host "  [DRY RUN] Would delete deployment ${id} (env=${env}, sha=${sha}) — ${Reason}" -ForegroundColor Yellow
         return
     }
 
     # Mark inactive first — GitHub rejects DELETE on an active deployment
     # unless the caller has repo_deployment scope. Creating an inactive
-    # status is the documented workaround and always works with contents:write.
+    # status is the documented workaround and always works with deployments:write.
     & gh api --method POST "/repos/$Repository/deployments/$id/statuses" `
         -f state=inactive 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -106,16 +140,47 @@ function Remove-Deployment {
 
     & gh api --method DELETE "/repos/$Repository/deployments/$id" 2>$null
     if ($LASTEXITCODE -eq 0) {
-        Write-Host "  Deleted deployment ${id} (env=${env}, sha=${sha})" -ForegroundColor Green
+        Write-Host "  Deleted deployment ${id} (env=${env}, sha=${sha}) — ${Reason}" -ForegroundColor Green
     } else {
         Write-Host "  Warning: Could not delete deployment ${id}" -ForegroundColor Yellow
     }
     Start-Sleep -Seconds $DeleteDelaySeconds
 }
 
-# ── Step 3: Per environment, keep latest, delete older past retention
+# ── Step 4: Scenario 1 — released-RC deployments (delete immediately)
+
+Write-Host "--- Scenario 1: Released-RC Deployments ---" -ForegroundColor Cyan
 
 $deletedCount = 0
+$remainingDeployments = @()
+
+foreach ($deployment in $allDeployments) {
+    if ($releasedRcShas.ContainsKey($deployment.sha)) {
+        $rcTag = $releasedRcShas[$deployment.sha]
+        Remove-Deployment -Deployment $deployment -Reason "RC ${rcTag} (released)"
+        $deletedCount++
+    } else {
+        $remainingDeployments += $deployment
+    }
+}
+
+if ($deletedCount -eq 0) {
+    Write-Host "  No released-RC deployments found" -ForegroundColor Gray
+}
+Write-Host ""
+
+# ── Step 5: Scenario 2 — superseded per environment ─────────────────
+
+Write-Host "--- Scenario 2: Superseded Per Environment ---" -ForegroundColor Cyan
+
+$byEnvironment = @{}
+foreach ($deployment in $remainingDeployments) {
+    $env = $deployment.environment
+    if (-not $byEnvironment.ContainsKey($env)) {
+        $byEnvironment[$env] = @()
+    }
+    $byEnvironment[$env] += $deployment
+}
 
 # Sort environments alphabetically for stable log output
 $sortedEnvironments = $byEnvironment.Keys | Sort-Object
@@ -141,8 +206,7 @@ foreach ($env in $sortedEnvironments) {
             continue
         }
 
-        Write-Host "  Cleaning up $($deployment.id) (created $createdAt)" -ForegroundColor White
-        Remove-Deployment -Deployment $deployment
+        Remove-Deployment -Deployment $deployment -Reason "superseded, past retention"
         $deletedCount++
     }
 }

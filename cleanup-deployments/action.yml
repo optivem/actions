@@ -22,6 +22,10 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Fetch all tags
+      shell: bash
+      run: git fetch --tags --force
+
     - name: Cleanup Deployments
       shell: pwsh
       run: |

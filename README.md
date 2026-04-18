@@ -53,6 +53,15 @@ Cleans up superseded GitHub deployments that are no longer needed.
 
 ### What it deletes
 
-For each environment:
-- Always keeps the latest deployment
-- After retention period: all older (superseded) deployments
+**Released-RC deployments** (final tag `vX.Y.Z` exists):
+- Immediately deletes any deployment whose SHA matches a `vX.Y.Z-rc.*` tag
+
+**Superseded per environment** (for all remaining deployments):
+- Always keeps the latest deployment per environment
+- After retention period: deletes older deployments
+
+### Ordering note
+
+Run this action **before** `cleanup-prereleases` in the same workflow — the
+released-RC logic relies on RC git tags being present to resolve SHAs, and
+`cleanup-prereleases` deletes those tags immediately for released versions.
