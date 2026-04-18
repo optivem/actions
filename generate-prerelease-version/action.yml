@@ -1,27 +1,39 @@
 name: 'Generate Prerelease Version'
-description: 'Generate prerelease version from target version with incrementing RC number'
+description: 'Generate an RC prerelease version for the current workflow run. Delegates to compose-prerelease-version for the tag string, plus guards against running against an already-released target version.'
 
 inputs:
   target-version:
     description: 'Target semantic version from VERSION file (e.g., 1.0.0)'
     required: true
+  prefix:
+    description: 'Optional prefix prepended to the tag (e.g., monolith-java). Produces {prefix}-v{version}-rc.{run_number} when set, else v{version}-rc.{run_number}'
+    required: false
+    default: ''
   suffix:
-    description: 'Prerelease suffix (e.g., rc, alpha, beta)'
+    description: 'Prerelease suffix'
     required: false
     default: 'rc'
 
 outputs:
   version:
-    description: 'The prerelease version (e.g., v1.0.0-rc.1)'
-    value: ${{ steps.generate.outputs.version }}
+    description: 'The prerelease version (e.g., v1.0.0-rc.42 or monolith-java-v1.0.0-rc.42)'
+    value: ${{ steps.compose.outputs.version }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Generate Prerelease Version
-      id: generate
+    - name: Check Final Tag Not Released
       shell: pwsh
       run: |
         & "${{ github.action_path }}/generate-prerelease-version.ps1" `
           -TargetVersion '${{ inputs.target-version }}' `
-          -PrereleaseSuffix '${{ inputs.suffix }}'
+          -Prefix '${{ inputs.prefix }}'
+
+    - name: Compose Prerelease Version
+      id: compose
+      uses: optivem/actions/compose-prerelease-version@v1
+      with:
+        target-version: ${{ inputs.target-version }}
+        suffix: ${{ inputs.suffix }}
+        number: ${{ github.run_number }}
+        prefix: ${{ inputs.prefix }}

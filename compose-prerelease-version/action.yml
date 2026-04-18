@@ -1,0 +1,35 @@
+name: 'Compose Prerelease Version'
+description: 'Compose a prerelease version string from its parts (target-version, suffix, number, optional prefix). Pure function — no side effects.'
+
+inputs:
+  target-version:
+    description: 'Target semantic version (e.g., 1.0.0)'
+    required: true
+  suffix:
+    description: 'Prerelease suffix (e.g., rc, dev, alpha, beta)'
+    required: true
+  number:
+    description: 'Counter appended after the suffix (e.g., github.run_number or a build number)'
+    required: true
+  prefix:
+    description: 'Optional prefix prepended to the tag. Produces {prefix}-v{version}-{suffix}.{number} when set, else v{version}-{suffix}.{number}'
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: 'The composed prerelease version string'
+    value: ${{ steps.compose.outputs.version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compose Prerelease Version
+      id: compose
+      shell: pwsh
+      run: |
+        & "${{ github.action_path }}/compose-prerelease-version.ps1" `
+          -TargetVersion '${{ inputs.target-version }}' `
+          -Suffix '${{ inputs.suffix }}' `
+          -Number ${{ inputs.number }} `
+          -Prefix '${{ inputs.prefix }}'

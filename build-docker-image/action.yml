@@ -29,11 +29,11 @@ inputs:
     required: false
     default: 'latest'
   component-version:
-    description: 'Component version (e.g., "1.0.0"). If provided along with build-number, image is tagged with version-dev.N format.'
+    description: 'Component version (e.g., "1.0.0"). If provided, image is tagged as v{component-version}-dev.{build-number}. Requires build-number.'
     required: false
     default: ''
   build-number:
-    description: 'Build number for dev tagging (e.g., github.run_number). Used with component-version to create tags like v1.0.0-dev.3.'
+    description: 'Build number for dev tagging (e.g., github.run_number). Required when component-version is provided.'
     required: false
     default: ''
   dockerfile:
@@ -73,6 +73,15 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
 
+    - name: Compose Component Version
+      id: compose-version
+      if: inputs.component-version != ''
+      uses: optivem/actions/compose-prerelease-version@v1
+      with:
+        target-version: ${{ inputs.component-version }}
+        suffix: dev
+        number: ${{ inputs.build-number }}
+
     - name: Tag Docker image
       id: tag
       run: |
@@ -92,11 +101,7 @@ runs:
 
         # Tag with component version (if provided)
         if [ -n "${{ inputs.component-version }}" ]; then
-          VERSION_SUFFIX=""
-          if [ -n "${{ inputs.build-number }}" ]; then
-            VERSION_SUFFIX="-dev.${{ inputs.build-number }}"
-          fi
-          IMAGE_VERSION_TAG="${BASE_IMAGE}:v${{ inputs.component-version }}${VERSION_SUFFIX}"
+          IMAGE_VERSION_TAG="${BASE_IMAGE}:${{ steps.compose-version.outputs.version }}"
           docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$IMAGE_VERSION_TAG"
           echo "image-version-tag=$IMAGE_VERSION_TAG" >> $GITHUB_OUTPUT
           echo "🏷️ Tagged with version: $IMAGE_VERSION_TAG"

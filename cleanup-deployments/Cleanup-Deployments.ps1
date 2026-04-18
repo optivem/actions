@@ -24,6 +24,10 @@
 .PARAMETER RetentionDays
     Number of days to retain superseded deployments before deletion. Default: 30
 
+.PARAMETER ProtectedEnvironments
+    Comma-separated list of environment names whose deployments must never be
+    deleted (case-insensitive). Default: "production".
+
 .PARAMETER DeleteDelaySeconds
     Seconds to wait between each API delete call to avoid GitHub rate limiting. Default: 10
 
@@ -36,6 +40,7 @@
 
 param(
     [int]$RetentionDays = 30,
+    [string]$ProtectedEnvironments = "production",
     [int]$DeleteDelaySeconds = 10,
     [bool]$DryRun = $false,
     [string]$Repository = $env:GITHUB_REPOSITORY
@@ -43,14 +48,27 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$protectedEnvSet = @{}
+foreach ($name in ($ProtectedEnvironments -split ',')) {
+    $trimmed = $name.Trim()
+    if ($trimmed) { $protectedEnvSet[$trimmed.ToLowerInvariant()] = $true }
+}
+
+function Test-EnvironmentProtected {
+    param([string]$EnvironmentName)
+    if (-not $EnvironmentName) { return $false }
+    return $protectedEnvSet.ContainsKey($EnvironmentName.ToLowerInvariant())
+}
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Deployment Cleanup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Repository:     $Repository"
-Write-Host "Retention Days: $RetentionDays"
-Write-Host "Delete Delay:   ${DeleteDelaySeconds}s"
-Write-Host "Dry Run:        $DryRun"
+Write-Host "Repository:             $Repository"
+Write-Host "Retention Days:         $RetentionDays"
+Write-Host "Protected Environments: $(if ($protectedEnvSet.Count) { ($protectedEnvSet.Keys -join ', ') } else { '(none)' })"
+Write-Host "Delete Delay:           ${DeleteDelaySeconds}s"
+Write-Host "Dry Run:                $DryRun"
 Write-Host ""
 
 $cutoffDate = (Get-Date).AddDays(-$RetentionDays)
@@ -112,6 +130,22 @@ if ($LASTEXITCODE -ne 0 -or -not $deploymentsJson) {
 $deploymentsJson = $deploymentsJson -replace '\]\[', ','
 $allDeployments = $deploymentsJson | ConvertFrom-Json
 Write-Host "  Found $($allDeployments.Count) deployment(s)" -ForegroundColor Green
+
+# Filter out deployments in protected environments before any scenario runs.
+# These are never eligible for deletion. Belt-and-suspenders: Remove-Deployment
+# also enforces this, so a regression in either guard is caught by the other.
+$protectedCount = 0
+$allDeployments = @($allDeployments | Where-Object {
+    if (Test-EnvironmentProtected -EnvironmentName $_.environment) {
+        $protectedCount++
+        $false
+    } else {
+        $true
+    }
+})
+if ($protectedCount -gt 0) {
+    Write-Host "  Excluded $protectedCount deployment(s) in protected environment(s)" -ForegroundColor Cyan
+}
 Write-Host ""
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -122,6 +156,14 @@ function Remove-Deployment {
     $id = $Deployment.id
     $env = $Deployment.environment
     $sha = $Deployment.sha.Substring(0, 7)
+
+    # Safety net: never delete a deployment to a protected environment,
+    # even if upstream logic thought it was eligible. This is the last line
+    # of defense against accidental production-deployment deletion.
+    if (Test-EnvironmentProtected -EnvironmentName $env) {
+        Write-Host "  Protected: skipping deployment ${id} (env=${env}, sha=${sha}) — ${Reason}" -ForegroundColor Cyan
+        return
+    }
 
     if ($DryRun) {
         Write-Host "  [DRY RUN] Would delete deployment ${id} (env=${env}, sha=${sha}) — ${Reason}" -ForegroundColor Yellow

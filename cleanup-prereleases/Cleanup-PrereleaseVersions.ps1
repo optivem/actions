@@ -122,6 +122,13 @@ function Get-TagCreationDate {
 function Remove-GitTag {
     param([string]$Tag)
 
+    # Safety net: never delete a final release tag (vX.Y.Z shape), even if
+    # upstream categorization misclassified it into a prerelease bucket.
+    if ($Tag -match '^v\d+\.\d+\.\d+$') {
+        Write-Host "  Protected: skipping final release git tag $Tag" -ForegroundColor Cyan
+        return
+    }
+
     if ($DryRun) {
         Write-Host "  [DRY RUN] Would delete git tag: $Tag" -ForegroundColor Yellow
         return
@@ -146,6 +153,14 @@ function Remove-GitHubRelease {
     # Check from pre-fetched data (no API call)
     if (-not $allReleases.ContainsKey($Tag)) {
         return  # No release for this tag
+    }
+
+    # Safety net: never delete a final (non-prerelease) GitHub release, even
+    # if upstream tag categorization misclassified it. Belt-and-suspenders
+    # against regressions in the vX.Y.Z / vX.Y.Z-rc.N regexes.
+    if (-not $allReleases[$Tag].IsPrerelease) {
+        Write-Host "  Protected: skipping final GitHub release $Tag (isPrerelease=false)" -ForegroundColor Cyan
+        return
     }
 
     if ($DryRun) {

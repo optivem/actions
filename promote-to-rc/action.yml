@@ -8,10 +8,14 @@ inputs:
   image-urls:
     description: 'JSON array of Docker image digest URLs to tag'
     required: true
+  prefix:
+    description: 'Optional prefix prepended to the tag (e.g., monolith-java). Produces {prefix}-v{version}-rc.{run_number} when set, else v{version}-rc.{run_number}'
+    required: false
+    default: ''
 
 outputs:
   version:
-    description: 'The generated prerelease version (e.g., v1.0.0-rc.1)'
+    description: 'The generated prerelease version (e.g., v1.0.0-rc.42 or monolith-java-v1.0.0-rc.42)'
     value: ${{ steps.generate-version.outputs.version }}
   image-urls:
     description: 'JSON array of Docker image URLs with the prerelease tag applied'
@@ -25,6 +29,7 @@ runs:
       uses: optivem/actions/generate-prerelease-version@v1
       with:
         target-version: ${{ inputs.target-version }}
+        prefix: ${{ inputs.prefix }}
 
     - name: Tag Docker Images for Prerelease
       id: tag-images

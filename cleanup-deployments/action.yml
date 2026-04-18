@@ -10,6 +10,10 @@ inputs:
     description: 'Number of days to retain superseded deployments before deletion'
     required: false
     default: '30'
+  protected-environments:
+    description: 'Comma-separated list of environment names whose deployments must never be deleted (case-insensitive).'
+    required: false
+    default: 'production'
   delete-delay-seconds:
     description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
     required: false
@@ -32,6 +36,7 @@ runs:
         $scriptPath = Join-Path ${{ github.action_path }} "Cleanup-Deployments.ps1"
         & $scriptPath `
           -RetentionDays ${{ inputs.retention-days }} `
+          -ProtectedEnvironments "${{ inputs.protected-environments }}" `
           -DryRun ([System.Convert]::ToBoolean("${{ inputs.dry-run }}")) `
           -DeleteDelaySeconds ${{ inputs.delete-delay-seconds }} `
           -Repository "${{ github.repository }}"
