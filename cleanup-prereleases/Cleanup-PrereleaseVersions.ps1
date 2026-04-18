@@ -122,9 +122,10 @@ function Get-TagCreationDate {
 function Remove-GitTag {
     param([string]$Tag)
 
-    # Safety net: never delete a final release tag (vX.Y.Z shape), even if
-    # upstream categorization misclassified it into a prerelease bucket.
-    if ($Tag -match '^v\d+\.\d+\.\d+$') {
+    # Safety net: never delete a final release tag (vX.Y.Z shape, optionally
+    # prefixed — e.g. "v1.0.0", "meta-v1.0.0"), even if upstream categorization
+    # misclassified it into a prerelease bucket.
+    if ($Tag -match '^(?:[a-z][a-z0-9-]*-)?v\d+\.\d+\.\d+$') {
         Write-Host "  Protected: skipping final release git tag $Tag" -ForegroundColor Cyan
         return
     }
@@ -215,34 +216,50 @@ function Remove-DockerImageTag {
 # ── Step 3: Categorize git tags (local, no API calls) ────────────────
 
 Write-Host "Categorizing tags..." -ForegroundColor Cyan
-$allTags = & git tag -l "v*"
+$allTags = & git tag -l
 if (-not $allTags) {
-    Write-Host "No version tags found. Nothing to clean up." -ForegroundColor Green
+    Write-Host "No tags found. Nothing to clean up." -ForegroundColor Green
     exit 0
 }
 
-$finalReleases = @{}       # "1.0.0" -> tag "v1.0.0"
-$prereleaseTags = @{}      # "1.0.0" -> @("v1.0.0-rc.1", "v1.0.0-rc.2", ...)
-$statusTags = @{}          # "1.0.0" -> @("v1.0.0-rc.1-qa-deployed", ...)
+$finalReleases = @{}       # "1.0.0" -> tag "v1.0.0"   (final releases are always unprefixed)
+$prereleaseTags = @{}      # "1.0.0" -> @("v1.0.0-rc.1", "monolith-java-v1.0.0-rc.5", ...)
+$statusTags = @{}          # "1.0.0" -> @("v1.0.0-rc.1-qa-deployed", "monolith-java-v1.0.0-rc.5-qa-deployed", ...)
 
+# Prerelease and status tags may be namespaced with a pipeline prefix
+# (e.g. "monolith-java-v1.0.0-rc.5") so that multiple pipelines can
+# produce RCs for the same version without colliding. Final release
+# tags ("v1.0.0") remain unprefixed — there is one final per version.
 foreach ($tag in $allTags) {
-    if ($tag -match '^v(\d+\.\d+\.\d+)$') {
+    if ($tag -match '^(?:[a-z][a-z0-9-]*-)?v(\d+\.\d+\.\d+)$') {
+        # Any final release (prefixed or not — e.g. "v1.0.0", "meta-v1.0.0")
+        # for this version counts as "released to production" and triggers
+        # bulk cleanup of all prereleases sharing the same version.
         $finalReleases[$matches[1]] = $tag
     }
-    elseif ($tag -match '^v(\d+\.\d+\.\d+)-\w+\.\d+-.+$') {
+    elseif ($tag -match '^(?:[a-z][a-z0-9-]*-)?v(\d+\.\d+\.\d+)-\w+\.\d+-.+$') {
         $version = $matches[1]
         if (-not $statusTags.ContainsKey($version)) {
             $statusTags[$version] = @()
         }
         $statusTags[$version] += $tag
     }
-    elseif ($tag -match '^v(\d+\.\d+\.\d+)-\w+\.\d+$') {
+    elseif ($tag -match '^(?:[a-z][a-z0-9-]*-)?v(\d+\.\d+\.\d+)-\w+\.\d+$') {
         $version = $matches[1]
         if (-not $prereleaseTags.ContainsKey($version)) {
             $prereleaseTags[$version] = @()
         }
         $prereleaseTags[$version] += $tag
     }
+}
+
+function Get-TagPrefix {
+    param([string]$Tag)
+    # Extract optional prefix; returns "" for unprefixed tags.
+    if ($Tag -match '^([a-z][a-z0-9-]*)-v\d+\.\d+\.\d+') {
+        return $matches[1]
+    }
+    return ""
 }
 
 $deletedCount = 0
@@ -321,44 +338,64 @@ foreach ($version in $sortedPrereleaseVersions) {
         continue  # Only one RC, nothing superseded
     }
 
-    # Sort RC tags by RC number ascending (oldest first for cleanup)
-    $sortedRcTags = $rcTags | Sort-Object {
-        if ($_ -match '\.(\d+)$') { [int]$matches[1] } else { 0 }
+    # Group RCs by prefix so each pipeline (e.g. monolith-java, meta) keeps
+    # its own latest RC independently. Without this, one pipeline's latest
+    # could be wiped out because another pipeline has a higher run_number.
+    $rcsByPrefix = @{}
+    foreach ($rcTag in $rcTags) {
+        $prefix = Get-TagPrefix -Tag $rcTag
+        if (-not $rcsByPrefix.ContainsKey($prefix)) {
+            $rcsByPrefix[$prefix] = @()
+        }
+        $rcsByPrefix[$prefix] += $rcTag
     }
 
-    $latestRc = $sortedRcTags[-1]
-    $olderRcs = $sortedRcTags | Select-Object -SkipLast 1
-
-    Write-Host ""
-    Write-Host "Version $version (unreleased, latest: $latestRc)" -ForegroundColor White
-
-    foreach ($rcTag in $olderRcs) {
-        $tagDate = Get-TagCreationDate -Tag $rcTag
-        if (-not $tagDate -or $tagDate -ge $cutoffDate) {
-            Write-Host "  Retained $rcTag (created $tagDate, within retention window)" -ForegroundColor Gray
-            continue
+    foreach ($prefix in $rcsByPrefix.Keys) {
+        $prefixRcs = @($rcsByPrefix[$prefix])
+        if ($prefixRcs.Count -le 1) {
+            continue  # Only one RC in this pipeline group
         }
 
-        Write-Host "  Cleaning up $rcTag (created $tagDate)" -ForegroundColor White
+        # Sort RC tags by RC number ascending (oldest first for cleanup)
+        $sortedRcTags = $prefixRcs | Sort-Object {
+            if ($_ -match '\.(\d+)$') { [int]$matches[1] } else { 0 }
+        }
 
-        # Delete the RC release and tag
-        Remove-GitHubRelease -Tag $rcTag
-        Remove-GitTag -Tag $rcTag
-        $deletedCount++
+        $latestRc = $sortedRcTags[-1]
+        $olderRcs = $sortedRcTags | Select-Object -SkipLast 1
 
-        # Delete associated status tags
-        $stTags = if ($statusTags.ContainsKey($version)) { $statusTags[$version] } else { @() }
-        $relatedStatusTags = $stTags | Where-Object { $_ -like "$rcTag-*" }
-        foreach ($stTag in $relatedStatusTags) {
-            Remove-GitHubRelease -Tag $stTag
-            Remove-GitTag -Tag $stTag
+        $prefixLabel = if ($prefix) { "prefix '$prefix'" } else { "no prefix" }
+        Write-Host ""
+        Write-Host "Version $version, $prefixLabel (unreleased, latest: $latestRc)" -ForegroundColor White
+
+        foreach ($rcTag in $olderRcs) {
+            $tagDate = Get-TagCreationDate -Tag $rcTag
+            if (-not $tagDate -or $tagDate -ge $cutoffDate) {
+                Write-Host "  Retained $rcTag (created $tagDate, within retention window)" -ForegroundColor Gray
+                continue
+            }
+
+            Write-Host "  Cleaning up $rcTag (created $tagDate)" -ForegroundColor White
+
+            # Delete the RC release and tag
+            Remove-GitHubRelease -Tag $rcTag
+            Remove-GitTag -Tag $rcTag
             $deletedCount++
-        }
 
-        # Delete Docker image tags for this superseded RC
-        if ($packageList.Count -gt 0) {
-            foreach ($package in $packageList) {
-                Remove-DockerImageTag -PackageName $package -Tag $rcTag
+            # Delete associated status tags
+            $stTags = if ($statusTags.ContainsKey($version)) { $statusTags[$version] } else { @() }
+            $relatedStatusTags = $stTags | Where-Object { $_ -like "$rcTag-*" }
+            foreach ($stTag in $relatedStatusTags) {
+                Remove-GitHubRelease -Tag $stTag
+                Remove-GitTag -Tag $stTag
+                $deletedCount++
+            }
+
+            # Delete Docker image tags for this superseded RC
+            if ($packageList.Count -gt 0) {
+                foreach ($package in $packageList) {
+                    Remove-DockerImageTag -PackageName $package -Tag $rcTag
+                }
             }
         }
     }
