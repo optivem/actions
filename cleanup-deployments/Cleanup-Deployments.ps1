@@ -37,6 +37,10 @@
 .PARAMETER DeleteDelaySeconds
     Seconds to wait between each API delete call to avoid GitHub rate limiting. Default: 10
 
+.PARAMETER RateLimitThreshold
+    Pause before each API delete when remaining core-rate-limit requests fall
+    below this number (set 0 to disable). Default: 50
+
 .PARAMETER DryRun
     If true, only log what would be deleted without actually deleting anything.
 
@@ -49,6 +53,7 @@ param(
     [int]$RetentionDays = 30,
     [string]$ProtectedEnvironments = "*-production,production",
     [int]$DeleteDelaySeconds = 10,
+    [int]$RateLimitThreshold = 50,
     [bool]$DryRun = $false,
     [string]$Repository = $env:GITHUB_REPOSITORY
 )
@@ -80,8 +85,25 @@ Write-Host "Keep Count:             $KeepCount"
 Write-Host "Retention Days:         $RetentionDays"
 Write-Host "Protected Environments: $(if ($protectedPatterns.Count) { ($protectedPatterns -join ', ') } else { '(none)' })"
 Write-Host "Delete Delay:           ${DeleteDelaySeconds}s"
+Write-Host "Rate-Limit Threshold:   $(if ($RateLimitThreshold -gt 0) { $RateLimitThreshold } else { '(disabled)' })"
 Write-Host "Dry Run:                $DryRun"
 Write-Host ""
+
+function Wait-ForRateLimitBudget {
+    if ($RateLimitThreshold -le 0) { return }
+    $remainingRaw = & gh api rate_limit --jq '.resources.core.remaining' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $remainingRaw) { return }
+    $remaining = [int]$remainingRaw
+    if ($remaining -ge $RateLimitThreshold) { return }
+    $resetRaw = & gh api rate_limit --jq '.resources.core.reset' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $resetRaw) { return }
+    $reset = [int64]$resetRaw
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $waitSecs = [int]($reset - $now + 5)
+    if ($waitSecs -le 0) { return }
+    Write-Host "::warning::Rate limit low ($remaining remaining, threshold $RateLimitThreshold). Waiting ${waitSecs}s for reset..." -ForegroundColor Yellow
+    Start-Sleep -Seconds $waitSecs
+}
 
 $cutoffDate = (Get-Date).AddDays(-$RetentionDays)
 
@@ -185,6 +207,7 @@ function Remove-Deployment {
     # Mark inactive first — GitHub rejects DELETE on an active deployment
     # unless the caller has repo_deployment scope. Creating an inactive
     # status is the documented workaround and always works with deployments:write.
+    Wait-ForRateLimitBudget
     & gh api --method POST "/repos/$Repository/deployments/$id/statuses" `
         -f state=inactive 2>$null | Out-Null
     if ($LASTEXITCODE -ne 0) {
@@ -192,6 +215,7 @@ function Remove-Deployment {
         return
     }
 
+    Wait-ForRateLimitBudget
     & gh api --method DELETE "/repos/$Repository/deployments/$id" 2>$null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  Deleted deployment ${id} (env=${env}, sha=${sha}) — ${Reason}" -ForegroundColor Green
@@ -245,12 +269,15 @@ foreach ($env in $sortedEnvironments) {
         continue  # Within count cap, nothing eligible
     }
 
-    # Sort newest first by created_at
+    # Sort newest first by created_at for the cap calculation, then process
+    # candidates oldest-first so the stalest records go first — if the run is
+    # rate-limited or interrupted mid-sweep, the boundary (freshest-of-candidates)
+    # survives rather than the ancient ones.
     $sorted = $deployments | Sort-Object { [DateTime]::Parse($_.created_at) } -Descending
-    $candidates = $sorted | Select-Object -Skip $KeepCount
+    $candidates = $sorted | Select-Object -Skip $KeepCount | Sort-Object { [DateTime]::Parse($_.created_at) }
 
     Write-Host ""
-    Write-Host "Environment: $env (total=$($deployments.Count), keep-cap=$KeepCount, candidates=$($candidates.Count))" -ForegroundColor White
+    Write-Host "Environment: $env (total=$($deployments.Count), keep-cap=$KeepCount, candidates=$($candidates.Count), oldest-first)" -ForegroundColor White
 
     foreach ($deployment in $candidates) {
         $createdAt = [DateTime]::Parse($deployment.created_at)

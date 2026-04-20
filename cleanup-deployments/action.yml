@@ -22,6 +22,10 @@ inputs:
     description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
     required: false
     default: '10'
+  rate-limit-threshold:
+    description: 'Pause before each API delete when remaining core-rate-limit requests fall below this number (set 0 to disable).'
+    required: false
+    default: '50'
   dry-run:
     description: 'If true, only log what would be deleted without actually deleting anything'
     required: false
@@ -44,6 +48,7 @@ runs:
           -ProtectedEnvironments "${{ inputs.protected-environments }}" `
           -DryRun ([System.Convert]::ToBoolean("${{ inputs.dry-run }}")) `
           -DeleteDelaySeconds ${{ inputs.delete-delay-seconds }} `
+          -RateLimitThreshold ${{ inputs.rate-limit-threshold }} `
           -Repository "${{ github.repository }}"
       env:
         GH_TOKEN: ${{ env.GITHUB_TOKEN }}

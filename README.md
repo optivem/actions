@@ -11,6 +11,7 @@ Cleans up prerelease git tags, GitHub releases, and Docker image tags that are n
 | `retention-days` | Days to retain prerelease Docker image tags after release, and superseded RC artifacts before release | `30` |
 | `container-packages` | Comma-separated list of container package names for Docker image tag cleanup. If empty, Docker cleanup is skipped. | `''` |
 | `delete-delay-seconds` | Seconds to wait between each API delete call to avoid GitHub rate limiting | `10` |
+| `rate-limit-threshold` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) | `50` |
 | `dry-run` | If true, only log what would be deleted without actually deleting anything | `false` |
 
 ### Usage
@@ -43,6 +44,7 @@ Cleans up superseded GitHub deployments that are no longer needed.
 | `retention-days` | Retention floor in days. Candidates beyond `keep-count` are only deleted once older than this cutoff | `30` |
 | `protected-environments` | Comma-separated environment name patterns to never delete. Supports `*` wildcards, case-insensitive | `*-production,production` |
 | `delete-delay-seconds` | Seconds to wait between each API delete call to avoid GitHub rate limiting | `10` |
+| `rate-limit-threshold` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) | `50` |
 | `dry-run` | If true, only log what would be deleted without actually deleting anything | `false` |
 
 ### Usage

@@ -27,6 +27,10 @@
 .PARAMETER DeleteDelaySeconds
     Seconds to wait between each API delete call to avoid GitHub rate limiting. Default: 10
 
+.PARAMETER RateLimitThreshold
+    Pause before each API delete when remaining core-rate-limit requests fall
+    below this number (set 0 to disable). Default: 50
+
 .PARAMETER DryRun
     If true, only log what would be deleted without actually deleting anything.
 
@@ -38,6 +42,7 @@ param(
     [int]$RetentionDays = 30,
     [string]$ContainerPackages = "",
     [int]$DeleteDelaySeconds = 10,
+    [int]$RateLimitThreshold = 50,
     [bool]$DryRun = $false,
     [string]$Repository = $env:GITHUB_REPOSITORY
 )
@@ -49,11 +54,28 @@ Write-Host "  Prerelease Version Cleanup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Repository:         $Repository"
-Write-Host "Retention Days:     $RetentionDays"
-Write-Host "Container Packages: $(if ($ContainerPackages) { $ContainerPackages } else { '(none - Docker cleanup skipped)' })"
-Write-Host "Delete Delay:       ${DeleteDelaySeconds}s"
-Write-Host "Dry Run:            $DryRun"
+Write-Host "Retention Days:       $RetentionDays"
+Write-Host "Container Packages:   $(if ($ContainerPackages) { $ContainerPackages } else { '(none - Docker cleanup skipped)' })"
+Write-Host "Delete Delay:         ${DeleteDelaySeconds}s"
+Write-Host "Rate-Limit Threshold: $(if ($RateLimitThreshold -gt 0) { $RateLimitThreshold } else { '(disabled)' })"
+Write-Host "Dry Run:              $DryRun"
 Write-Host ""
+
+function Wait-ForRateLimitBudget {
+    if ($RateLimitThreshold -le 0) { return }
+    $remainingRaw = & gh api rate_limit --jq '.resources.core.remaining' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $remainingRaw) { return }
+    $remaining = [int]$remainingRaw
+    if ($remaining -ge $RateLimitThreshold) { return }
+    $resetRaw = & gh api rate_limit --jq '.resources.core.reset' 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $resetRaw) { return }
+    $reset = [int64]$resetRaw
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $waitSecs = [int]($reset - $now + 5)
+    if ($waitSecs -le 0) { return }
+    Write-Host "::warning::Rate limit low ($remaining remaining, threshold $RateLimitThreshold). Waiting ${waitSecs}s for reset..." -ForegroundColor Yellow
+    Start-Sleep -Seconds $waitSecs
+}
 
 $owner = ($Repository -split '/')[0]
 $cutoffDate = (Get-Date).AddDays(-$RetentionDays)
@@ -176,6 +198,7 @@ function Remove-GitHubRelease {
         return
     }
 
+    Wait-ForRateLimitBudget
     & gh release delete $Tag --repo $Repository --yes --cleanup-tag 2>$null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  Deleted GitHub release: $Tag" -ForegroundColor Green
@@ -208,6 +231,7 @@ function Remove-DockerImageTag {
                 return
             }
 
+            Wait-ForRateLimitBudget
             & gh api --method DELETE "/orgs/$owner/packages/container/$PackageName/versions/$($version.id)" 2>$null
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "  Deleted Docker image tag: $PackageName`:$Tag" -ForegroundColor Green
@@ -440,6 +464,7 @@ foreach ($tagName in @($allReleases.Keys)) {
 
     # Delete by release ID via the REST API. Drafts have no tag, so
     # `gh release delete <tag>` cannot target them reliably.
+    Wait-ForRateLimitBudget
     & gh api --method DELETE "repos/$Repository/releases/$($rel.Id)" 2>$null
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  Deleted release: $tagName" -ForegroundColor Green
