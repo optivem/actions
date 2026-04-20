@@ -1,5 +1,5 @@
-name: 'Promote to RC'
-description: 'Generates a prerelease version, tags Docker images, and creates a prerelease GitHub release'
+name: 'Create Prerelease'
+description: 'Creates a release candidate at the end of the commit stage: generates the prerelease version, tags Docker images with it, and creates a prerelease GitHub release'
 
 inputs:
   target-version:
@@ -42,7 +42,7 @@ runs:
 
     - name: Create Prerelease
       id: create-release
-      uses: optivem/actions/create-release@v1
+      uses: optivem/actions/create-github-release@v1
       with:
         base-version: latest
         release-version: ${{ steps.generate-version.outputs.version }}

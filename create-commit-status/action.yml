@@ -1,5 +1,5 @@
-name: 'Set Commit Status'
-description: 'Posts a commit status (success/failure/pending/error) to the current repository via the GitHub API.'
+name: 'Create Commit Status'
+description: 'Creates a commit status record on the current repository (POST /repos/{repo}/statuses/{sha}) — used for CI state or as per-commit metadata'
 author: 'Optivem'
 branding:
   icon: 'check-circle'

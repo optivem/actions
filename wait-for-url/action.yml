@@ -1,0 +1,42 @@
+name: 'Wait for URL'
+description: 'Polls an HTTP URL until it responds with success (curl -f) or max attempts are exhausted'
+author: 'Optivem'
+branding:
+  icon: 'clock'
+  color: 'blue'
+inputs:
+  url:
+    description: 'The URL to poll for readiness (e.g., http://localhost:8080/)'
+    required: true
+  max-attempts:
+    description: 'Maximum number of attempts before giving up'
+    required: false
+    default: '30'
+  wait-seconds:
+    description: 'Seconds to wait between attempts'
+    required: false
+    default: '10'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Wait for URL
+      run: |
+        echo "⏳ Waiting for ${{ inputs.url }} to respond..."
+        max_attempts=${{ inputs.max-attempts }}
+        wait_seconds=${{ inputs.wait-seconds }}
+        attempt=1
+
+        while [ $attempt -le $max_attempts ]; do
+          if curl -f "${{ inputs.url }}" > /dev/null 2>&1; then
+            echo "✅ ${{ inputs.url }} is responding."
+            exit 0
+          fi
+          echo "🔄 Attempt $attempt/$max_attempts: not ready yet, waiting $wait_seconds seconds..."
+          sleep $wait_seconds
+          attempt=$((attempt + 1))
+        done
+
+        echo "❌ ${{ inputs.url }} did not respond after $max_attempts attempts"
+        exit 1
+      shell: bash

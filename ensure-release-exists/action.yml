@@ -1,5 +1,5 @@
-name: 'Check Release Exists'
-description: 'Checks if a specific version release exists in the repository using GitHub CLI'
+name: 'Ensure Release Exists'
+description: 'Asserts that a GitHub release with the given version exists; fails the step if it does not. Use as a fail-fast guard.'
 author: 'Optivem'
 branding:
   icon: 'check-circle'
@@ -7,22 +7,17 @@ branding:
 
 inputs:
   version:
-    description: 'Release version to validate (e.g., v1.0.0-rc.1, v1.0.0)'
+    description: 'Release version to require (e.g., v1.0.0-rc.1, v1.0.0)'
     required: true
   github-token:
     description: 'GitHub token for API access'
     required: true
     default: ${{ github.token }}
 
-outputs:
-  exists:
-    description: 'Whether the release exists (true/false)'
-    value: ${{ steps.check-release.outputs.exists }}
-
 runs:
   using: 'composite'
   steps:
-    - name: Check Release Exists
+    - name: Ensure Release Exists
       id: check-release
       run: |
         $scriptPath = Join-Path ${{ github.action_path }} "Check-VersionReleaseExists.ps1"

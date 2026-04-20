@@ -118,26 +118,6 @@ runs:
       shell: bash
 
     - name: Wait for Service to be Ready
-      run: |
-        SERVICE_URL="${{ steps.deploy.outputs.service-url }}"
-
-        echo "⏳ Waiting for service to be ready at $SERVICE_URL..."
-
-        max_attempts=30
-        wait_seconds=10
-        attempt=1
-
-        while [ $attempt -le $max_attempts ]; do
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SERVICE_URL" 2>/dev/null || echo "000")
-          if [[ "$HTTP_STATUS" -ge 200 && "$HTTP_STATUS" -lt 400 ]]; then
-            echo "✅ Service is ready! (HTTP $HTTP_STATUS)"
-            exit 0
-          fi
-          echo "🔄 Attempt $attempt/$max_attempts: Service returned HTTP $HTTP_STATUS, waiting $wait_seconds seconds..."
-          sleep $wait_seconds
-          attempt=$((attempt + 1))
-        done
-
-        echo "❌ Service failed to become ready after $max_attempts attempts"
-        exit 1
-      shell: bash
+      uses: optivem/actions/wait-for-url@v1
+      with:
+        url: ${{ steps.deploy.outputs.service-url }}

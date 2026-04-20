@@ -1,57 +1,86 @@
 name: 'Create Release'
-description: 'Creates a GitHub release for any pipeline stage (deployment, signoff, production)'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'blue'
+description: 'Turns a release candidate into the release (Farley): strips the prerelease suffix, re-tags Docker images under the release version, creates a non-prerelease GitHub release, and pushes per-component git tags'
 
 inputs:
-  base-version:
-    description: 'Original version that triggered the workflow (e.g., v1.0.0-rc.1)'
-    required: true
-  release-version:
-    description: 'Release version tag to create (e.g., v1.0.0-rc.1-qa-deployed)'
-    required: true
-  environment:
-    description: 'Environment name (e.g., qa, staging, prod)'
-    required: true
-  status:
-    description: 'Status (e.g., deployed, passed, failed)'
+  version:
+    description: 'The RC version that was deployed (e.g., v1.0.0-rc.1)'
     required: true
   artifact-urls:
-    description: 'JSON array of artifact URLs (Docker images, packages, etc.)'
+    description: 'JSON array of Docker image URLs that were deployed'
+    required: true
+  component-versions:
+    description: 'Newline-separated list of component-name:version-file-path pairs (e.g., multitier-backend-java:system/multitier/backend-java/VERSION)'
     required: false
-    default: '[]'
-  is-prerelease:
-    description: 'Whether this is a prerelease'
-    required: false
-    default: 'true'
+    default: ''
 
 outputs:
-  release-url:
-    description: 'URL of the created GitHub release'
-    value: ${{ steps.create-release.outputs.release-url }}
+  version:
+    description: 'The generated production release version (e.g., v1.0.0)'
+    value: ${{ steps.generate-release-version.outputs.version }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Create Release
-      id: create-release
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Create-Release.ps1"
-        & $scriptPath `
-          -StatusVersion "${{ inputs.release-version }}" `
-          -OriginalVersion "${{ inputs.base-version }}" `
-          -Environment "${{ inputs.environment }}" `
-          -Status "${{ inputs.status }}" `
-          -ArtifactUrls '${{ inputs.artifact-urls }}' `
-          -IsPrerelease $${{ inputs.is-prerelease }} `
-          -GitHubToken "${{ env.GITHUB_TOKEN }}" `
-          -Repository "${{ github.repository }}" `
-          -ServerUrl "${{ github.server_url }}" `
-          -RunId "${{ github.run_id }}" `
-          -CommitSha "${{ github.sha }}" `
-          -Actor "${{ github.actor }}"
-      shell: pwsh
+    - name: Generate Release Version
+      id: generate-release-version
+      uses: optivem/actions/generate-release-version@v1
+      with:
+        prerelease-version: ${{ inputs.version }}
+
+    - name: Tag Docker Images
+      id: tag-images
+      uses: optivem/actions/tag-docker-images@v1
+      with:
+        image-urls: ${{ inputs.artifact-urls }}
+        tag: ${{ steps.generate-release-version.outputs.version }}
       env:
-        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+    - name: Create Production Release
+      id: create-release
+      uses: optivem/actions/create-github-release@v1
+      with:
+        base-version: ${{ inputs.version }}
+        release-version: ${{ steps.generate-release-version.outputs.version }}
+        environment: prod
+        status: deployed
+        artifact-urls: ${{ steps.tag-images.outputs.image-urls }}
+        is-prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+    - name: Tag Component Versions
+      if: inputs.component-versions != ''
+      shell: bash
+      run: |
+        while IFS= read -r line; do
+          [[ -z "$line" ]] && continue
+          component_name="${line%%:*}"
+          version_file="${line#*:}"
+
+          if [[ ! -f "$version_file" ]]; then
+            echo "::warning::VERSION file not found: $version_file"
+            continue
+          fi
+
+          version=$(cat "$version_file" | tr -d '[:space:]')
+          component_tag="${component_name}-v${version}"
+
+          if git ls-remote --tags --exit-code origin "refs/tags/$component_tag" >/dev/null 2>&1; then
+            echo "Skipped $component_name: tag $component_tag already exists on remote"
+          else
+            git tag "$component_tag"
+            if git push origin "$component_tag" 2>/dev/null; then
+              echo "Created component tag: $component_tag"
+            else
+              remote_sha=$(git ls-remote --tags origin "refs/tags/$component_tag" | cut -f1)
+              local_sha=$(git rev-parse "$component_tag")
+              if [[ -n "$remote_sha" && "$remote_sha" == "$local_sha" ]]; then
+                echo "Tag $component_tag created by concurrent run (same commit)"
+              else
+                echo "::error::Failed to push tag $component_tag (remote: $remote_sha, local: $local_sha)"
+                exit 1
+              fi
+            fi
+          fi
+        done <<< "${{ inputs.component-versions }}"

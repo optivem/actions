@@ -1,25 +1,26 @@
-name: 'Deploy to Docker'
-description: 'Deploy using Docker Compose and wait for systems to be ready'
+name: 'Run Docker Compose'
+description: 'Starts a Docker Compose stack and waits for the listed systems to respond on HTTP'
+
 inputs:
   environment:
-    description: 'Target deployment environment (e.g., acceptance, qa, production)'
+    description: 'Label used in logs to identify the target (e.g., acceptance, qa, production) — display only'
     required: true
   version:
-    description: 'Release version to deploy (e.g., v1.0.0-rc.1)'
+    description: 'Version label used in logs (e.g., v1.0.0-rc.1) — display only'
     required: true
   image-urls:
-    description: 'Docker image URLs to deploy (JSON array format)'
+    description: 'Docker image URLs being run (JSON array format) — surfaced in logs'
     required: true
   compose-file:
     description: 'Docker Compose file to use (e.g., docker-compose.yml)'
     required: false
     default: ''
   system-url:
-    description: 'Health check URL to wait for (e.g., http://localhost:8080/). Use this for a single system.'
+    description: 'Single health check URL to wait for (e.g., http://localhost:8080/)'
     required: false
     default: ''
   systems:
-    description: 'JSON array of systems to health check, each with name and url (e.g., [{"name": "API", "url": "http://localhost:8080/health"}]). Use this for multiple systems.'
+    description: 'JSON array of systems to health check, each with name and url (e.g., [{"name": "API", "url": "http://localhost:8080/health"}])'
     required: false
     default: ''
   working-directory:
@@ -29,25 +30,22 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Deploy with Docker Compose
+    - name: Start Docker Compose
       run: |
-        echo "🚀 Deploying system version ${{ inputs.version }} to ${{ inputs.environment }} environment..."
+        echo "🚀 Starting system version ${{ inputs.version }} for ${{ inputs.environment }}..."
         echo ""
 
-        # List Docker images being deployed
         if [[ -n "${{ inputs.image-urls }}" ]]; then
-          echo "📦 Deploying the following Docker images:"
-
-          # Parse JSON array and iterate through each URL
+          echo "📦 Images:"
           echo '${{ inputs.image-urls }}' | jq -r '.[]' | while IFS= read -r image_url; do
             if [[ -n "$image_url" ]]; then
-              echo "   🐳 Deploying: $image_url"
+              echo "   🐳 $image_url"
             fi
           done
           echo ""
         fi
 
-        echo "🐳 Starting Docker Compose..."
+        echo "🐳 Running docker compose up..."
 
         COMPOSE_FILE="${{ inputs.compose-file }}"
         if [[ -n "$COMPOSE_FILE" ]]; then
@@ -65,7 +63,6 @@ runs:
         SYSTEM_URL="${{ inputs.system-url }}"
         SYSTEM_URLS='${{ inputs.systems }}'
 
-        # Build a unified list of systems to check
         SYSTEMS="[]"
 
         if [[ -n "$SYSTEM_URL" ]]; then

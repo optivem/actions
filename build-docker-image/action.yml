@@ -24,10 +24,6 @@ inputs:
     description: 'Git commit SHA for image tagging'
     required: false
     default: '${{ github.sha }}'
-  image-latest-tag:
-    description: 'Tag to apply for the latest image (single value, e.g., "latest")'
-    required: false
-    default: 'latest'
   component-version:
     description: 'Component version (e.g., "1.0.0"). If provided, image is tagged as v{component-version}-dev.{build-number}. Requires build-number.'
     required: false
@@ -60,7 +56,6 @@ runs:
         echo "📁 Working directory: ${{ inputs.working-directory }}"
         echo "🐳 Dockerfile: ${{ inputs.dockerfile }}"
         echo "🔖 Git SHA: ${{ inputs.commit-sha }}"
-        echo "🏷️ Latest tag: ${{ inputs.image-latest-tag }}"
         echo "🌐 Registry: ${{ inputs.registry }}"
         echo "📍 Namespace: ${{ inputs.image-namespace }}"
       shell: bash
@@ -104,8 +99,8 @@ runs:
         echo "image-sha-tag=$IMAGE_SHA_TAG" >> $GITHUB_OUTPUT
         echo "🏷️ Tagged with SHA: $IMAGE_SHA_TAG"
 
-        # Tag with latest tag
-        IMAGE_LATEST_URL="${BASE_IMAGE}:${{ inputs.image-latest-tag }}"
+        # Tag with latest
+        IMAGE_LATEST_URL="${BASE_IMAGE}:latest"
         docker tag ${{ inputs.image-name }}:${{ inputs.commit-sha }} "$IMAGE_LATEST_URL"
         echo "image-latest-url=$IMAGE_LATEST_URL" >> $GITHUB_OUTPUT
         echo "🏷️ Tagged with: $IMAGE_LATEST_URL"
