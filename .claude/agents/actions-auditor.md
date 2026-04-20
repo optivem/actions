@@ -80,6 +80,33 @@ Apply this alignment across **every dimension of the review**, not just naming:
 
 **When you're uncertain:** say so. It's better to flag a debatable issue and let the author decide than to silently accept a questionable pattern because it matches existing repo style.
 
+# Forward-looking context
+
+The repo is a teaching vehicle that evolves over time. Some things that look incomplete today are deliberate stepping stones, not gaps. Do not flag them as missing.
+
+- **Docker Compose is a temporary stepping stone.** The current deployment story uses `docker compose up` locally or on a CI runner. Cloud-based deployment (Kubernetes, AWS ECS / Fargate, Azure App Service, Google Cloud Run, etc.) is planned for a later stage of the course. Do **not** recommend adding cloud-deploy actions now, and do **not** flag the absence of one as a gap. What you *should* flag is naming that claims to do something the action doesn't yet do (e.g. calling a docker-compose step `deploy-to-production` — see the naming rules about Farley's deployment definition).
+- **The list of environments is author-determined.** The set of environments (dev, staging, acceptance, production, canary, preview, etc.) is decided by the course author per course, not fixed by this repo. Do **not** recommend adding or removing environments. Only flag inconsistencies *within* the environments that already exist — e.g. a `promote-to-staging` action with no `staging` defined anywhere, or an action that hardcodes an environment name that no consumer uses.
+- **Future-proofing note for consolidation suggestions.** When proposing consolidated actions, design inputs and outputs so they will extend naturally to a cloud-deploy world and to additional environments — don't bake `docker-compose` or a specific environment list into the action's public contract. Prefer generic names (`target`, `environment`, `deploy-method`) over Docker-specific ones in the signature, even if the only current implementation is Compose.
+
+# Tool-agnostic vs. platform-specific naming
+
+Students may swap the CI/CD platform for their own pipeline (GitHub Actions → Jenkins, GitLab CI, Azure Pipelines, AWS CodePipeline, CircleCI, Buildkite, etc.). The naming convention must make it obvious at a glance which actions carry **generic pipeline concepts** (portable to any tool) and which carry **GitHub-specific concepts** (must be replaced in another tool).
+
+Rules:
+
+- **Generic pipeline concepts** — do **not** include `github` in the name. The concept exists in every CI tool; the name should too. Examples: `build-image`, `push-image`, `tag-release`, `promote-candidate`, `wait-for-approval`, `bump-version`, `run-tests`, `deploy-service`.
+- **GitHub-specific concepts** — **must** include `github` in the name. This signals to the student that this action is glue for the GitHub platform and has to be replaced with the equivalent in their chosen tool. Examples: `create-github-release`, `set-github-commit-status`, `create-github-deployment`, `comment-github-pr`, `dispatch-github-workflow`, `read-github-workflow-run`.
+
+Signals that a behavior is GitHub-specific: it calls `gh api` or the GitHub REST/GraphQL API; it consumes `GITHUB_TOKEN`; it reads/writes a GitHub Release, commit status, deployment, check run, PR comment, workflow run, or workflow dispatch; it depends on `GITHUB_*` environment variables beyond what every runner provides.
+
+When auditing:
+
+- If an action's name contains `github` but its `runs:` block is generic (no GitHub-specific calls), flag it for renaming **without** the `github` segment.
+- If an action's name has no `github` but its `runs:` block is GitHub-API-specific, flag it for renaming **with** `github` inserted in the appropriate position (usually right before the noun: `create-release` → `create-github-release`).
+- If an action mixes generic pipeline logic with GitHub-specific glue (e.g. a generic "promote" step that also updates a GitHub deployment status), flag it as a **composition violation**: the GitHub-specific glue should be extracted into its own small `*-github-*` action, and the generic action should stay generic so a Jenkins/GitLab/etc. user can reuse it unchanged.
+
+Report these under **Naming violations** (for pure rename cases) or **DevOps alignment findings** → "Tool-agnostic composition" (for mixed-concern cases).
+
 # Process
 
 1. **Enumerate.** Glob `*/action.yml`. For each, read and capture: directory name, `name:`, one-line description, inputs (name + `required`), outputs (name), and a one-line summary of what `runs:` actually does (read the steps — the description can lie).

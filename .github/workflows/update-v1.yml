@@ -1,0 +1,35 @@
+name: Update v1 Tag
+
+# Moves the floating `v1` tag forward to the latest commit on `main`.
+# Every consumer workflow (in shop, gh-optivem, optivem-testing) references
+# actions in this repo as `optivem/actions/<name>@v1`. Without this automation,
+# pushes to main alone would NOT update v1, so consumers would keep resolving
+# against the pre-push state. This workflow keeps the alias current.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-v1
+  cancel-in-progress: false
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Retarget v1 to current commit
+        run: |
+          echo "Retargeting v1 → ${{ github.sha }}"
+          git tag -f v1 "${{ github.sha }}"
+          git push origin v1 --force
+          echo "v1 now points at ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
