@@ -22,6 +22,18 @@ inputs:
   success-artifact-ids:
     description: 'The artifact IDs created on success as JSON array. Single artifacts must also be in array format: ["artifact"]. Multiple artifacts: ["artifact1", "artifact2"]'
     required: false
+  skipped-reason:
+    description: 'Human-readable reason the stage was skipped (e.g., "No new artifacts since last successful run"). Only used when stage-result is "skipped".'
+    required: false
+  latest-artifact-ids:
+    description: 'The latest known artifact IDs as JSON array (even though the stage did not run against them). Displayed on skipped. Same format as success-artifact-ids.'
+    required: false
+  latest-updated-at:
+    description: 'ISO 8601 timestamp of when the latest artifacts were last updated. Displayed on skipped.'
+    required: false
+  last-run-at:
+    description: 'ISO 8601 timestamp of the last successful run of this workflow. Displayed on skipped.'
+    required: false
 
 
 runs:
@@ -33,11 +45,18 @@ runs:
         & $scriptPath -StageResult "${{ inputs.stage-result }}" -SuccessVersion "${{ inputs.success-version }}"
       shell: pwsh
 
-    - name: Process Artifact IDs
-      id: process-artifacts
+    - name: Process Success Artifact IDs
+      id: process-success-artifacts
       run: |
         $scriptPath = Join-Path ${{ github.action_path }} "scripts/Process-Artifacts.ps1"
         & $scriptPath -ArtifactsInput '${{ inputs.success-artifact-ids }}'
+      shell: pwsh
+
+    - name: Process Latest Artifact IDs
+      id: process-latest-artifacts
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "scripts/Process-Artifacts.ps1"
+        & $scriptPath -ArtifactsInput '${{ inputs.latest-artifact-ids }}'
       shell: pwsh
 
     - name: Generate System Stage Summary
@@ -49,5 +68,13 @@ runs:
           🌍 **Environment:** ${{ inputs.environment }}
         stage-success-content: |
           🎯 **Release Candidate:** ${{ inputs.success-version }}
-          
-          ${{ steps.process-artifacts.outputs.artifacts-formatted && format('🔗 **Artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-artifacts.outputs.artifacts-formatted) || '' }}
+
+          ${{ steps.process-success-artifacts.outputs.artifacts-formatted && format('🔗 **Artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-success-artifacts.outputs.artifacts-formatted) || '' }}
+        stage-skipped-content: |
+          ${{ inputs.skipped-reason && format('ℹ️ **Reason:** {0}', inputs.skipped-reason) || '' }}
+
+          ${{ inputs.latest-updated-at && format('🕒 **Latest artifacts updated at:** `{0}`', inputs.latest-updated-at) || '' }}
+
+          ${{ inputs.last-run-at && format('✅ **Last successful run at:** `{0}`', inputs.last-run-at) || '' }}
+
+          ${{ steps.process-latest-artifacts.outputs.artifacts-formatted && format('🔗 **Latest known artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-latest-artifacts.outputs.artifacts-formatted) || '' }}

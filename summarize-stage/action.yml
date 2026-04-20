@@ -13,22 +13,6 @@ inputs:
   stage-name:
     description: 'Name of the stage being summarized'
     required: true
-  stage-success-emoji:
-    description: 'Emoji to display for successful stages'
-    required: false
-    default: '✅'
-  stage-failure-emoji:
-    description: 'Emoji to display for failed stages'
-    required: false
-    default: '❌'
-  stage-cancelled-emoji:
-    description: 'Emoji to display for cancelled stages'
-    required: false
-    default: '🛑'
-  stage-unknown-emoji:
-    description: 'Emoji to display for unknown stage status'
-    required: false
-    default: '⚠️'
   stage-content:
     description: 'General content to display for any stage result (supports markdown)'
     required: false
@@ -37,53 +21,88 @@ inputs:
     description: 'Custom content to display on success (supports markdown)'
     required: false
     default: ''
+  stage-failure-content:
+    description: 'Custom content to display on failure (supports markdown). Shown in place of the default "check the job logs" message.'
+    required: false
+    default: ''
+  stage-cancelled-content:
+    description: 'Custom content to display on cancelled (supports markdown). Shown in place of the default cancellation message.'
+    required: false
+    default: ''
+  stage-skipped-content:
+    description: 'Custom content to display on skipped (supports markdown). When provided, the stage is treated as a first-class skipped outcome rather than unknown.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
   steps:
     - name: Generate Stage Summary
       shell: bash
+      env:
+        STAGE_RESULT: ${{ inputs.stage-result }}
+        STAGE_NAME: ${{ inputs.stage-name }}
+        STAGE_CONTENT: ${{ inputs.stage-content }}
+        STAGE_SUCCESS_CONTENT: ${{ inputs.stage-success-content }}
+        STAGE_FAILURE_CONTENT: ${{ inputs.stage-failure-content }}
+        STAGE_CANCELLED_CONTENT: ${{ inputs.stage-cancelled-content }}
+        STAGE_SKIPPED_CONTENT: ${{ inputs.stage-skipped-content }}
       run: |
-        echo "# ${{ inputs.stage-name }} Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        # Check stage job result
-        STAGE_RESULT="${{ inputs.stage-result }}"
-        
-        if [[ "$STAGE_RESULT" == "success" ]]; then
-          echo "## ${{ inputs.stage-success-emoji }} ${{ inputs.stage-name }} Succeeded" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Add general stage content if provided
-          if [[ -n "${{ inputs.stage-content }}" ]]; then
-            cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-        ${{ inputs.stage-content }}
-        EOF
-            echo "" >> $GITHUB_STEP_SUMMARY
+        write_header() {
+          echo "## $1 $STAGE_NAME $2"
+          echo ""
+        }
+
+        write_content() {
+          local content="$1" fallback="$2"
+          if [[ -n "$content" ]]; then
+            printf '%s\n' "$content"
+          elif [[ -n "$fallback" ]]; then
+            echo "$fallback"
           fi
-          
-          # Add custom success content if provided
-          if [[ -n "${{ inputs.stage-success-content }}" ]]; then
-            cat << 'EOF' >> $GITHUB_STEP_SUMMARY
-        ${{ inputs.stage-success-content }}
-        EOF
-          else
-            # Default success message
-            echo "Stage completed successfully." >> $GITHUB_STEP_SUMMARY
+        }
+
+        {
+          echo "# $STAGE_NAME Summary"
+          echo ""
+
+          case "$STAGE_RESULT" in
+            success)
+              write_header "✅" "Succeeded"
+              ;;
+            failure)
+              write_header "❌" "Failed"
+              ;;
+            cancelled)
+              write_header "🛑" "Cancelled"
+              ;;
+            skipped)
+              write_header "⏭️" "Skipped"
+              ;;
+            *)
+              write_header "⚠️" "Status Unknown"
+              ;;
+          esac
+
+          if [[ -n "$STAGE_CONTENT" ]]; then
+            printf '%s\n\n' "$STAGE_CONTENT"
           fi
-          
-        elif [[ "$STAGE_RESULT" == "failure" ]]; then
-          echo "## ${{ inputs.stage-failure-emoji }} ${{ inputs.stage-name }} Failed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The stage process encountered an error. Check the job logs for details." >> $GITHUB_STEP_SUMMARY
-          
-        elif [[ "$STAGE_RESULT" == "cancelled" ]]; then
-          echo "## ${{ inputs.stage-cancelled-emoji }} ${{ inputs.stage-name }} Cancelled" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⏹️ **Stage process was cancelled**" >> $GITHUB_STEP_SUMMARY
-          
-        else
-          echo "## ${{ inputs.stage-unknown-emoji }} ${{ inputs.stage-name }} Status Unknown" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "❓ **Stage result:** \`$STAGE_RESULT\`" >> $GITHUB_STEP_SUMMARY
-        fi
+
+          case "$STAGE_RESULT" in
+            success)
+              write_content "$STAGE_SUCCESS_CONTENT" "Stage completed successfully."
+              ;;
+            failure)
+              write_content "$STAGE_FAILURE_CONTENT" "The stage process encountered an error. Check the job logs for details."
+              ;;
+            cancelled)
+              write_content "$STAGE_CANCELLED_CONTENT" "⏹️ **Stage process was cancelled**"
+              ;;
+            skipped)
+              write_content "$STAGE_SKIPPED_CONTENT" "Stage was skipped."
+              ;;
+            *)
+              echo "❓ **Stage result:** \`$STAGE_RESULT\`"
+              ;;
+          esac
+        } >> "$GITHUB_STEP_SUMMARY"
