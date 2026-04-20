@@ -129,6 +129,69 @@ Use `gh api` when the concept is genuinely GitHub-platform metadata:
 
 Note: consuming `GITHUB_TOKEN` for git auth (via `https://x-access-token:${TOKEN}@github.com/...`) does NOT by itself make an action Tier 3. The auth pattern is portable (swap URL + token source), and the git operation itself is git-native. Only the platform concept being accessed determines the tier.
 
+## Architectural principle: primitives first, composites optional and thin
+
+Prefer small, single-concern **primitive** actions over large composite actions that bundle multiple concerns. Composites are acceptable **only as thin sugar** over primitives that can also be called directly at the call site.
+
+> **Rule:** every behavior exposed by a composite must also be reachable by calling primitives directly. A composite that hides logic that callers cannot otherwise replicate step-by-step is a design smell.
+
+Why:
+
+- **Scales with new artifact types / targets.** A Docker-specific prerelease composite can't accept npm packages. If prerelease creation is decomposed into `generate-prerelease-version` → `tag-<artifact-type>` → `create-github-release`, adding a new artifact type means adding one new tagging primitive — not a whole parallel composite (`publish-npm-prerelease`, `publish-maven-prerelease`, …) that duplicates version-gen and release-creation.
+- **Composition across artifact types.** When a project ships Docker images *and* npm packages under the same release version, primitives compose naturally (one version → N tagging steps → one release). Monolithic composites cannot — calling two of them generates two versions.
+- **No hidden magic.** Readers see the actual steps at the call site. Debugging a broken release doesn't require opening the composite's `action.yml` to guess what it's doing.
+- **Independent testability.** Each primitive has a narrow contract and can be tested in isolation.
+
+Composites are allowed when:
+
+- They wrap 2–4 primitives in a fixed, well-known order that is genuinely universal (not just common for the current caller set).
+- They add no behavior beyond calling primitives — no conditional logic, no artifact-type branching, no "smart" defaults that hide a primitive's input.
+- Their name honestly reflects the specialization (e.g. `publish-docker-prerelease`, not `create-prerelease` if Docker is hardcoded).
+- The primitives remain first-class citizens — callers must be able to bypass the composite without loss of capability.
+
+Signals that a composite is violating this rule:
+
+- Its inputs include an artifact-type-specific shape (e.g. `image-urls:` where a generic `artifact-urls:` would be enough) but the name is generic.
+- A caller wanting a different artifact type would have to fork it or write a parallel composite.
+- Removing the composite and inlining its steps at call sites loses no capability — only brevity.
+
+## Architectural principle: one concern per action, swappable at the seams
+
+Each primitive action addresses exactly **one** concern from the orthogonal set of concerns a release pipeline juggles. A reader should be able to point at any action and say which single concern it owns. A reviewer should be able to swap the implementation of any one concern — replacing a primitive with a peer — without touching the others.
+
+The orthogonal concerns in this repo's pipeline domain:
+
+| Concern | Example sources that vary | Example primitives |
+|---|---|---|
+| **Version source** | VERSION files / `package.json` / `pom.xml` / Cargo.toml / latest git tag | `read-target-version` (VERSION files), `generate-prerelease-version` |
+| **Artifact type & tagging** | Docker images / npm packages / Maven JARs / NuGet / zip bundles | `tag-docker-images`, future: `tag-npm-package`, `publish-maven-artifact` |
+| **Git tag creation** | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `create-and-push-tag`, `ensure-tag-exists` |
+| **Release record** | GitHub Release / GitLab Release / Bitbucket Downloads / none | `create-github-release` |
+| **Commit of generated files** | `git push` / Contents API / merge-request PR | `commit-files-via-github-contents-api` |
+| **Status / approval signalling** | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-github-commit-status` |
+
+> **Rule:** no single action may own more than one of these concerns. If it does, it's a **concern-mixing violation** and must be split.
+
+The payoff is **swappability at the seams**:
+
+- Moving from VERSION files to `package.json` touches only the version-source primitive. Artifact tagging, tag creation, and release record are unaffected.
+- Moving from GitHub Releases to GitLab Releases touches only the release-record primitive. Version source, artifact tagging, and commit-pushing are unaffected.
+- Adding a new artifact type touches only the tagging primitive set. Everything else stays.
+- Porting to Jenkins or GitLab CI touches only the Tier 3 primitives (those with `github` in the name). Tier 1/2 primitives remain identical.
+
+Signals that an action mixes concerns:
+
+- Its inputs span two or more of the concerns above (e.g. both `version-file-path:` and `image-urls:` and `release-notes:`).
+- Its `runs:` block reads a VERSION file **and** calls `gh api /releases` **and** does `docker tag` in the same action.
+- Its name is a noun-phrase glue word like "prerelease", "release", "pipeline", or "stage" that bundles multiple primitives by convention rather than isolating one primitive.
+
+When you find a concern-mixing action:
+
+- Identify which concerns it spans (from the table above).
+- Recommend splitting it into one primitive per concern.
+- If a thin composite is still desirable for the common-case caller, recommend rebuilding it **on top of** the primitives — never as a replacement.
+- Flag it in **DevOps alignment findings** under "Separation of concerns" (new category) with the specific concerns it mixes and the proposed primitive split.
+
 ## Performance caveat for git remote scans
 
 `git ls-remote` fetches the full ref list and filters client-side (the refspec filter on the command line is client-side filtering after transport in most git versions). For repos with thousands of tags, a paginated `gh api /repos/.../tags` or `/releases` can be faster.
@@ -142,8 +205,10 @@ Note: consuming `GITHUB_TOKEN` for git auth (via `https://x-access-token:${TOKEN
 - If an action's name has no `github` but its `runs:` block is Tier 3 (genuinely GitHub-platform-specific), flag it for renaming with `github` inserted in the appropriate position (usually right before the noun: `create-release` → `create-github-release`).
 - If an action mixes Tier 1/2 logic with Tier 3 glue, flag it as a **composition violation**: the Tier 3 glue should be extracted into its own small `*-github-*` action; the generic/git-native action stays clean so a Jenkins/GitLab/etc. user reuses it unchanged.
 - If an action uses `gh api` for something a git command can do (Tier 3 implementation of a Tier 2 concept), flag it as a **portability violation** — recommend rewriting with git and dropping `github` from the name.
+- If an action bundles more than one concern from the swappability table (version source / artifact tagging / tag creation / release record / file commit / status signalling), flag it as a **concern-mixing violation** — recommend splitting into one primitive per concern and rebuilding any composite as thin sugar on top of them.
+- If a composite action hides logic that cannot be replicated step-by-step at the call site, flag it as a **composite-opacity violation** — recommend exposing the underlying primitives as first-class actions so the composite is optional sugar, not a required gate.
 
-Report these under **Naming violations** (for pure rename cases), **DevOps alignment findings** → "Tool-agnostic composition" (for mixed-concern cases), or **DevOps alignment findings** → "Prefer git over gh api" (for portability violations).
+Report these under **Naming violations** (for pure rename cases), **DevOps alignment findings** → "Tool-agnostic composition" (for mixed-concern cases), **DevOps alignment findings** → "Separation of concerns" (for concern-mixing violations), **DevOps alignment findings** → "Composite opacity" (for opaque composites), or **DevOps alignment findings** → "Prefer git over gh api" (for portability violations).
 
 # Process
 
