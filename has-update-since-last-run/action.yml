@@ -1,13 +1,13 @@
-name: 'Has New Docker Image Versions Since Run'
-description: 'Detects whether a newer version of a docker image has been pushed since the last successful run of a given workflow. Caller resolves the latest image timestamp (typically via find-latest-docker-images) and passes it in. Part of the `has-new-*-since-run` primitive family.'
+name: 'Has Update Since Last Run'
+description: 'Detects whether a subject has been updated since the last successful run of a given workflow. Caller passes the subject timestamp (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). Generic timestamp-vs-run comparator.'
 author: 'Optivem'
 branding:
   icon: 'refresh-cw'
   color: 'blue'
 
 inputs:
-  image-timestamp:
-    description: 'ISO 8601 timestamp of the latest docker image push — typically the `latest-image-timestamp` output of `find-latest-docker-images`.'
+  last-updated-at:
+    description: 'ISO 8601 timestamp representing when the subject under observation was last updated. Typically resolved by the caller from whatever source is relevant (e.g. `find-latest-docker-images` output, a git commit time, an artifact push time).'
     required: true
   workflow-name:
     description: 'Workflow file name or display name to check last successful run against (e.g. `github.workflow`).'
@@ -24,9 +24,9 @@ inputs:
 outputs:
   changed:
     description: |
-      'true' when the image timestamp is strictly newer than the last successful run's createdAt,
+      'true' when last-updated-at is strictly newer than the last successful run's createdAt,
       OR when there is no previous successful run (fail-open on first run).
-      'false' when a previous successful run was found AND the image is not newer than it.
+      'false' when a previous successful run was found AND the subject is not newer than it.
     value: ${{ steps.check.outputs.changed }}
   last-run-at:
     description: 'ISO 8601 createdAt of the last successful run. Empty if no previous successful run exists.'
@@ -35,20 +35,20 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Compare image timestamp against last successful run
+    - name: Compare subject timestamp against last successful run
       id: check
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
-        IMAGE_TIMESTAMP: ${{ inputs.image-timestamp }}
+        LAST_UPDATED_AT: ${{ inputs.last-updated-at }}
         WORKFLOW_NAME: ${{ inputs.workflow-name }}
         REPO_OWNER: ${{ inputs.repo-owner }}
         REPO_NAME: ${{ inputs.repo-name }}
       run: |
         set -euo pipefail
 
-        if [[ -z "$IMAGE_TIMESTAMP" ]]; then
-          echo "::error::image-timestamp is empty"
+        if [[ -z "$LAST_UPDATED_AT" ]]; then
+          echo "::error::last-updated-at is empty"
           exit 1
         fi
 
@@ -63,7 +63,7 @@ runs:
           2>/dev/null \
           | jq -r 'map(select(.conclusion == "success"))[0].createdAt // ""')
 
-        echo "Image timestamp: $IMAGE_TIMESTAMP"
+        echo "Subject last-updated-at: $LAST_UPDATED_AT"
 
         if [[ -z "$last_run_at" ]]; then
           echo "No previous successful run found for workflow '$WORKFLOW_NAME' — reporting changed=true (fail-open)."
@@ -78,12 +78,13 @@ runs:
 
         # ISO 8601 lexicographic comparison is correct when both timestamps are in UTC
         # with the same format (both include 'Z'). GitHub API returns UTC Z-suffixed;
-        # find-latest-docker-images likewise emits UTC Z-suffixed timestamps.
-        if [[ "$IMAGE_TIMESTAMP" > "$last_run_at" ]]; then
-          echo "Image is newer than last successful run — changed=true"
+        # typical subject timestamps (docker push times, git commit times) are likewise
+        # UTC Z-suffixed.
+        if [[ "$LAST_UPDATED_AT" > "$last_run_at" ]]; then
+          echo "Subject is newer than last successful run — changed=true"
           changed=true
         else
-          echo "Image is not newer than last successful run — changed=false"
+          echo "Subject is not newer than last successful run — changed=false"
           changed=false
         fi
 
