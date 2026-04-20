@@ -1,0 +1,35 @@
+name: 'Resolve Tag from SHA'
+description: 'Finds the first tag in a repository that points at a given commit SHA. Inverse of resolve-commit.'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'green'
+inputs:
+  repo:
+    description: 'Repository in "owner/name" form (e.g. optivem/shop)'
+    required: true
+  sha:
+    description: 'Commit SHA to look up'
+    required: true
+outputs:
+  tag:
+    description: 'The first tag pointing at the SHA, or empty string if none found'
+    value: ${{ steps.resolve.outputs.tag }}
+runs:
+  using: 'composite'
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ inputs.repo }}
+        SHA: ${{ inputs.sha }}
+      run: |
+        TAG=$(gh api "repos/$REPO/tags" --paginate \
+          --jq ".[] | select(.commit.sha==\"$SHA\") | .name" | head -1)
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        if [ -n "$TAG" ]; then
+          echo "Resolved $REPO SHA $SHA to tag: $TAG" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "No tag found in $REPO pointing at $SHA" >> "$GITHUB_STEP_SUMMARY"
+        fi

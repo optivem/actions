@@ -1,0 +1,60 @@
+name: 'Resolve Prerelease Tag'
+description: 'Resolves a prerelease tag in a GitHub repository: returns the user-supplied tag (after validating its prefix and that it is a published release) or the latest published release matching the prefix.'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'green'
+inputs:
+  repo:
+    description: 'Repository in "owner/name" form (e.g. optivem/shop)'
+    required: true
+  input-tag:
+    description: 'Explicit tag to validate. Empty = resolve to the latest published release matching tag-prefix.'
+    required: false
+    default: ''
+  tag-prefix:
+    description: 'Required tag prefix (e.g. "meta-v"). Used to filter releases when input-tag is empty, and to validate input-tag when set.'
+    required: false
+    default: 'meta-v'
+outputs:
+  tag:
+    description: 'The validated tag'
+    value: ${{ steps.resolve.outputs.tag }}
+runs:
+  using: 'composite'
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        REPO="${{ inputs.repo }}"
+        INPUT_TAG="${{ inputs.input-tag }}"
+        PREFIX="${{ inputs.tag-prefix }}"
+
+        if [ -z "$INPUT_TAG" ]; then
+          TAG=$(gh api "repos/$REPO/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name | startswith(\"$PREFIX\"))] | sort_by(.created_at) | last | .tag_name" 2>/dev/null)
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "::error::No ${PREFIX}* release found in $REPO — publish a ${PREFIX}* release first, or pass an explicit input-tag."
+            exit 1
+          fi
+          echo "Using latest ${PREFIX}* release from $REPO: $TAG" >> "$GITHUB_STEP_SUMMARY"
+        else
+          if [ "$INPUT_TAG" = "main" ] || [ "$INPUT_TAG" = "refs/heads/main" ]; then
+            echo "::error::input-tag 'main' is not allowed — pass a published ${PREFIX}* release tag."
+            exit 1
+          fi
+          case "$INPUT_TAG" in
+            "$PREFIX"*) ;;
+            *) echo "::error::input-tag '$INPUT_TAG' must start with '$PREFIX' — only ${PREFIX}* release tags are accepted."; exit 1 ;;
+          esac
+          if ! gh api "repos/$REPO/releases/tags/$INPUT_TAG" >/dev/null 2>&1; then
+            echo "::error::input-tag '$INPUT_TAG' is not a published release in $REPO."
+            exit 1
+          fi
+          TAG="$INPUT_TAG"
+          echo "Using input-tag (${PREFIX}* release): $TAG" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"

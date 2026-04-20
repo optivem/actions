@@ -1,0 +1,48 @@
+name: 'Set Commit Status'
+description: 'Posts a commit status (success/failure/pending/error) to the current repository via the GitHub API.'
+author: 'Optivem'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+inputs:
+  sha:
+    description: 'Commit SHA to attach the status to. Empty = current commit (github.sha).'
+    required: false
+    default: ''
+  context:
+    description: 'Status context (label shown on the commit)'
+    required: true
+  state:
+    description: 'Status state: success, failure, pending, or error'
+    required: false
+    default: 'success'
+  description:
+    description: 'Short human-readable description (often the subject identifier, e.g. the verified upstream SHA)'
+    required: false
+    default: ''
+  target-url:
+    description: 'URL the status links to. Empty = link to the current workflow run.'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_SHA: ${{ inputs.sha }}
+        CONTEXT: ${{ inputs.context }}
+        STATE: ${{ inputs.state }}
+        DESCRIPTION: ${{ inputs.description }}
+        INPUT_TARGET_URL: ${{ inputs.target-url }}
+        DEFAULT_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        COMMIT_SHA: ${{ github.sha }}
+      run: |
+        SHA="${INPUT_SHA:-$COMMIT_SHA}"
+        TARGET_URL="${INPUT_TARGET_URL:-$DEFAULT_TARGET_URL}"
+        gh api "repos/${{ github.repository }}/statuses/$SHA" \
+          -f state="$STATE" \
+          -f context="$CONTEXT" \
+          -f description="$DESCRIPTION" \
+          -f target_url="$TARGET_URL"
+        echo "Recorded status [$CONTEXT=$STATE] on commit $SHA${DESCRIPTION:+ ($DESCRIPTION)}" >> "$GITHUB_STEP_SUMMARY"
