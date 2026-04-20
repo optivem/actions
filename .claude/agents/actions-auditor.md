@@ -128,11 +128,16 @@ See report section in workflow output for full context.
 
 - [ ] **<short title>** — <one-line description of the change>
   - Affects: `<dir1>`, `<dir2>`
-  - Consumers to update: `<N call sites in shop/gh-optivem>`
+  - Consumers to update (<N> in shop, <M> in gh-optivem):
+    - `<relative/path/to/consumer1.yml>`
+    - `<relative/path/to/consumer2.yml>`
+    - ...
   - Category: naming | duplicate | consolidation | dead-code | dead-input
 
 - [ ] ...
 ```
+
+**Consumers to update** must list the specific consumer workflow files (relative to the academy workspace root, e.g. `shop/.github/workflows/foo.yml`) that reference the affected action(s). A bare count like "36 call sites in shop" is not acceptable — the user needs to see exactly which files are touched. If the same file has multiple call sites to the same action, list it once.
 
 Each item must be self-contained enough to be executed independently. Per project convention, items are removed from this file as they are executed, the file is deleted when empty, and the `.plans/` directory is deleted when it contains no files.
 
