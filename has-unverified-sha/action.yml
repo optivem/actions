@@ -13,7 +13,7 @@ inputs:
     description: 'The commit-status context that records prior verification (e.g. `verified-shop-sha`). Matched against the `context` field of commit statuses on head-sha.'
     required: true
   head-sha:
-    description: 'Commit whose statuses are inspected. Defaults to ${{ github.sha }}.'
+    description: 'Commit whose statuses are inspected. Defaults to `github.sha`.'
     required: false
     default: ${{ github.sha }}
   repo-owner:

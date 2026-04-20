@@ -10,7 +10,7 @@ inputs:
     description: 'ISO 8601 timestamp of the latest docker image push — typically the `latest-image-timestamp` output of `find-latest-docker-images`.'
     required: true
   workflow-name:
-    description: 'Workflow file name or display name to check last successful run against (e.g. `${{ github.workflow }}`).'
+    description: 'Workflow file name or display name to check last successful run against (e.g. `github.workflow`).'
     required: true
   repo-owner:
     description: 'Repository owner (organization or username). Defaults to the current repository owner.'
