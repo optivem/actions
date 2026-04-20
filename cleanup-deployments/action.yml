@@ -6,18 +6,26 @@ branding:
   color: 'orange'
 
 inputs:
+  keep-count:
+    description: 'Per-environment count cap: keep this many newest deployments, candidates beyond the cap are eligible for deletion if past retention-days.'
+    required: false
+    default: '3'
   retention-days:
-    description: 'Number of days to retain superseded deployments before deletion'
+    description: 'Retention floor in days. Deployments beyond keep-count are only deleted once older than this cutoff.'
     required: false
     default: '30'
   protected-environments:
-    description: 'Comma-separated list of environment names whose deployments must never be deleted (case-insensitive).'
+    description: 'Comma-separated list of environment name patterns whose deployments must never be deleted. Supports `*` wildcards, case-insensitive (e.g. `*-production,production`).'
     required: false
-    default: 'production'
+    default: '*-production,production'
   delete-delay-seconds:
     description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
     required: false
     default: '10'
+  rate-limit-threshold:
+    description: 'Pause before each API delete when remaining core-rate-limit requests fall below this number (set 0 to disable).'
+    required: false
+    default: '50'
   dry-run:
     description: 'If true, only log what would be deleted without actually deleting anything'
     required: false
@@ -35,10 +43,12 @@ runs:
       run: |
         $scriptPath = Join-Path ${{ github.action_path }} "Cleanup-Deployments.ps1"
         & $scriptPath `
+          -KeepCount ${{ inputs.keep-count }} `
           -RetentionDays ${{ inputs.retention-days }} `
           -ProtectedEnvironments "${{ inputs.protected-environments }}" `
           -DryRun ([System.Convert]::ToBoolean("${{ inputs.dry-run }}")) `
           -DeleteDelaySeconds ${{ inputs.delete-delay-seconds }} `
+          -RateLimitThreshold ${{ inputs.rate-limit-threshold }} `
           -Repository "${{ github.repository }}"
       env:
         GH_TOKEN: ${{ env.GITHUB_TOKEN }}

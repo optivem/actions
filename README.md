@@ -11,6 +11,7 @@ Cleans up prerelease git tags, GitHub releases, and Docker image tags that are n
 | `retention-days` | Days to retain prerelease Docker image tags after release, and superseded RC artifacts before release | `30` |
 | `container-packages` | Comma-separated list of container package names for Docker image tag cleanup. If empty, Docker cleanup is skipped. | `''` |
 | `delete-delay-seconds` | Seconds to wait between each API delete call to avoid GitHub rate limiting | `10` |
+| `rate-limit-threshold` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) | `50` |
 | `dry-run` | If true, only log what would be deleted without actually deleting anything | `false` |
 
 ### Usage
@@ -39,8 +40,11 @@ Cleans up superseded GitHub deployments that are no longer needed.
 
 | Input | Description | Default |
 |---|---|---|
-| `retention-days` | Days to retain superseded deployments before deletion | `30` |
+| `keep-count` | Per-environment count cap: keep this many newest deployments | `3` |
+| `retention-days` | Retention floor in days. Candidates beyond `keep-count` are only deleted once older than this cutoff | `30` |
+| `protected-environments` | Comma-separated environment name patterns to never delete. Supports `*` wildcards, case-insensitive | `*-production,production` |
 | `delete-delay-seconds` | Seconds to wait between each API delete call to avoid GitHub rate limiting | `10` |
+| `rate-limit-threshold` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) | `50` |
 | `dry-run` | If true, only log what would be deleted without actually deleting anything | `false` |
 
 ### Usage
@@ -55,10 +59,14 @@ Cleans up superseded GitHub deployments that are no longer needed.
 
 **Released-RC deployments** (final tag `vX.Y.Z` exists):
 - Immediately deletes any deployment whose SHA matches a `vX.Y.Z-rc.*` tag
+- Bypasses both `keep-count` and `retention-days`
 
-**Superseded per environment** (for all remaining deployments):
-- Always keeps the latest deployment per environment
-- After retention period: deletes older deployments
+**Superseded per environment** (count cap + retention floor):
+- Keeps the newest `keep-count` deployments per environment
+- Anything beyond the cap is deleted only once older than `retention-days`
+  (the floor prevents pruning fresh bursts during active debugging)
+
+**Protected environments** are never touched by either scenario.
 
 ### Ordering note
 
