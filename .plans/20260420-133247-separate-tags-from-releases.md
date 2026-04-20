@@ -4,7 +4,7 @@
 
 **Git tag = source of truth. GitHub Release = UX on top.** Every pipeline step that needs to mark a commit creates a tag. Only commits that need a user-facing landing page (release notes, assets, "latest" UI) get a GitHub Release object layered on top.
 
-Current state conflates the two: `create-release` creates *both* the tag and the release object. `promote-to-rc`, `promote-rc-to-qa`, `promote-rc-to-prod`, `approve-rc-in-qa`, `reject-rc-in-qa` all go through it, producing a GitHub Release for every intermediate state. This is what drives 42+ `check-release-exists` call sites, ongoing cleanup debt, and rate-limit pressure.
+Current state conflates the two: `create-release` creates *both* the tag and the release object. `promote-to-rc`, `promote-rc-to-qa`, `promote-rc-to-prod`, `approve-rc-in-qa`, `reject-rc-in-qa` all go through it, producing a GitHub Release for every intermediate state. This is what drives 42+ `ensure-release-exists` call sites, ongoing cleanup debt, and rate-limit pressure.
 
 ## Target state
 
@@ -21,11 +21,6 @@ Current state conflates the two: `create-release` creates *both* the tag and the
   - Affects: `create-release`
   - Consumers to update: downstream in phase 2 (all current callers go via `promote-*` / `approve-*` / `reject-*` actions)
   - Category: refactor
-
-- [ ] **Add `check-tag-exists` action** — New primitive: takes `tag` (and optional `repo`), returns success if the tag exists in git, error with a clear message otherwise. Uses `git ls-remote --tags` or `gh api repos/.../git/refs/tags/{tag}`. Replaces the role `check-release-exists` plays in gating QA/prod steps.
-  - Affects: new `check-tag-exists` directory
-  - Consumers to update: phase 3 updates 42 call sites
-  - Category: new
 
 ### Phase 2 — RC + status-marker actions go tag-only
 
@@ -60,16 +55,6 @@ Current state conflates the two: `create-release` creates *both* the tag and the
   - Affects: `find-release-by-run` (delete or rename), possibly new `find-tag-by-run`, possibly `trigger-and-wait`
   - Consumers to update: 1 call site in `_prerelease-pipeline.yml:178-180`
   - Category: refactor
-
-- [ ] **Replace all `check-release-exists` call sites with `check-tag-exists`** — 42 occurrences across shop workflows (12 QA-stage + 24 prod-stage + 6 QA-signoff). Each call currently validates a GitHub Release object; should instead validate a git tag.
-  - Affects: 12 workflows in `shop/.github/workflows/`
-  - Consumers to update: 42 workflow steps
-  - Category: callsite-update
-
-- [ ] **Delete `check-release-exists` action** — Once all 42 call sites are migrated to `check-tag-exists`, remove the directory.
-  - Affects: `check-release-exists`
-  - Consumers to update: 0 (after previous item)
-  - Category: delete
 
 ### Phase 4 — production release policy
 

@@ -1,9 +1,10 @@
 name: 'Resolve Tag from SHA'
-description: 'Finds the first tag in a repository that points at a given commit SHA. Inverse of resolve-commit.'
+description: 'Finds the first tag in a repository that points at a given commit SHA. Tool-agnostic — uses git ls-remote, works against any git remote.'
 author: 'Optivem'
 branding:
   icon: 'tag'
   color: 'green'
+
 inputs:
   repo:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
@@ -11,22 +12,46 @@ inputs:
   sha:
     description: 'Commit SHA to look up'
     required: true
+  github-token:
+    description: 'Token for authenticating to the remote'
+    required: false
+    default: ${{ github.token }}
+
 outputs:
   tag:
     description: 'The first tag pointing at the SHA, or empty string if none found'
     value: ${{ steps.resolve.outputs.tag }}
+
 runs:
   using: 'composite'
   steps:
     - id: resolve
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
         REPO: ${{ inputs.repo }}
         SHA: ${{ inputs.sha }}
+        TOKEN: ${{ inputs.github-token }}
       run: |
-        TAG=$(gh api "repos/$REPO/tags" --paginate \
-          --jq ".[] | select(.commit.sha==\"$SHA\") | .name" | head -1)
+        # TODO(scale): git ls-remote --tags fetches the full tag list and filters client-side.
+        # For repos with thousands of tags this is slower than a paginated `gh api /repos/.../tags`.
+        # At this repo's scale (dozens of tags) it is fine. Revisit when tag counts grow.
+        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+
+        # git ls-remote --tags prints: "<sha>\t<ref>".
+        # Annotated tags appear twice: once for the tag-object SHA (refs/tags/X) and once
+        # peeled to the commit it points at (refs/tags/X^{}). Lightweight tags appear once
+        # with the commit SHA directly. Match on the commit SHA; strip the "refs/tags/"
+        # prefix and any "^{}" suffix to recover the tag name.
+        TAG=$(git ls-remote --tags "$remote_url" | awk -v sha="$SHA" '
+          $1 == sha {
+            ref = $2
+            sub(/^refs\/tags\//, "", ref)
+            sub(/\^\{\}$/, "", ref)
+            print ref
+            exit
+          }
+        ')
+
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
         if [ -n "$TAG" ]; then
           echo "Resolved $REPO SHA $SHA to tag: $TAG" >> "$GITHUB_STEP_SUMMARY"

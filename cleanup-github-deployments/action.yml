@@ -1,4 +1,4 @@
-name: 'Cleanup Deployments'
+name: 'Cleanup GitHub Deployments'
 description: 'Cleans up superseded GitHub deployments that are no longer needed'
 author: 'Optivem'
 branding:

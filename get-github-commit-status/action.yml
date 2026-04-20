@@ -1,4 +1,4 @@
-name: 'Get Commit Status'
+name: 'Get GitHub Commit Status'
 description: 'Reads the most recent commit status with a given context (and optionally a required state) from a commit. Fails if no matching status is found.'
 author: 'Optivem'
 branding:

@@ -1,0 +1,30 @@
+name: 'Map Signoff Result'
+description: 'Maps a human signoff decision (approved/rejected) to a CI stage result (success/failure). Pure string mapping — no git, no platform dependency.'
+author: 'Optivem'
+branding:
+  icon: 'check-square'
+  color: 'green'
+
+inputs:
+  result:
+    description: 'Signoff decision: "approved" or anything else (treated as rejection)'
+    required: true
+
+outputs:
+  stage-result:
+    description: '"success" if result is "approved", "failure" otherwise'
+    value: ${{ steps.map.outputs.stage-result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: map
+      shell: bash
+      env:
+        RESULT: ${{ inputs.result }}
+      run: |
+        if [[ "$RESULT" == "approved" ]]; then
+          echo "stage-result=success" >> "$GITHUB_OUTPUT"
+        else
+          echo "stage-result=failure" >> "$GITHUB_OUTPUT"
+        fi

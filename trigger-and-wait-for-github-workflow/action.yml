@@ -1,4 +1,4 @@
-name: 'Trigger and Wait for Workflow'
+name: 'Trigger and Wait for GitHub Workflow'
 description: 'Trigger a workflow_dispatch workflow, poll for completion, and fail if the triggered run fails. Includes GitHub API rate-limit protection.'
 inputs:
   workflow:

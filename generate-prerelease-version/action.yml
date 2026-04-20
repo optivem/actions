@@ -22,12 +22,23 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Check Final Tag Not Released
-      shell: pwsh
+    - name: Compose Final Release Tag
+      id: final-tag
+      shell: bash
+      env:
+        PREFIX: ${{ inputs.prefix }}
+        TARGET: ${{ inputs.target-version }}
       run: |
-        & "${{ github.action_path }}/generate-prerelease-version.ps1" `
-          -TargetVersion '${{ inputs.target-version }}' `
-          -Prefix '${{ inputs.prefix }}'
+        if [ -n "$PREFIX" ]; then
+          echo "version=${PREFIX}-v${TARGET}" >> "$GITHUB_OUTPUT"
+        else
+          echo "version=v${TARGET}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Ensure Final Version Unreleased
+      uses: optivem/actions/ensure-version-unreleased@v1
+      with:
+        version: ${{ steps.final-tag.outputs.version }}
 
     - name: Compose Prerelease Version
       id: compose

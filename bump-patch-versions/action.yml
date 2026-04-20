@@ -1,40 +1,39 @@
 name: 'Bump Patch Versions'
-description: 'Finds VERSION files where the final release tag already exists and bumps the patch version. Commits changes via the GitHub Contents API with SHA precondition (no git push), making it race-safe against concurrent main-branch writes.'
+description: 'Computes patch-version bumps for VERSION files whose matching release tag already exists on the remote. Reads files from the checked-out workspace; writes nothing. Tool-agnostic — uses git ls-remote, no platform API dependency. Pair with commit-files-via-github-contents-api (or an equivalent for your platform) to persist the bumps.'
 
 inputs:
   version-files:
     description: 'Newline-separated list of "path:tag-prefix1,tag-prefix2,..." entries. Each VERSION file is bumped if ANY tag "{prefix}{current-version}" exists on the remote. Example: "VERSION:meta-v,monolith-java-v"'
     required: true
-  branch:
-    description: 'Branch to update (default: main)'
+  remote:
+    description: 'Git remote to check for tags (default: origin)'
     required: false
-    default: 'main'
-  github-token:
-    description: 'GitHub token for API access'
-    required: false
-    default: ${{ github.token }}
+    default: 'origin'
 
 outputs:
+  bumps:
+    description: 'JSON array of {path, old-version, new-version, release-tag} for files that need bumping'
+    value: ${{ steps.bump.outputs.bumps }}
   bumped:
-    description: 'Whether any versions were bumped (true or false)'
+    description: 'true if at least one file needs bumping'
     value: ${{ steps.bump.outputs.bumped }}
   summary:
-    description: 'Summary of bumped versions'
+    description: 'Human-readable summary (one line per file, bumped or skipped)'
     value: ${{ steps.bump.outputs.summary }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Bump Patch Versions (API + SHA lock)
+    - name: Bump Patch Versions (compute)
       id: bump
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
-        REPO: ${{ github.repository }}
-        BRANCH: ${{ inputs.branch }}
+        VERSION_FILES: ${{ inputs.version-files }}
+        REMOTE: ${{ inputs.remote }}
       run: |
         set -euo pipefail
 
+        bumps='[]'
         bumped=false
         summary=""
 
@@ -53,77 +52,40 @@ runs:
           fi
           IFS=',' read -ra tag_prefixes <<< "$tag_prefixes_csv"
 
-          # Fetch file metadata via Contents API (gets current content + blob SHA)
-          if ! response=$(gh api "repos/${REPO}/contents/${file}?ref=${BRANCH}" 2>/dev/null); then
-            echo "::warning::VERSION file not found via API: $file"
+          if [[ ! -f "$file" ]]; then
+            echo "::warning::VERSION file not found: $file"
             continue
           fi
+          current_version=$(cat "$file" | tr -d '[:space:]')
 
-          file_sha=$(echo "$response" | jq -r '.sha')
-          current_b64=$(echo "$response" | jq -r '.content' | tr -d '\n')
-          current_version=$(echo "$current_b64" | base64 -d | tr -d '[:space:]')
-
-          # Bump if ANY of the configured release tags exists on the remote
           matched_tag=""
           for prefix in "${tag_prefixes[@]}"; do
             candidate="${prefix}${current_version}"
-            if git ls-remote --tags --exit-code origin "refs/tags/${candidate}" >/dev/null 2>&1; then
+            if git ls-remote --tags --exit-code "$REMOTE" "refs/tags/${candidate}" >/dev/null 2>&1; then
               matched_tag="$candidate"
               break
             fi
           done
           if [[ -z "$matched_tag" ]]; then
             echo "Skipped $file: $current_version (no matching release tag exists on remote for prefixes: ${tag_prefixes_csv})"
+            summary="${summary}${file}: skipped (no matching release tag for $current_version)\n"
             continue
           fi
-          release_tag="$matched_tag"
 
           major=$(echo "$current_version" | cut -d. -f1)
           minor=$(echo "$current_version" | cut -d. -f2)
           patch=$(echo "$current_version" | cut -d. -f3)
           new_version="${major}.${minor}.$((patch + 1))"
-          new_content_b64=$(printf '%s\n' "$new_version" | base64 -w0)
 
-          # Retry loop for 409 Conflict (SHA precondition failed = concurrent write)
-          attempt=0
-          max_attempts=5
-          while [[ $attempt -lt $max_attempts ]]; do
-            attempt=$((attempt + 1))
+          bumps=$(jq -c --arg p "$file" --arg ov "$current_version" --arg nv "$new_version" --arg rt "$matched_tag" \
+            '. + [{path: $p, "old-version": $ov, "new-version": $nv, "release-tag": $rt}]' <<< "$bumps")
 
-            if gh api --method PUT "repos/${REPO}/contents/${file}" \
-                -f message="Bump $file to $new_version (post-release of $release_tag)" \
-                -f content="${new_content_b64}" \
-                -f sha="${file_sha}" \
-                -f branch="${BRANCH}" >/dev/null 2>&1; then
-              echo "Bumped $file: $current_version -> $new_version"
-              summary="${summary}${file}: ${current_version} -> ${new_version}\n"
-              bumped=true
-              break
-            fi
+          echo "Planned bump: $file $current_version -> $new_version (release $matched_tag)"
+          summary="${summary}${file}: ${current_version} -> ${new_version}\n"
+          bumped=true
+        done <<< "$VERSION_FILES"
 
-            # Refresh state — either another run bumped it (converged) or we retry with fresh SHA
-            response=$(gh api "repos/${REPO}/contents/${file}?ref=${BRANCH}")
-            file_sha=$(echo "$response" | jq -r '.sha')
-            current_b64=$(echo "$response" | jq -r '.content' | tr -d '\n')
-            current_version_now=$(echo "$current_b64" | base64 -d | tr -d '[:space:]')
-
-            if [[ "$current_version_now" == "$new_version" ]]; then
-              echo "Converged: $file is now $new_version (concurrent writer finished first)"
-              break
-            fi
-            if [[ "$current_version_now" != "$current_version" ]]; then
-              echo "::warning::$file changed to $current_version_now during bump; skipping"
-              break
-            fi
-            echo "Retry $attempt/$max_attempts for $file..."
-          done
-
-          if [[ $attempt -eq $max_attempts ]]; then
-            echo "::error::Exhausted retries bumping $file"
-            exit 1
-          fi
-        done <<< "${{ inputs.version-files }}"
-
+        echo "bumps=$bumps" >> "$GITHUB_OUTPUT"
         echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
         echo "summary<<EOF" >> "$GITHUB_OUTPUT"
         echo -e "$summary" >> "$GITHUB_OUTPUT"

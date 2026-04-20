@@ -1,4 +1,4 @@
-name: 'Resolve Commit'
+name: 'Resolve GitHub Commit'
 description: 'Resolves a git ref (branch, tag, or SHA) in a GitHub repository to its commit SHA and committer timestamp.'
 author: 'Optivem'
 branding:

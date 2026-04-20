@@ -1,0 +1,41 @@
+name: 'Ensure Tag Exists'
+description: 'Asserts that a git tag exists in the repository; fails the step if it does not. Tool-agnostic — uses git ls-remote, no platform API dependency.'
+author: 'Optivem'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  tag:
+    description: 'Git tag to require (e.g., meta-v1.0.0-rc.1, monolith-java-v1.0.0)'
+    required: true
+  repo:
+    description: 'Repository in owner/repo format'
+    required: false
+    default: ${{ github.repository }}
+  github-token:
+    description: 'Token for authenticating to the remote'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Ensure tag exists
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        REPO: ${{ inputs.repo }}
+        TOKEN: ${{ inputs.github-token }}
+      run: |
+        echo "Checking if tag '$TAG' exists on $REPO..."
+
+        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+
+        if git ls-remote --tags "$remote_url" "refs/tags/$TAG" 2>/dev/null | grep -q "refs/tags/$TAG"; then
+          echo "✅ Tag '$TAG' found in $REPO"
+          exit 0
+        fi
+
+        echo "::error::Tag '$TAG' does not exist in repository '$REPO'. Make sure the tag is correct and was created by a previous stage."
+        exit 1

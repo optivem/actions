@@ -1,4 +1,4 @@
-name: 'Create Commit Status'
+name: 'Create GitHub Commit Status'
 description: 'Creates a commit status record on the current repository (POST /repos/{repo}/statuses/{sha}) — used for CI state or as per-commit metadata'
 author: 'Optivem'
 branding:

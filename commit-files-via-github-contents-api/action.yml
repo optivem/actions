@@ -1,0 +1,44 @@
+name: 'Commit Files via GitHub Contents API'
+description: 'GitHub-API primitive: writes a set of files to a branch via the Contents API with SHA preconditions, retrying on conflict. Race-safe alternative to `git push` for workflows that may run concurrently on the same branch.'
+author: 'Optivem'
+
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
+
+inputs:
+  files:
+    description: 'JSON array of `{path, content, message}` entries. `path` is repo-relative, `content` is the full new file content (plain text, will be base64-encoded before PUT), `message` is the commit message for that file.'
+    required: true
+  branch:
+    description: 'Branch to commit to (default: the branch of the current run)'
+    required: false
+    default: ${{ github.ref_name }}
+  max-retries:
+    description: 'Maximum number of retries per file on SHA-precondition conflict (HTTP 409/422)'
+    required: false
+    default: '3'
+
+outputs:
+  commits:
+    description: 'JSON array of `{path, commit-sha, content-sha, html-url}` for each file that was committed'
+    value: ${{ steps.commit.outputs.commits }}
+  committed:
+    description: 'true if at least one file was committed'
+    value: ${{ steps.commit.outputs.committed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Commit Files
+      id: commit
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "Commit-Files.ps1"
+        & $scriptPath `
+          -FilesJson '${{ inputs.files }}' `
+          -Branch "${{ inputs.branch }}" `
+          -Repository "${{ github.repository }}" `
+          -MaxRetries ${{ inputs.max-retries }}

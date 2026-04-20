@@ -1,4 +1,4 @@
-name: 'Wait for Commit-Triggered Run'
+name: 'Wait for GitHub Commit-Triggered Run'
 description: 'Wait for a workflow run triggered by a specific commit SHA. Includes GitHub API rate-limit protection.'
 inputs:
   workflow:

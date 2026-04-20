@@ -87,25 +87,63 @@ The repo is a teaching vehicle that evolves over time. Some things that look inc
 - **Docker Compose is a temporary stepping stone.** The current deployment story uses `docker compose up` locally or on a CI runner. Cloud-based deployment (Kubernetes, AWS ECS / Fargate, Azure App Service, Google Cloud Run, etc.) is planned for a later stage of the course. Do **not** recommend adding cloud-deploy actions now, and do **not** flag the absence of one as a gap. What you *should* flag is naming that claims to do something the action doesn't yet do (e.g. calling a docker-compose step `deploy-to-production` — see the naming rules about Farley's deployment definition).
 - **The list of environments is author-determined.** The set of environments (dev, staging, acceptance, production, canary, preview, etc.) is decided by the course author per course, not fixed by this repo. Do **not** recommend adding or removing environments. Only flag inconsistencies *within* the environments that already exist — e.g. a `promote-to-staging` action with no `staging` defined anywhere, or an action that hardcodes an environment name that no consumer uses.
 - **Future-proofing note for consolidation suggestions.** When proposing consolidated actions, design inputs and outputs so they will extend naturally to a cloud-deploy world and to additional environments — don't bake `docker-compose` or a specific environment list into the action's public contract. Prefer generic names (`target`, `environment`, `deploy-method`) over Docker-specific ones in the signature, even if the only current implementation is Compose.
+- **`:latest` is load-bearing in this pipeline — do NOT flag it as an anti-pattern.** The acceptance stage intentionally pulls `:latest` to exercise the newest post-commit, pre-release image against the system test suite. That's the defined role of `:latest` here: "the most recent passing commit-stage build." Versioned/SHA-pinned tags are used from acceptance-stage onward for reproducibility. The general mainstream-DevOps argument against `:latest` (reproducibility, rollback) applies to *production* use of `:latest`, which this pipeline does NOT do — prod-stage pins by version/SHA. Do not recommend making `:latest` push opt-in, do not recommend removing the `image-latest-url` output, and do not cite SRE/K8s `imagePullPolicy` guidance against it in this repo.
 
 # Tool-agnostic vs. platform-specific naming
 
-Students may swap the CI/CD platform for their own pipeline (GitHub Actions → Jenkins, GitLab CI, Azure Pipelines, AWS CodePipeline, CircleCI, Buildkite, etc.). The naming convention must make it obvious at a glance which actions carry **generic pipeline concepts** (portable to any tool) and which carry **GitHub-specific concepts** (must be replaced in another tool).
+Students may swap the CI/CD platform for their own pipeline (GitHub Actions → Jenkins, GitLab CI, Azure Pipelines, AWS CodePipeline, CircleCI, Buildkite, etc.) and may swap the git host (GitHub → GitLab, Bitbucket, Gitea, self-hosted). The naming convention must make it obvious at a glance which actions carry portable concepts vs. which carry GitHub-platform-specific glue.
 
-Rules:
+## Naming tiers
 
-- **Generic pipeline concepts** — do **not** include `github` in the name. The concept exists in every CI tool; the name should too. Examples: `build-image`, `push-image`, `tag-release`, `promote-candidate`, `wait-for-approval`, `bump-version`, `run-tests`, `deploy-service`.
-- **GitHub-specific concepts** — **must** include `github` in the name. This signals to the student that this action is glue for the GitHub platform and has to be replaced with the equivalent in their chosen tool. Examples: `create-github-release`, `set-github-commit-status`, `create-github-deployment`, `comment-github-pr`, `dispatch-github-workflow`, `read-github-workflow-run`.
+There are three conceptual tiers. Only the third gets a prefix.
 
-Signals that a behavior is GitHub-specific: it calls `gh api` or the GitHub REST/GraphQL API; it consumes `GITHUB_TOKEN`; it reads/writes a GitHub Release, commit status, deployment, check run, PR comment, workflow run, or workflow dispatch; it depends on `GITHUB_*` environment variables beyond what every runner provides.
+- **Tier 1 — fully generic** (any CI, any VCS, any host). No prefix. Examples: `build-image`, `push-image`, `wait-for-approval`, `bump-version`, `run-tests`, `deploy-service`, `validate-config`.
+- **Tier 2 — git-native** (any CI, any git host, but requires a git VCS). No prefix. Git is the assumed baseline — adding `git-` to names is redundant because the domain nouns (`tag`, `commit`, `sha`, `ref`, `branch`) already imply git. Examples: `ensure-tag-exists`, `resolve-tag-from-sha`, `create-and-push-tag`, `check-version-unreleased`, `bump-patch-versions`.
+- **Tier 3 — GitHub-platform-specific** (requires GitHub, not just git). `github` segment required. These are concepts that genuinely do not exist in vanilla git: Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs. Examples: `create-github-release`, `create-github-commit-status`, `trigger-and-wait-for-github-workflow`, `cleanup-github-deployments`, `check-github-container-packages-exist`.
 
-When auditing:
+## Implementation rule: prefer git over `gh api` wherever both work
 
-- If an action's name contains `github` but its `runs:` block is generic (no GitHub-specific calls), flag it for renaming **without** the `github` segment.
-- If an action's name has no `github` but its `runs:` block is GitHub-API-specific, flag it for renaming **with** `github` inserted in the appropriate position (usually right before the noun: `create-release` → `create-github-release`).
-- If an action mixes generic pipeline logic with GitHub-specific glue (e.g. a generic "promote" step that also updates a GitHub deployment status), flag it as a **composition violation**: the GitHub-specific glue should be extracted into its own small `*-github-*` action, and the generic action should stay generic so a Jenkins/GitLab/etc. user can reuse it unchanged.
+The naming tier follows from what the implementation actually does. Because names are sticky, the default when writing or reviewing an action is:
 
-Report these under **Naming violations** (for pure rename cases) or **DevOps alignment findings** → "Tool-agnostic composition" (for mixed-concern cases).
+> **If a git command achieves the same outcome as a `gh api` call, use git.** Reserve `gh api` for concepts that genuinely do not exist in git.
+
+Why:
+
+- Portability: git commands work identically against GitHub, GitLab, Bitbucket, Gitea, self-hosted git. Students porting elsewhere rewrite nothing for Tier 2 actions.
+- No rate limits: GitHub API has 5000 req/hour per authenticated user; git operations don't count toward it. Matters for cleanup jobs and loops.
+- Fewer moving parts: no `gh` CLI version drift, no token scope surprises.
+- Honest names: using `gh api` where git would work drags a misleading `github` label onto logic that is in fact portable.
+
+Use `gh api` when the concept is genuinely GitHub-platform metadata:
+
+- Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs, review comments.
+- Push timestamps (distinct from committer timestamps — git only has the latter).
+- Searches that require GitHub's search indexes (e.g. cross-repo commit search without cloning).
+
+## Signals that a behavior is GitHub-platform-specific (Tier 3)
+
+- Calls `gh api` or the GitHub REST/GraphQL API **for a concept that has no git equivalent** (Release, commit status, Deployment, workflow run, PR, Package, check run, Issue).
+- Invokes `gh release`, `gh workflow run`, `gh run list/watch`, `gh pr`, `gh issue`.
+- Reads/writes GitHub commit statuses, Deployments, PR comments, workflow-dispatch inputs.
+- Depends on `GITHUB_*` environment variables beyond the universal ones every runner provides (`GITHUB_WORKSPACE`, `GITHUB_SHA`, `GITHUB_REF` are considered baseline-universal in this repo; `GITHUB_RUN_ID` is GitHub-specific because workflow runs are).
+
+Note: consuming `GITHUB_TOKEN` for git auth (via `https://x-access-token:${TOKEN}@github.com/...`) does NOT by itself make an action Tier 3. The auth pattern is portable (swap URL + token source), and the git operation itself is git-native. Only the platform concept being accessed determines the tier.
+
+## Performance caveat for git remote scans
+
+`git ls-remote` fetches the full ref list and filters client-side (the refspec filter on the command line is client-side filtering after transport in most git versions). For repos with thousands of tags, a paginated `gh api /repos/.../tags` or `/releases` can be faster.
+
+- For this repo's scale (dozens of tags) this is irrelevant; prefer git.
+- Actions that enumerate all tags (e.g. scanning for a tag that points at a given SHA) should carry a TODO comment noting the tradeoff so the next maintainer knows to revisit when tag counts grow.
+
+## When auditing
+
+- If an action's name contains `github` but its `runs:` block is Tier 1 or Tier 2 (generic, or git-native), flag it for renaming without the `github` segment AND for rewriting the implementation to match if it currently uses `gh api` unnecessarily.
+- If an action's name has no `github` but its `runs:` block is Tier 3 (genuinely GitHub-platform-specific), flag it for renaming with `github` inserted in the appropriate position (usually right before the noun: `create-release` → `create-github-release`).
+- If an action mixes Tier 1/2 logic with Tier 3 glue, flag it as a **composition violation**: the Tier 3 glue should be extracted into its own small `*-github-*` action; the generic/git-native action stays clean so a Jenkins/GitLab/etc. user reuses it unchanged.
+- If an action uses `gh api` for something a git command can do (Tier 3 implementation of a Tier 2 concept), flag it as a **portability violation** — recommend rewriting with git and dropping `github` from the name.
+
+Report these under **Naming violations** (for pure rename cases), **DevOps alignment findings** → "Tool-agnostic composition" (for mixed-concern cases), or **DevOps alignment findings** → "Prefer git over gh api" (for portability violations).
 
 # Process
 

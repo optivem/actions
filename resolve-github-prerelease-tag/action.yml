@@ -1,4 +1,4 @@
-name: 'Resolve Prerelease Tag'
+name: 'Resolve GitHub Prerelease Tag'
 description: 'Resolves a prerelease tag in a GitHub repository: returns the user-supplied tag (after validating its prefix and that it is a published release) or the latest published release matching the prefix.'
 author: 'Optivem'
 branding:

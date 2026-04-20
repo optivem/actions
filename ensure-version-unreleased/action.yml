@@ -1,0 +1,25 @@
+name: 'Ensure Version Unreleased'
+description: 'Asserts that a version tag does NOT yet exist in the repository; fails the step if it does. Inverse of ensure-tag-exists. Tool-agnostic — uses git tag -l, no platform API dependency.'
+author: 'Optivem'
+branding:
+  icon: 'x-circle'
+  color: 'red'
+
+inputs:
+  version:
+    description: 'Fully composed version tag to check (e.g., v1.0.0, monolith-java-v1.0.0, meta-v1.0.0-rc.1-qa-approved). Compose prefix/version yourself before passing.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Ensure Version Unreleased
+      shell: bash
+      env:
+        TAG: ${{ inputs.version }}
+      run: |
+        if git tag -l "$TAG" | grep -q -F -x "$TAG"; then
+          echo "::error::Version $TAG is already released. Cannot re-release. Bump the VERSION file and create a new RC."
+          exit 1
+        fi
+        echo "Version $TAG has not been released yet — OK to proceed."
