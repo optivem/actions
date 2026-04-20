@@ -61,14 +61,21 @@ $cutoffDate = (Get-Date).AddDays(-$RetentionDays)
 # ── Step 1: Fetch all releases in one batch API call ─────────────────
 
 Write-Host "Fetching all GitHub releases (single API call)..." -ForegroundColor Cyan
+# Use the REST API rather than `gh release list` so draft releases are included
+# (drafts have no git tag, so Scenario 3 needs to see them via the release record).
+# Keying `$allReleases` by tag name is fine: drafts may share the same intended
+# tag, but the last one wins for lookup purposes and each is still deleted by ID
+# in Scenario 3's dedicated loop below.
 $allReleases = @{}
-$releasesJson = & gh release list --repo $Repository --limit 999 --json tagName,createdAt,isPrerelease 2>$null
+$releasesJson = & gh api "repos/$Repository/releases" --paginate 2>$null
 if ($LASTEXITCODE -eq 0 -and $releasesJson) {
     $releasesList = $releasesJson | ConvertFrom-Json
     foreach ($rel in $releasesList) {
-        $allReleases[$rel.tagName] = @{
-            CreatedAt    = [DateTime]::Parse($rel.createdAt)
-            IsPrerelease = $rel.isPrerelease
+        $allReleases[$rel.tag_name] = @{
+            Id           = $rel.id
+            CreatedAt    = [DateTime]::Parse($rel.created_at)
+            IsPrerelease = $rel.prerelease
+            IsDraft      = $rel.draft
         }
     }
     Write-Host "  Found $($allReleases.Count) releases" -ForegroundColor Green
@@ -399,6 +406,48 @@ foreach ($version in $sortedPrereleaseVersions) {
             }
         }
     }
+}
+
+# ── Scenario 3: Orphaned prerelease GitHub releases (no git tag) ─────
+#
+# Catches prerelease GitHub releases that Scenarios 1 and 2 cannot see
+# because those iterate `git tag -l`. The main case is draft releases —
+# drafts don't create a git tag until published, so a draft abandoned
+# mid-pipeline (or left over from a pre-`meta`-prefix naming scheme)
+# stays visible in the Releases UI forever. Orphans are deleted
+# unconditionally: a prerelease record with no backing git tag is by
+# definition stale (published RCs always have a tag).
+
+Write-Host ""
+Write-Host "--- Orphaned Prerelease Releases ---" -ForegroundColor Cyan
+
+$gitTagSet = @{}
+foreach ($tag in $allTags) { $gitTagSet[$tag] = $true }
+
+foreach ($tagName in @($allReleases.Keys)) {
+    $rel = $allReleases[$tagName]
+
+    if (-not $rel.IsPrerelease) { continue }
+    if ($gitTagSet.ContainsKey($tagName)) { continue }
+
+    $kind = if ($rel.IsDraft) { "draft" } else { "orphaned" }
+    Write-Host "  Cleaning up $kind release $tagName (created $($rel.CreatedAt))" -ForegroundColor White
+
+    if ($DryRun) {
+        Write-Host "  [DRY RUN] Would delete release: $tagName (id $($rel.Id))" -ForegroundColor Yellow
+        continue
+    }
+
+    # Delete by release ID via the REST API. Drafts have no tag, so
+    # `gh release delete <tag>` cannot target them reliably.
+    & gh api --method DELETE "repos/$Repository/releases/$($rel.Id)" 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Deleted release: $tagName" -ForegroundColor Green
+        $deletedCount++
+    } else {
+        Write-Host "  Warning: Could not delete release $tagName (id $($rel.Id))" -ForegroundColor Yellow
+    }
+    Start-Sleep -Seconds $DeleteDelaySeconds
 }
 
 # ── Summary ──────────────────────────────────────────────────────────
