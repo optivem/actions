@@ -1,0 +1,90 @@
+name: 'Has Unverified SHA'
+description: 'Detects whether a given head commit is missing a prior success commit-status for a specified subject SHA under a given status context. Used to skip re-verification when the same subject has already been verified on this HEAD.'
+author: 'Optivem'
+branding:
+  icon: 'shield-off'
+  color: 'blue'
+
+inputs:
+  subject-sha:
+    description: 'Identity of the subject under test (e.g. the resolved commit SHA of an upstream repo). Matched against the `description` field of commit statuses on head-sha.'
+    required: true
+  status-context:
+    description: 'The commit-status context that records prior verification (e.g. `verified-shop-sha`). Matched against the `context` field of commit statuses on head-sha.'
+    required: true
+  head-sha:
+    description: 'Commit whose statuses are inspected. Defaults to ${{ github.sha }}.'
+    required: false
+    default: ${{ github.sha }}
+  repo-owner:
+    description: 'Repository owner (organization or username). Defaults to the current repository owner.'
+    required: false
+    default: ${{ github.repository_owner }}
+  repo-name:
+    description: 'Repository name. Defaults to the current repository name.'
+    required: false
+    default: ${{ github.event.repository.name }}
+
+outputs:
+  changed:
+    description: |
+      'true' when no matching success status is found on head-sha (subject has NOT been verified yet — run).
+      'false' when a matching success status exists (subject already verified — skip).
+      Fails open to 'true' on transient API errors, to avoid silent skipping.
+    value: ${{ steps.check.outputs.changed }}
+  verified-at:
+    description: 'ISO 8601 createdAt of the matching success status, if one was found. Empty otherwise.'
+    value: ${{ steps.check.outputs.verified-at }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Look up commit statuses on head-sha
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SUBJECT_SHA: ${{ inputs.subject-sha }}
+        STATUS_CONTEXT: ${{ inputs.status-context }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+        REPO_OWNER: ${{ inputs.repo-owner }}
+        REPO_NAME: ${{ inputs.repo-name }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "$HEAD_SHA" ]]; then
+          echo "::error::head-sha is empty"
+          exit 1
+        fi
+
+        echo "Head SHA: $HEAD_SHA"
+        echo "Subject SHA: $SUBJECT_SHA"
+        echo "Status context: $STATUS_CONTEXT"
+
+        if ! statuses=$(gh api "repos/${REPO_OWNER}/${REPO_NAME}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
+          echo "::warning::Could not fetch commit statuses — failing open to changed=true. Details: $statuses"
+          {
+            echo "changed=true"
+            echo "verified-at="
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        match_created_at=$(echo "$statuses" | jq -r --arg ctx "$STATUS_CONTEXT" --arg sha "$SUBJECT_SHA" '
+          map(select(.context == $ctx and .description == $sha and .state == "success"))
+          | .[0].created_at // ""
+        ')
+
+        if [[ -n "$match_created_at" ]]; then
+          echo "Subject already verified on this HEAD at $match_created_at — changed=false"
+          {
+            echo "changed=false"
+            echo "verified-at=$match_created_at"
+          } >> "$GITHUB_OUTPUT"
+        else
+          echo "No matching success status — changed=true"
+          {
+            echo "changed=true"
+            echo "verified-at="
+          } >> "$GITHUB_OUTPUT"
+        fi

@@ -1,0 +1,93 @@
+name: 'Has New Docker Image Versions Since Run'
+description: 'Detects whether a newer version of a docker image has been pushed since the last successful run of a given workflow. Caller resolves the latest image timestamp (typically via find-latest-docker-images) and passes it in. Part of the `has-new-*-since-run` primitive family.'
+author: 'Optivem'
+branding:
+  icon: 'refresh-cw'
+  color: 'blue'
+
+inputs:
+  image-timestamp:
+    description: 'ISO 8601 timestamp of the latest docker image push — typically the `latest-image-timestamp` output of `find-latest-docker-images`.'
+    required: true
+  workflow-name:
+    description: 'Workflow file name or display name to check last successful run against (e.g. `${{ github.workflow }}`).'
+    required: true
+  repo-owner:
+    description: 'Repository owner (organization or username). Defaults to the current repository owner.'
+    required: false
+    default: ${{ github.repository_owner }}
+  repo-name:
+    description: 'Repository name. Defaults to the current repository name.'
+    required: false
+    default: ${{ github.event.repository.name }}
+
+outputs:
+  changed:
+    description: |
+      'true' when the image timestamp is strictly newer than the last successful run's createdAt,
+      OR when there is no previous successful run (fail-open on first run).
+      'false' when a previous successful run was found AND the image is not newer than it.
+    value: ${{ steps.check.outputs.changed }}
+  last-run-at:
+    description: 'ISO 8601 createdAt of the last successful run. Empty if no previous successful run exists.'
+    value: ${{ steps.check.outputs.last-run-at }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compare image timestamp against last successful run
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        IMAGE_TIMESTAMP: ${{ inputs.image-timestamp }}
+        WORKFLOW_NAME: ${{ inputs.workflow-name }}
+        REPO_OWNER: ${{ inputs.repo-owner }}
+        REPO_NAME: ${{ inputs.repo-name }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "$IMAGE_TIMESTAMP" ]]; then
+          echo "::error::image-timestamp is empty"
+          exit 1
+        fi
+
+        # Most recent successful run of this workflow. Limit 50 to handle short bursts
+        # of failed/in-progress runs preceding the last success.
+        last_run_at=$(gh run list \
+          --repo "${REPO_OWNER}/${REPO_NAME}" \
+          --workflow "$WORKFLOW_NAME" \
+          --status completed \
+          --limit 50 \
+          --json conclusion,createdAt \
+          2>/dev/null \
+          | jq -r 'map(select(.conclusion == "success"))[0].createdAt // ""')
+
+        echo "Image timestamp: $IMAGE_TIMESTAMP"
+
+        if [[ -z "$last_run_at" ]]; then
+          echo "No previous successful run found for workflow '$WORKFLOW_NAME' — reporting changed=true (fail-open)."
+          {
+            echo "changed=true"
+            echo "last-run-at="
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "Last successful run: $last_run_at"
+
+        # ISO 8601 lexicographic comparison is correct when both timestamps are in UTC
+        # with the same format (both include 'Z'). GitHub API returns UTC Z-suffixed;
+        # find-latest-docker-images likewise emits UTC Z-suffixed timestamps.
+        if [[ "$IMAGE_TIMESTAMP" > "$last_run_at" ]]; then
+          echo "Image is newer than last successful run — changed=true"
+          changed=true
+        else
+          echo "Image is not newer than last successful run — changed=false"
+          changed=false
+        fi
+
+        {
+          echo "changed=$changed"
+          echo "last-run-at=$last_run_at"
+        } >> "$GITHUB_OUTPUT"
