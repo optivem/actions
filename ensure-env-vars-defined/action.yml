@@ -13,7 +13,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Validate Config
+    - name: Ensure Environment Variables Defined
       run: |
         missing=()
 
