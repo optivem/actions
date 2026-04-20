@@ -24,10 +24,7 @@ Current state conflates the two: `create-release` creates *both* the tag and the
 
 ### Phase 2 — RC + status-marker actions go tag-only
 
-- [ ] **Refactor `promote-to-rc` to tag-only** — Drop the `create-release` step; keep `generate-prerelease-version` and `tag-docker-images`; add `create-and-push-tag` at the end to publish the RC tag. Remove `is-prerelease: true` release creation entirely. Outputs (`version`, `image-urls`) stay the same.
-  - Affects: `promote-to-rc`
-  - Consumers to update: 0 (acceptance-stage workflows already read `version` output from `promote-to-rc`, not from the release object)
-  - Category: refactor
+> **Note (2026-04-20 update):** the original `promote-to-rc` / `create-prerelease` composite has been fully decomposed at call sites rather than refactored in-place, per the "primitives first, composites optional and thin" principle added to `actions-auditor`. The 12 acceptance-stage callers now inline `generate-prerelease-version` → `tag-docker-images` → `create-and-push-tag` directly. The `create-prerelease` action has been deleted. Remaining Phase 2 items below apply to QA/signoff/prod actions, which still use the old `create-release` path.
 
 - [ ] **Refactor `promote-rc-to-qa` to tag-only** — Replace its `create-release` call with `create-and-push-tag` to produce `{prefix}-v{version}-rc.N-qa-deployed` as a plain tag.
   - Affects: `promote-rc-to-qa`
