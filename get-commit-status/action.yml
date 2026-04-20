@@ -1,0 +1,60 @@
+name: 'Get Commit Status'
+description: 'Reads the most recent commit status with a given context (and optionally a required state) from a commit. Fails if no matching status is found.'
+author: 'Optivem'
+branding:
+  icon: 'search'
+  color: 'green'
+inputs:
+  sha:
+    description: 'Commit SHA to read the status from'
+    required: true
+  context:
+    description: 'Status context to look up'
+    required: true
+  state:
+    description: 'Required state filter (success, failure, pending, error). Empty = any state.'
+    required: false
+    default: 'success'
+  repo:
+    description: 'Repository in "owner/name" form. Default: current repository.'
+    required: false
+    default: ${{ github.repository }}
+outputs:
+  description:
+    description: 'The description field of the matched status'
+    value: ${{ steps.read.outputs.description }}
+  state:
+    description: 'The state of the matched status'
+    value: ${{ steps.read.outputs.state }}
+  target-url:
+    description: 'The target_url of the matched status'
+    value: ${{ steps.read.outputs.target-url }}
+runs:
+  using: 'composite'
+  steps:
+    - id: read
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ inputs.repo }}
+        SHA: ${{ inputs.sha }}
+        CONTEXT: ${{ inputs.context }}
+        STATE_FILTER: ${{ inputs.state }}
+      run: |
+        if [ -n "$STATE_FILTER" ]; then
+          JQ="[.[] | select(.context==\"$CONTEXT\" and .state==\"$STATE_FILTER\")][0]"
+        else
+          JQ="[.[] | select(.context==\"$CONTEXT\")][0]"
+        fi
+        STATUS_JSON=$(gh api "repos/$REPO/commits/$SHA/statuses" --jq "$JQ")
+        if [ -z "$STATUS_JSON" ] || [ "$STATUS_JSON" = "null" ]; then
+          echo "::error::No ${STATE_FILTER:+$STATE_FILTER }commit status with context '$CONTEXT' found on $REPO commit $SHA"
+          exit 1
+        fi
+        DESCRIPTION=$(echo "$STATUS_JSON" | jq -r '.description // ""')
+        STATE=$(echo "$STATUS_JSON" | jq -r '.state // ""')
+        TARGET_URL=$(echo "$STATUS_JSON" | jq -r '.target_url // ""')
+        echo "description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
+        echo "state=$STATE" >> "$GITHUB_OUTPUT"
+        echo "target-url=$TARGET_URL" >> "$GITHUB_OUTPUT"
+        echo "Read status [$CONTEXT=$STATE] from commit $SHA${DESCRIPTION:+ ($DESCRIPTION)}" >> "$GITHUB_STEP_SUMMARY"
