@@ -1,0 +1,71 @@
+name: 'Resolve Commit'
+description: 'Resolves a git ref (branch, tag, or SHA) in a remote repository to its commit SHA and committer timestamp. Tool-agnostic — uses git fetch + git log, works against any git remote that allows reachable-SHA fetches.'
+author: 'Optivem'
+
+branding:
+  icon: 'git-commit'
+  color: 'green'
+
+inputs:
+  repo:
+    description: 'Repository in "owner/name" form (e.g. optivem/shop). Resolved against github.com.'
+    required: true
+  ref:
+    description: 'Git ref to resolve (branch, tag, or SHA). Empty defaults to "main".'
+    required: false
+    default: 'main'
+  github-token:
+    description: 'Token for authenticating to the remote'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  sha:
+    description: '40-character commit SHA'
+    value: ${{ steps.resolve.outputs.sha }}
+  timestamp:
+    description: 'Committer timestamp in ISO 8601 format'
+    value: ${{ steps.resolve.outputs.timestamp }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        REPO: ${{ inputs.repo }}
+        REF: ${{ inputs.ref }}
+        TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$REF" ]; then
+          REF="main"
+        fi
+
+        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+
+        # Shallow-fetch just the target ref into a throwaway repo. Works for branches,
+        # tags, and SHAs (GitHub has uploadpack.allowReachableSHA1InWant enabled).
+        workdir=$(mktemp -d)
+        trap 'rm -rf "$workdir"' EXIT
+        cd "$workdir"
+
+        git init --quiet
+        if ! git fetch --quiet --depth=1 "$remote_url" "$REF"; then
+          echo "::error::Failed to resolve $REPO ref '$REF' — ref not found or fetch failed"
+          exit 1
+        fi
+
+        SHA=$(git rev-parse FETCH_HEAD)
+        TIMESTAMP=$(git log -1 --format=%cI FETCH_HEAD)
+
+        if [ -z "$SHA" ] || [ ${#SHA} -ne 40 ]; then
+          echo "::error::Resolved SHA for $REPO ref '$REF' is invalid: '$SHA'"
+          exit 1
+        fi
+
+        echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+        echo "timestamp=$TIMESTAMP" >> "$GITHUB_OUTPUT"
+        echo "Resolved $REPO ref '$REF' to SHA: $SHA" >> "$GITHUB_STEP_SUMMARY"
+        echo "Committer timestamp: $TIMESTAMP" >> "$GITHUB_STEP_SUMMARY"
