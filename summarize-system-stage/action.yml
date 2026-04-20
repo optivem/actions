@@ -78,3 +78,10 @@ runs:
           ${{ inputs.last-run-at && format('✅ **Last successful run at:** `{0}`', inputs.last-run-at) || '' }}
 
           ${{ steps.process-latest-artifacts.outputs.artifacts-formatted && format('🔗 **Latest known artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-latest-artifacts.outputs.artifacts-formatted) || '' }}
+
+    - name: Cancel Run on Skipped
+      if: inputs.stage-result == 'skipped'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}

@@ -48,6 +48,14 @@ runs:
         STAGE_CANCELLED_CONTENT: ${{ inputs.stage-cancelled-content }}
         STAGE_SKIPPED_CONTENT: ${{ inputs.stage-skipped-content }}
       run: |
+        case "$STAGE_RESULT" in
+          success|failure|cancelled|skipped) ;;
+          *)
+            echo "::error::Invalid stage-result '$STAGE_RESULT'. Must be one of: success, failure, cancelled, skipped."
+            exit 1
+            ;;
+        esac
+
         write_header() {
           echo "## $1 $STAGE_NAME $2"
           echo ""
@@ -79,9 +87,6 @@ runs:
             skipped)
               write_header "⏭️" "Skipped"
               ;;
-            *)
-              write_header "⚠️" "Status Unknown"
-              ;;
           esac
 
           if [[ -n "$STAGE_CONTENT" ]]; then
@@ -100,9 +105,6 @@ runs:
               ;;
             skipped)
               write_content "$STAGE_SKIPPED_CONTENT" "Stage was skipped."
-              ;;
-            *)
-              echo "❓ **Stage result:** \`$STAGE_RESULT\`"
               ;;
           esac
         } >> "$GITHUB_STEP_SUMMARY"
