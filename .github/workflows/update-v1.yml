@@ -1,4 +1,4 @@
-name: Update v1 Tag
+name: update-v1
 
 # Moves the floating `v1` tag forward to the latest commit on `main`.
 # Every consumer workflow (in shop, gh-optivem, optivem-testing) references
