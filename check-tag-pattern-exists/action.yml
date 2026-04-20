@@ -1,0 +1,53 @@
+name: 'Check Tag Pattern Exists'
+description: 'Checks whether any tag matching a pattern exists in the remote repository. Tool-agnostic — uses git ls-remote, no platform API dependency.'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  tag-pattern:
+    description: 'Tag pattern to match (e.g., meta-v*)'
+    required: true
+  repo:
+    description: 'Repository in owner/repo format'
+    required: false
+    default: ${{ github.repository }}
+  github-token:
+    description: 'Token for authenticating to the remote'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exists:
+    description: 'Whether at least one matching tag exists (true/false)'
+    value: ${{ steps.check.outputs.exists }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check tag pattern
+      id: check
+      shell: bash
+      env:
+        TAG_PATTERN: ${{ inputs.tag-pattern }}
+        REPO: ${{ inputs.repo }}
+        TOKEN: ${{ inputs.github-token }}
+      run: |
+        echo "Checking for tags matching '$TAG_PATTERN' in $REPO..."
+
+        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+
+        if ! output=$(git ls-remote --tags "$remote_url" "refs/tags/${TAG_PATTERN}" 2>/dev/null); then
+          echo "::error::Failed to query tags from $REPO"
+          exit 1
+        fi
+
+        if [ -n "$output" ]; then
+          count=$(printf '%s\n' "$output" | wc -l | tr -d ' ')
+          echo "Found ${count} tag(s) matching '$TAG_PATTERN' in $REPO"
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::No tags matching '$TAG_PATTERN' in $REPO. Upstream has not tagged yet — skipping."
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi

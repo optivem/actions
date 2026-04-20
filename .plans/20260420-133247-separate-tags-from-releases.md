@@ -26,26 +26,6 @@ Current state conflates the two: `create-release` creates *both* the tag and the
 
 > **Note (2026-04-20 update):** the original `promote-to-rc` / `create-prerelease` composite has been fully decomposed at call sites rather than refactored in-place, per the "primitives first, composites optional and thin" principle added to `actions-auditor`. The 12 acceptance-stage callers now inline `generate-prerelease-version` → `tag-docker-images` → `create-and-push-tag` directly. The `create-prerelease` action has been deleted. Remaining Phase 2 items below apply to QA/signoff/prod actions, which still use the old `create-release` path.
 
-- [ ] **Refactor `promote-rc-to-qa` to tag-only** — Replace its `create-release` call with `create-and-push-tag` to produce `{prefix}-v{version}-rc.N-qa-deployed` as a plain tag.
-  - Affects: `promote-rc-to-qa`
-  - Consumers to update: 12 shop QA-stage call sites (no input changes — action surface stable)
-  - Category: refactor
-
-- [ ] **Refactor `approve-rc-in-qa` to tag-only** — Replace `create-release` with `create-and-push-tag` for `{prefix}-v{version}-rc.N-qa-approved`.
-  - Affects: `approve-rc-in-qa`
-  - Consumers to update: 6 shop signoff call sites (no input changes)
-  - Category: refactor
-
-- [ ] **Refactor `reject-rc-in-qa` to tag-only** — Replace `create-release` with `create-and-push-tag` for `{prefix}-v{version}-rc.N-qa-rejected`.
-  - Affects: `reject-rc-in-qa`
-  - Consumers to update: 6 shop signoff call sites (no input changes)
-  - Category: refactor
-
-- [ ] **Refactor `promote-rc-to-prod` to tag-only for the deployed marker** — `{prefix}-v{version}-rc.N-prod-deployed` becomes a plain tag. Final-version release (see phase 4) is a separate concern.
-  - Affects: `promote-rc-to-prod`
-  - Consumers to update: 12 shop prod-stage call sites (no input changes)
-  - Category: refactor
-
 ### Phase 3 — replace release-based lookups with tag-based lookups
 
 - [ ] **Replace `find-release-by-run` with tag-based lookup** — Currently scans GitHub Release bodies for the run ID (via GraphQL). In tag-only world there are no release bodies to scan. Replacement: the acceptance-stage job already outputs `version` from `promote-to-rc`; expose that as a workflow output so `_prerelease-pipeline.yml` can read it via `trigger-and-wait`'s run-id. If `trigger-and-wait` cannot surface triggered-workflow outputs, fall back to a new `find-tag-by-run` action that queries tags whose tagger-date / tagger-message references the run ID (or that point to a SHA reachable from the run's commit).
