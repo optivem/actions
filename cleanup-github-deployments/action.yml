@@ -30,6 +30,10 @@ inputs:
     description: 'If true, only log what would be deleted without actually deleting anything'
     required: false
     default: 'false'
+  token:
+    description: 'GitHub token used for deployment API calls. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: 'composite'
@@ -41,7 +45,7 @@ runs:
     - name: Cleanup Deployments
       shell: bash
       env:
-        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ inputs.token }}
         KEEP_COUNT: ${{ inputs.keep-count }}
         RETENTION_DAYS: ${{ inputs.retention-days }}
         PROTECTED_ENVIRONMENTS: ${{ inputs.protected-environments }}

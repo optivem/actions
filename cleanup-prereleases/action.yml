@@ -26,6 +26,10 @@ inputs:
     description: 'If true, only log what would be deleted without actually deleting anything'
     required: false
     default: 'false'
+  token:
+    description: 'GitHub token used for tag, release, and package API calls. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: 'composite'
@@ -37,7 +41,7 @@ runs:
     - name: Cleanup Prereleases
       shell: bash
       env:
-        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ inputs.token }}
         RETENTION_DAYS: ${{ inputs.retention-days }}
         CONTAINER_PACKAGES: ${{ inputs.container-packages }}
         DELETE_DELAY_SECONDS: ${{ inputs.delete-delay-seconds }}
