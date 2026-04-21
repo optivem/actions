@@ -8,7 +8,7 @@ branding:
 
 inputs:
   repo:
-    description: 'Repository in "owner/name" form (e.g. optivem/shop). Resolved against github.com.'
+    description: 'Repository in "owner/name" form (e.g. optivem/shop). Resolved against the configured git-host (defaults to github.com).'
     required: true
   ref:
     description: 'Git ref to resolve (branch, tag, or SHA). Empty defaults to "main".'
@@ -18,6 +18,10 @@ inputs:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
+  git-host:
+    description: 'Git host to query (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
 
 outputs:
   sha:
@@ -36,6 +40,7 @@ runs:
         REPO: ${{ inputs.repo }}
         REF: ${{ inputs.ref }}
         TOKEN: ${{ inputs.github-token }}
+        GIT_HOST: ${{ inputs.git-host }}
       run: |
         set -euo pipefail
 
@@ -43,7 +48,7 @@ runs:
           REF="main"
         fi
 
-        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
 
         # Shallow-fetch just the target ref into a throwaway repo. Works for branches,
         # tags, and SHAs (GitHub has uploadpack.allowReachableSHA1InWant enabled).

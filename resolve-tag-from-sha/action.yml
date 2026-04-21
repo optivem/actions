@@ -16,6 +16,10 @@ inputs:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
+  git-host:
+    description: 'Git host to query (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
 
 outputs:
   tag:
@@ -31,11 +35,12 @@ runs:
         REPO: ${{ inputs.repo }}
         SHA: ${{ inputs.sha }}
         TOKEN: ${{ inputs.github-token }}
+        GIT_HOST: ${{ inputs.git-host }}
       run: |
         # TODO(scale): git ls-remote --tags fetches the full tag list and filters client-side.
         # For repos with thousands of tags this is slower than a paginated `gh api /repos/.../tags`.
         # At this repo's scale (dozens of tags) it is fine. Revisit when tag counts grow.
-        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
 
         # git ls-remote --tags prints: "<sha>\t<ref>".
         # Annotated tags appear twice: once for the tag-object SHA (refs/tags/X) and once

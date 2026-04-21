@@ -17,6 +17,10 @@ inputs:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
+  git-host:
+    description: 'Git host to query (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
 
 runs:
   using: 'composite'
@@ -27,10 +31,11 @@ runs:
         TAG: ${{ inputs.tag }}
         REPO: ${{ inputs.repo }}
         TOKEN: ${{ inputs.github-token }}
+        GIT_HOST: ${{ inputs.git-host }}
       run: |
         echo "Checking if tag '$TAG' exists on $REPO..."
 
-        remote_url="https://x-access-token:${TOKEN}@github.com/${REPO}.git"
+        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
 
         if git ls-remote --tags "$remote_url" "refs/tags/$TAG" 2>/dev/null | grep -q "refs/tags/$TAG"; then
           echo "✅ Tag '$TAG' found in $REPO"
