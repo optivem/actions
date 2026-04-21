@@ -192,6 +192,77 @@ When you find a concern-mixing action:
 - If a thin composite is still desirable for the common-case caller, recommend rebuilding it **on top of** the primitives — never as a replacement.
 - Flag it in **DevOps alignment findings** under "Separation of concerns" (new category) with the specific concerns it mixes and the proposed primitive split.
 
+## Architectural principle: composition order and idempotence
+
+Once concerns are split into primitives, the caller workflow (or a thin composite wrapper) must compose them in an order that **minimises the blast radius of partial failure**, and each primitive must be **idempotent** so a rerun of the same workflow is safe.
+
+### Ordering rule: cheapest-to-reverse first, hardest-to-reverse last
+
+Release-style pipelines bundle several side effects that are not equally reversible. Order the steps so that if step N fails, steps 1…N-1 left the world in a state that is cheap to re-enter, not a partial "release" that is now visible to users.
+
+Rough reversibility ranking (cheapest to reverse → hardest):
+
+1. **Building/pushing an artifact** (docker image, npm tarball, Maven JAR) — overwritable by the next push of the same tag; nobody has consumed it yet.
+2. **Creating/updating a git tag** — movable with a force-push; visible only to git consumers.
+3. **Creating a platform release record** (GitHub Release, GitLab Release) — user-visible, appears in "Releases" UI, may trigger notifications and downstream webhooks.
+4. **Announcing / notifying** (Slack, email, status page, changelog commit) — pushes information to humans; cannot be un-sent.
+
+The caller must step through these in increasing-reversibility-cost order. A common concrete ordering for a Docker + GitHub release:
+
+```
+build-and-push docker image   # 1. artifact exists but nothing references it yet
+create-and-push git tag       # 2. tag points at an already-published image
+create-github-release         # 3. release references an already-existing tag
+notify / announce             # 4. only after the release record is real
+```
+
+If step 3 fails, you have a tagged image and a git tag — both re-runnable. If the order were reversed (release first, then tag, then image), a failure at step 2 leaves a GitHub Release pointing at a tag that doesn't exist, visible to users.
+
+### Idempotence rule: every primitive must be safe to rerun
+
+Because the caller will rerun the workflow on failure, each primitive must converge to the same end state whether it's the first run or the hundredth. Concretely:
+
+- **Tag creation** — create-if-missing, otherwise verify-or-update; never fail because "tag already exists" when the existing tag already points at the intended SHA.
+- **Artifact push** — pushing an already-published image/package to the same tag is a no-op or an overwrite, not an error.
+- **Release record** — create-if-missing, otherwise update-in-place; a rerun must not produce two Releases for the same tag.
+- **Status / notification** — either deduplicate on a stable key, or scope the notification to a step that only runs on first success.
+
+Actions that silently succeed on a genuine no-op are fine; actions that *fail* on a rerun because "the thing already exists" are a pipeline-fragility bug.
+
+### Concrete example — three primitives + thin caller
+
+Separate composites, one per concern:
+
+```
+actions/
+  build-and-push-image/action.yml     # concern: artifact type & push
+  create-and-push-tag/action.yml      # concern: git tag creation
+  create-github-release/action.yml    # concern: release record
+```
+
+Each primitive accepts only the inputs for its own concern (e.g. `create-and-push-tag` takes `tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
+
+```yaml
+jobs:
+  release:
+    steps:
+      - uses: actions/checkout@v4
+      - uses: optivem/actions/build-and-push-image@v1    # 1. cheapest to reverse
+        with: { image: ghcr.io/acme/api, tag: ${{ inputs.version }} }
+      - uses: optivem/actions/create-and-push-tag@v1     # 2. movable
+        with: { tag: v${{ inputs.version }}, sha: ${{ github.sha }} }
+      - uses: optivem/actions/create-github-release@v1   # 3. user-visible
+        with: { tag: v${{ inputs.version }}, notes: ${{ inputs.notes }} }
+```
+
+A thin composite wrapper (`publish-docker-release`) that runs these three in this order is acceptable **only if** each primitive remains independently callable (per the "primitives first, composites optional and thin" rule above) and the wrapper adds no behavior beyond the fixed sequence.
+
+### When auditing
+
+- If a composite runs steps in an order where an early-step failure would leave a user-visible artifact pointing at nothing (e.g. GitHub Release created before its tag, or tag created before the image it describes is published), flag it as an **ordering violation** under **DevOps alignment findings** → "Composition ordering".
+- If a primitive fails on rerun because "the thing already exists" (e.g. `gh release create` without an exists-check, `git tag` without `-f` or a prior existence probe, a docker push that errors on tag reuse), flag it as an **idempotence violation** under **DevOps alignment findings** → "Idempotence". Recommend the create-or-update pattern.
+- If a monolithic action fuses the three release concerns (artifact push + git tag + release record) into a single `runs:` block, flag it under **Separation of concerns** (existing category) AND note that the monolith hides the ordering/idempotence decisions from the reader.
+
 ## Performance caveat for git remote scans
 
 `git ls-remote` fetches the full ref list and filters client-side (the refspec filter on the command line is client-side filtering after transport in most git versions). For repos with thousands of tags, a paginated `gh api /repos/.../tags` or `/releases` can be faster.
