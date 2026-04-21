@@ -109,18 +109,22 @@ Three conceptual tiers. Only the third gets a prefix.
 
   *Porting caveat for Tier 3:* a Tier 3 concept may not have identical shape on other platforms. `create-github-release` ports to an Azure DevOps "Release" but Azure Releases model deployment stages, which GitHub Releases do not; `has-update-since-last-github-workflow-run` ports to GitLab as pipeline-runs, which contain jobs rather than runs. Treat Tier 3 renames as **"start here", not "done"** — the rename is the first step; inputs/outputs may also shift when the target concept has a different shape.
 
-## 3.2 Implementation rule: prefer git over `gh api` wherever both work
+## 3.2 Implementation rule: prefer VCS-standard commands over platform API
 
-> **If a git command achieves the same outcome as a `gh api` call, use git.** Reserve `gh api` for concepts that genuinely do not exist in git.
+> **If a VCS-standard command (git, or the portable CLI equivalent on your platform) achieves the same outcome as a platform API call, use the VCS command.** Reserve the platform API for concepts that genuinely do not exist in the VCS.
+
+On GitHub Actions this rule reads "prefer `git` over `gh api`" — `gh api` is the concrete platform API. On GitLab CI it reads "prefer `git` over `glab api`"; on Bitbucket "prefer `git` over `bb api` / `curl https://api.bitbucket.org/...`". The *principle* is VCS-vs-platform-API; the CLI names are illustrative.
+
+**Tier is determined by the concept accessed, not the tool used.** An action named `has-update-since-last-commit` (Tier 2) may use `gh api` internally for speed or convenience — the tier promise is that a port to GitLab replaces only the implementation, not the name. (See also the note at the end of §3.3 on `GITHUB_TOKEN`-for-git-auth: same principle — auth tool ≠ tier.)
 
 Why:
 
-- **Portability.** Git commands work identically against GitHub, GitLab, Bitbucket, Gitea, self-hosted git. Students porting elsewhere rewrite nothing for Tier 2 actions.
-- **No rate limits.** GitHub API has 5000 req/hour per authenticated user; git operations don't count toward it. Matters for cleanup jobs and loops.
-- **Fewer moving parts.** No `gh` CLI version drift, no token scope surprises.
-- **Honest names.** Using `gh api` where git would work drags a misleading `github` label onto logic that is in fact portable.
+- **Portability.** VCS-standard commands (git) work identically against GitHub, GitLab, Bitbucket, Gitea, self-hosted. Students porting elsewhere rewrite nothing for Tier 2 actions.
+- **No rate limits.** GitHub API has 5000 req/hour per authenticated user (GitLab, Bitbucket, etc. impose their own caps); VCS operations don't count toward them. Matters for cleanup jobs and loops.
+- **Fewer moving parts.** No platform-CLI version drift, no token scope surprises.
+- **Honest names.** Using the platform API where the VCS would work drags a misleading platform label onto logic that is in fact portable.
 
-Use `gh api` when the concept is genuinely GitHub-platform metadata:
+Use the platform API when the concept is genuinely platform metadata (examples shown for GitHub; analogs apply on GitLab/Bitbucket/etc.):
 
 - Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs, review comments.
 - Push timestamps (distinct from committer timestamps — git only has the latter).
@@ -173,7 +177,7 @@ Prefer small, single-concern **primitive** actions over large composite actions 
 
 Why:
 
-- **Scales with new artifact types / targets.** A Docker-specific prerelease composite can't accept npm packages. If prerelease creation is decomposed into `generate-prerelease-version` → `tag-<artifact-type>` → `create-github-release`, adding a new artifact type means adding one new tagging primitive — not a whole parallel composite.
+- **Scales with new artifact types / targets.** A Docker-specific prerelease composite can't accept npm packages. If prerelease creation is decomposed into `compose-prerelease-version` → `tag-<artifact-type>` → `create-github-release`, adding a new artifact type means adding one new tagging primitive — not a whole parallel composite.
 - **Composition across artifact types.** When a project ships Docker images *and* npm packages under the same release version, primitives compose naturally. Monolithic composites cannot — calling two of them generates two versions.
 - **No hidden magic.** Readers see the actual steps at the call site. Debugging a broken release doesn't require opening the composite's `action.yml`.
 - **Independent testability.** Each primitive has a narrow contract and can be tested in isolation.
@@ -201,7 +205,7 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 
 | Concern | Factor V stage | Example sources that vary | Example primitives |
 |---|---|---|---|
-| **Version source** | release | VERSION files / `package.json` / `pom.xml` / Cargo.toml / latest git tag | `read-target-version`, `generate-prerelease-version` |
+| **Version source** | release | VERSION files / `package.json` / `pom.xml` / Cargo.toml / latest git tag | `read-target-version`, `compose-prerelease-version` |
 | **Artifact construction** | build | Docker images / npm packages / Maven JARs / NuGet / zip bundles | `build-docker-image` (build step only — NOT tag-with-release-version) |
 | **Artifact release tagging** | release | `docker tag :v{version}` / `npm publish --tag` / Maven release plugin | `tag-docker-images`, future: `tag-npm-package`, `publish-maven-artifact` |
 | **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `create-and-push-tag`, `ensure-tag-exists` |

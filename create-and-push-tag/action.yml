@@ -45,7 +45,7 @@ runs:
           git tag "$TAG"
         fi
 
-        if git push origin "$TAG" 2>/dev/null; then
+        if git push origin "$TAG"; then
           echo "Created and pushed tag $TAG at $target_sha" >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi
