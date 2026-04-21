@@ -12,8 +12,16 @@ inputs:
   tag:
     description: 'Target tag to apply to images (e.g., v1.0.5, latest, production)'
     required: true
+  registry:
+    description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io). Defaults to ghcr.io.'
+    required: false
+    default: 'ghcr.io'
+  registry-username:
+    description: 'Username for registry authentication'
+    required: false
+    default: '${{ github.actor }}'
   token:
-    description: 'Token used to authenticate against ghcr.io. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    description: 'Token used to authenticate against the registry. Defaults to the workflow-scoped GITHUB_TOKEN.'
     required: false
     default: ${{ github.token }}
 
@@ -25,11 +33,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Log in to GitHub Container Registry
-      run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+    - name: Log in to Container Registry
+      run: |
+        echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
       shell: bash
       env:
-        GH_TOKEN: ${{ inputs.token }}
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_TOKEN: ${{ inputs.token }}
 
     - name: Tag Docker Images
       id: tag-images
