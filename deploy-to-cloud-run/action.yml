@@ -123,6 +123,6 @@ runs:
 
     - name: Wait for Service to be Ready
       if: inputs.wait-for-ready == 'true'
-      uses: optivem/actions/wait-for-url@v1
+      uses: optivem/actions/wait-for-urls@v1
       with:
-        url: ${{ steps.deploy.outputs.service-url }}
+        systems: '[{"name": "Cloud Run service", "url": "${{ steps.deploy.outputs.service-url }}"}]'
