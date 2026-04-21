@@ -306,7 +306,7 @@ A thin composite wrapper (`publish-docker-release`) that runs these three in thi
 | Pure rename (Tier mismatch: `github` in name but Tier 1/2 runs, or no `github` but Tier 3 runs) | **Naming violations** |
 | Action mixes Tier 1/2 logic with Tier 3 glue (composition violation) | DevOps alignment → **Tool-agnostic composition** |
 | Action hardcodes `github.com` git host (portability violation) | DevOps alignment → **Tool-agnostic composition** |
-| Action uses `gh api` for something a git command can do | DevOps alignment → **Prefer git over gh api** |
+| Action uses the platform API (e.g. `gh api`) for something a VCS-standard command (`git`) can do | DevOps alignment → **Prefer VCS over platform API** |
 | Action bundles more than one concern from the table in §6 | DevOps alignment → **Separation of concerns** |
 | Composite hides logic that can't be replicated step-by-step | DevOps alignment → **Composite opacity** |
 | Composite runs steps in an order where early-step failure leaves a dangling reference | DevOps alignment → **Composition ordering** |
