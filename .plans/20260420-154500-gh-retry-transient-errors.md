@@ -36,18 +36,6 @@ Root cause: transient GitHub API error on `gh release create`. The step has no r
 
 ## Items
 
-### Phase 4 — guardrails
-
-- [ ] **Add a lint check to prevent raw `gh ` usage going forward** — A small script (bash or PS1) under `shared/_lint/check-no-raw-gh.sh` that greps every `action.yml` and `*.ps1` outside `shared/` for `\bgh\s+(api|release|workflow|run|repo|pr|issue)` and fails if any match is not preceded by `gh_retry` / `Invoke-GhWithRetry`. Wire into a GitHub Action workflow in the `optivem/actions` repo that runs on PRs. Whitelist `gh auth status` and `gh api rate_limit`.
-  - Affects: new `shared/_lint/check-no-raw-gh.sh`, new `.github/workflows/lint-gh-usage.yml`
-  - Consumers to update: 0
-  - Category: new
-
-- [ ] **Document the pattern in `README.md`** — Short section: "Calling `gh` from actions — use the retry wrappers" with a minimal before/after snippet for both shells and a pointer to `shared/`.
-  - Affects: `README.md`
-  - Consumers to update: 0
-  - Category: docs
-
 ### Phase 5 — verification
 
 - [ ] **Re-run the failed pipeline** — Trigger `meta-prerelease-stage` on `optivem/shop` main after phases 1–3 merge and tag-bump of `@v1`. Confirm the previously-failing `Promote Prerelease (QA Deployed)` step succeeds (even if GitHub API is healthy — this just confirms no regressions). Bonus: inject a controlled 502 via a test-only flag on the PS1 helper to confirm retry surfaces in logs end-to-end.
@@ -55,10 +43,14 @@ Root cause: transient GitHub API error on `gh release create`. The step has no r
   - Consumers to update: 0
   - Category: verification
 
-- [ ] **Audit other actions repos for the same pattern** — `gh-optivem`, `github-utils`, `courses` CI — if any contain `gh` invocations without retry, either port the helper or at minimum file a follow-up plan. Out of scope for this plan's code changes; include as a one-line summary after verification.
-  - Affects: survey only
-  - Consumers to update: 0
-  - Category: verification
+## Sibling-repo audit (2026-04-21)
+
+`gh-optivem`, `github-utils`, `courses` surveyed for raw `gh` calls without a retry wrapper:
+- **courses** — no GitHub Actions workflows; nothing to port.
+- **github-utils/scripts/** — `check-actions-all.sh`, `delete-packages.sh`, `test-pipeline-templates.sh`, `common.sh` (the `gh_api` wrapper) all call `gh` directly with no transient-error handling.
+- **gh-optivem** — 6 raw `gh api` calls in `.github/workflows/gh-post-release-stage.yml` and `gh-release-stage.yml`; `scripts/cleanup-orphans.sh`; Go CLI (`internal/shell/github.go`, `internal/steps/*.go`, `main.go`) shells out to `gh` without retry — different problem class but same 5xx exposure.
+
+Out of scope for this plan's code changes — file follow-up plans per repo if/when this bites again.
 
 ## Open decisions
 

@@ -23,7 +23,8 @@ runs:
   steps:
     - name: Resolve Docker Images
       id: resolve-images
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Resolve-DockerImages.ps1"
-        & $scriptPath -Tag "${{ inputs.tag }}" -ImageUrls "${{ inputs.base-image-urls }}"
-      shell: pwsh
+      shell: bash
+      env:
+        TAG: ${{ inputs.tag }}
+        BASE_IMAGE_URLS: ${{ inputs.base-image-urls }}
+      run: bash "${{ github.action_path }}/resolve-docker-images.sh"

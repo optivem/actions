@@ -20,6 +20,7 @@ runs:
   steps:
     - name: Resolve image digests
       id: get-digests
-      shell: pwsh
-      run: |
-        & "${{ github.action_path }}/action.ps1" -ImageUrls '${{ inputs.image-urls }}'
+      shell: bash
+      env:
+        IMAGE_URLS: ${{ inputs.image-urls }}
+      run: bash "${{ github.action_path }}/resolve-docker-image-digests.sh"
