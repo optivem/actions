@@ -1,4 +1,4 @@
-name: 'Has Update Since Last GitHub Workflow Run'
+name: 'Check Update Since Last GitHub Workflow Run'
 description: 'Detects whether a subject has been updated since the last successful run of a given workflow. Caller passes the subject timestamp (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). Generic timestamp-vs-run comparator.'
 author: 'Optivem'
 branding:

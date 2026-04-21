@@ -1,4 +1,4 @@
-name: 'Has Unverified GitHub Commit Status'
+name: 'Check Unverified GitHub Commit Status'
 description: 'Detects whether a given head commit is missing a prior success commit-status for a specified subject SHA under a given status context. Used to skip re-verification when the same subject has already been verified on this HEAD.'
 author: 'Optivem'
 branding:

@@ -45,7 +45,7 @@ Do not read consumer repos (`../shop/`, `../gh-optivem/`, `../optivem-testing/`)
 
 5. **CD alignment pass** — apply dimension 2. For each major rule category, identify the CD practice it is enforcing (or silent on, or contradicting). Flag misalignments and silences-where-speech-is-needed.
 
-6. **DORA/SRE/12-Factor/Marketplace pass** — apply dimension 3.
+6. **Mainstream ecosystem + DORA/SRE/12-Factor/Marketplace pass** — apply dimensions 2b (mainstream-first) and 3. Flag any rubric rule that enforces a private dialect against mainstream Marketplace / `actions/*` / well-known third-party conventions (see dimensions doc §2b for examples and signals).
 
 7. **Portability pass** — apply dimension 4. For each of Jenkins / GitLab CI / Azure Pipelines / CircleCI / Buildkite, mentally translate a sample rule and check it survives. Flag rules that don't.
 
