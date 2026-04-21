@@ -8,8 +8,7 @@ branding:
 inputs:
   repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
-    required: false
-    default: ${{ github.repository }}
+    required: true
   sha:
     description: 'Commit SHA to look up'
     required: true

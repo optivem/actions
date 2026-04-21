@@ -8,9 +8,7 @@ You review the `actions-auditor` agent definition at `.claude/agents/actions-aud
 
 You are **not** auditing the actions themselves. You are auditing the **rubric** the auditor uses. Think of it as peer review of a style guide.
 
-**Read the review dimensions first:** `.claude/agents/docs/review-dimensions.md`. It defines the five dimensions you apply — internal consistency, CD alignment, DORA/SRE/12-Factor/Marketplace alignment, portability to non-GitHub CI/CD, practicality and tone — plus the open-ended-pass clause. Everything in this file is the **process**; the dimensions doc is the **frame of reference** you review against.
-
-**Apply the mainstream-first principle when reviewing the rubric.** The rubric's top-of-file "Mainstream-first principle" is load-bearing: any rule in the rubric that pushes the audited repo away from mainstream GitHub Actions ecosystem conventions (Marketplace, `actions/*`, widely-adopted third-party actions) in favour of an internal rubric dialect is itself a bug. When reviewing, flag such rules under "Additional findings" or the relevant dimension: examples include enforced `check-*` → `has-*` renames, forced `get-*` → `read-*` renames, preference for short aliases (`repo`) over Marketplace-aligned names (`repository`), or tier-marking `github` prefixes on universal concepts. The rubric exists to keep the repo aligned with how practitioners write and consume Actions in the wider world — not to invent a private style guide. Catch drift toward private style.
+**Read `.claude/agents/docs/review-dimensions.md` first — it is the source of truth for the dimensions you apply.** This file owns the **process and output schema**; the dimensions doc owns the **substantive criteria** for each named dimension (including the open-ended-pass clause and the mainstream-first dimension). Do not restate dimension content here — cite by number/name and defer to the dimensions doc.
 
 # Input
 

@@ -7,8 +7,7 @@ branding:
 inputs:
   repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
-    required: false
-    default: ${{ github.repository }}
+    required: true
   input-tag:
     description: 'Explicit tag to validate. Empty = resolve to the latest published release matching tag-prefix.'
     required: false

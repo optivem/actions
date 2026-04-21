@@ -9,8 +9,7 @@ branding:
 inputs:
   repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop). Resolved against the configured git-host (defaults to github.com).'
-    required: false
-    default: ${{ github.repository }}
+    required: true
   ref:
     description: 'Git ref to resolve (branch, tag, or SHA). Empty defaults to "main".'
     required: false
