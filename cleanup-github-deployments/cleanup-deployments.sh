@@ -132,6 +132,11 @@ done
 echo "  Released-RC SHAs: ${#released_rc_shas[@]}"
 echo
 
+# Check rate-limit headroom before the paginated fetch. Prevents starting
+# a long run that would hit the per-delete throttle only after burning quota
+# on enumeration.
+wait_for_rate_limit_budget
+
 # ── Step 3: Fetch all deployments (paginated) ───────────────────────
 echo "Fetching all deployments..."
 

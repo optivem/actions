@@ -69,6 +69,11 @@ wait_for_rate_limit_budget() {
   sleep "$wait_secs"
 }
 
+# Check rate-limit headroom before the paginated fetches. Prevents starting
+# a long run that would hit the per-delete throttle only after burning quota
+# on the enumeration calls.
+wait_for_rate_limit_budget
+
 # ── Step 1: Fetch all releases (paginated) ───────────────────────────
 echo "Fetching all GitHub releases (single API call)..."
 
