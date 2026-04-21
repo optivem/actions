@@ -13,6 +13,10 @@ inputs:
     description: 'Prerelease suffix'
     required: false
     default: 'rc'
+  number:
+    description: 'RC number to suffix the version with. Defaults to the current workflow run number.'
+    required: false
+    default: ${{ github.run_number }}
 
 outputs:
   version:
@@ -46,5 +50,5 @@ runs:
       with:
         target-version: ${{ inputs.target-version }}
         suffix: ${{ inputs.suffix }}
-        number: ${{ github.run_number }}
+        number: ${{ inputs.number }}
         prefix: ${{ inputs.prefix }}
