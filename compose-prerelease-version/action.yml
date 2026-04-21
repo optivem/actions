@@ -26,10 +26,25 @@ runs:
   steps:
     - name: Compose Prerelease Version
       id: compose
-      shell: pwsh
+      shell: bash
+      env:
+        TARGET_VERSION: ${{ inputs.target-version }}
+        SUFFIX: ${{ inputs.suffix }}
+        NUMBER: ${{ inputs.number }}
+        PREFIX: ${{ inputs.prefix }}
       run: |
-        & "${{ github.action_path }}/compose-prerelease-version.ps1" `
-          -TargetVersion '${{ inputs.target-version }}' `
-          -Suffix '${{ inputs.suffix }}' `
-          -Number ${{ inputs.number }} `
-          -Prefix '${{ inputs.prefix }}'
+        set -euo pipefail
+
+        if [[ ! "$TARGET_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::Invalid version format: $TARGET_VERSION. Expected: X.Y.Z (e.g., 1.0.0)"
+          exit 1
+        fi
+
+        if [[ -n "$PREFIX" ]]; then
+          version="${PREFIX}-v${TARGET_VERSION}-${SUFFIX}.${NUMBER}"
+        else
+          version="v${TARGET_VERSION}-${SUFFIX}.${NUMBER}"
+        fi
+
+        echo "Composed prerelease version: $version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"

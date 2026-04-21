@@ -1,0 +1,16 @@
+name: lint-shell-policy
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check shell policy (no new pwsh)
+        run: bash shared/_lint/check-no-new-pwsh.sh "origin/${{ github.base_ref }}"

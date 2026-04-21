@@ -39,16 +39,14 @@ runs:
       run: git fetch --tags --force
 
     - name: Cleanup Deployments
-      shell: pwsh
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Cleanup-Deployments.ps1"
-        & $scriptPath `
-          -KeepCount ${{ inputs.keep-count }} `
-          -RetentionDays ${{ inputs.retention-days }} `
-          -ProtectedEnvironments "${{ inputs.protected-environments }}" `
-          -DryRun ([System.Convert]::ToBoolean("${{ inputs.dry-run }}")) `
-          -DeleteDelaySeconds ${{ inputs.delete-delay-seconds }} `
-          -RateLimitThreshold ${{ inputs.rate-limit-threshold }} `
-          -Repository "${{ github.repository }}"
+      shell: bash
       env:
         GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+        KEEP_COUNT: ${{ inputs.keep-count }}
+        RETENTION_DAYS: ${{ inputs.retention-days }}
+        PROTECTED_ENVIRONMENTS: ${{ inputs.protected-environments }}
+        DELETE_DELAY_SECONDS: ${{ inputs.delete-delay-seconds }}
+        RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        REPOSITORY: ${{ github.repository }}
+      run: bash "$GITHUB_ACTION_PATH/cleanup-deployments.sh"

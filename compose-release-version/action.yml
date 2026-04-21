@@ -16,7 +16,29 @@ runs:
   steps:
     - name: Convert Prerelease to Release Version
       id: convert-version
+      shell: bash
+      env:
+        PRERELEASE_VERSION: ${{ inputs.prerelease-version }}
       run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Compose-ReleaseVersion.ps1"
-        & $scriptPath -PrereleaseVersion "${{ inputs.prerelease-version }}"
-      shell: pwsh
+        set -euo pipefail
+
+        if [[ -z "${PRERELEASE_VERSION:-}" ]]; then
+          echo "::error::prerelease-version is required"
+          exit 1
+        fi
+
+        echo "Input prerelease version: $PRERELEASE_VERSION"
+
+        release=$(printf '%s' "$PRERELEASE_VERSION" | sed -E 's/-(rc|alpha|beta|preview)\.[0-9]+$//I')
+
+        if [[ -z "$release" ]]; then
+          echo "::error::Failed to generate release version from: $PRERELEASE_VERSION"
+          exit 1
+        fi
+
+        if [[ "$PRERELEASE_VERSION" == v* && "$release" != v* ]]; then
+          release="v$release"
+        fi
+
+        echo "Generated release version: $release"
+        echo "version=$release" >> "$GITHUB_OUTPUT"

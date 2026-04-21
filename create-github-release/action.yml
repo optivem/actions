@@ -37,21 +37,138 @@ runs:
   steps:
     - name: Create Release
       id: create-release
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Create-Release.ps1"
-        & $scriptPath `
-          -StatusVersion "${{ inputs.release-version }}" `
-          -OriginalVersion "${{ inputs.base-version }}" `
-          -Environment "${{ inputs.environment }}" `
-          -Status "${{ inputs.status }}" `
-          -ArtifactUrls '${{ inputs.artifact-urls }}' `
-          -IsPrerelease $${{ inputs.is-prerelease }} `
-          -GitHubToken "${{ env.GITHUB_TOKEN }}" `
-          -Repository "${{ github.repository }}" `
-          -ServerUrl "${{ github.server_url }}" `
-          -RunId "${{ github.run_id }}" `
-          -CommitSha "${{ github.sha }}" `
-          -Actor "${{ github.actor }}"
-      shell: pwsh
+      shell: bash
       env:
         GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+        STATUS_VERSION: ${{ inputs.release-version }}
+        ORIGINAL_VERSION: ${{ inputs.base-version }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        STATUS: ${{ inputs.status }}
+        ARTIFACT_URLS: ${{ inputs.artifact-urls }}
+        IS_PRERELEASE: ${{ inputs.is-prerelease }}
+        REPOSITORY: ${{ github.repository }}
+        SERVER_URL: ${{ github.server_url }}
+        RUN_ID: ${{ github.run_id }}
+        COMMIT_SHA: ${{ github.sha }}
+        ACTOR: ${{ github.actor }}
+      run: |
+        set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+
+        echo "🚀 Creating GitHub release for $ENVIRONMENT $STATUS..."
+        echo "📦 Status Version: $STATUS_VERSION"
+        echo "🏷️ Original Version: $ORIGINAL_VERSION"
+        echo "🌍 Environment: $ENVIRONMENT"
+        echo "📊 Status: $STATUS"
+        echo "🔖 Is Prerelease: $IS_PRERELEASE"
+
+        # Map status → icon.
+        status_lower=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+        case "$status_lower" in
+          deployed)   status_icon="🚀" ;;
+          prerelease) status_icon="📦" ;;
+          approved|rejected) status_icon="🧑‍💻" ;;
+          *)          status_icon="📊" ;;
+        esac
+
+        # Map environment → short uppercase label.
+        env_lower=$(echo "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
+        case "$env_lower" in
+          acceptance) env_label="ACC" ;;
+          qa)         env_label="QA" ;;
+          prod)       env_label="PROD" ;;
+          *)          env_label=$(echo "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]') ;;
+        esac
+
+        # Use original version for signoff statuses, status version otherwise.
+        case "$status_lower" in
+          approved|rejected) display_version="$ORIGINAL_VERSION" ;;
+          *)                 display_version="$STATUS_VERSION" ;;
+        esac
+
+        # Status suffix only for signoff actions.
+        case "$status_lower" in
+          approved) status_suffix=" APPROVED" ;;
+          rejected) status_suffix=" REJECTED" ;;
+          *)        status_suffix="" ;;
+        esac
+
+        release_title="$status_icon $display_version $env_label$status_suffix"
+        short_sha="${COMMIT_SHA:0:7}"
+        timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+        # Build release body in a tempfile (multi-line markdown).
+        notes_file=$(mktemp)
+        {
+          echo "# $status_icon $display_version $env_label$status_suffix"
+          echo
+          echo "**Original Version:** $ORIGINAL_VERSION  "
+          echo "**Status Version:** $STATUS_VERSION  "
+          echo "**Environment:** $ENVIRONMENT  "
+          echo "**Status:** $STATUS  "
+          echo "**Workflow:** [$RUN_ID]($SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID)  "
+          echo "**Commit:** [$short_sha]($SERVER_URL/$REPOSITORY/commit/$COMMIT_SHA)  "
+          echo "**Actor:** $ACTOR  "
+          echo
+        } > "$notes_file"
+
+        # Optional artifacts section.
+        artifact_count=0
+        if [[ -n "$ARTIFACT_URLS" && "$ARTIFACT_URLS" != "[]" ]]; then
+          if artifact_count=$(jq 'length' <<<"$ARTIFACT_URLS" 2>/dev/null); then
+            if (( artifact_count > 0 )); then
+              echo "📋 Found $artifact_count artifact(s)"
+              {
+                echo "## 📦 Artifacts"
+                echo
+                jq -r '.[] | "- \(.)"' <<<"$ARTIFACT_URLS"
+                echo
+              } >> "$notes_file"
+            fi
+          else
+            echo "⚠️ Could not parse artifact URLs, proceeding without artifacts"
+          fi
+        fi
+
+        {
+          echo "---"
+          echo "*Created: $timestamp*"
+        } >> "$notes_file"
+
+        echo "📝 Release Title: $release_title"
+        echo "📄 Checking if release already exists..."
+
+        # If release exists, delete it (idempotent re-runs on the same tag).
+        if gh_retry release view "$STATUS_VERSION" --repo "$REPOSITORY" >/dev/null 2>&1; then
+          echo "🗑️ Found existing release $STATUS_VERSION, deleting it..."
+          if gh_retry release delete "$STATUS_VERSION" --repo "$REPOSITORY" --yes 2>&1; then
+            echo "✅ Successfully deleted existing release"
+          else
+            echo "⚠️ Failed to delete existing release — proceeding to create anyway"
+          fi
+        else
+          echo "📄 No existing release found"
+        fi
+
+        echo "📄 Creating release with GitHub CLI..."
+
+        prerelease_flag=()
+        if [[ "$IS_PRERELEASE" == "true" ]]; then
+          prerelease_flag=(--prerelease)
+        fi
+
+        if release_url=$(gh_retry release create "$STATUS_VERSION" \
+            --title "$release_title" \
+            --notes-file "$notes_file" \
+            --repo "$REPOSITORY" \
+            "${prerelease_flag[@]}" 2>&1); then
+          release_url=$(echo "$release_url" | tail -n1 | tr -d '[:space:]')
+          echo "✅ Successfully created release: $release_url"
+          echo "release-url=$release_url" >> "$GITHUB_OUTPUT"
+        else
+          echo "::error::Failed to create release. gh CLI output: $release_url"
+          rm -f "$notes_file"
+          exit 1
+        fi
+
+        rm -f "$notes_file"

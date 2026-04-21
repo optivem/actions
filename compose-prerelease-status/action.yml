@@ -26,6 +26,45 @@ runs:
   steps:
     - name: Compose Prerelease Status
       id: build
-      run: .\Compose-PrereleaseStatus.ps1 -PrereleaseVersion "${{ inputs.prerelease-version }}" -Environment "${{ inputs.environment }}" -Status "${{ inputs.status }}"
-      working-directory: ${{ github.action_path }}
-      shell: pwsh
+      shell: bash
+      env:
+        PRERELEASE_VERSION: ${{ inputs.prerelease-version }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        STATUS: ${{ inputs.status }}
+      run: |
+        set -euo pipefail
+
+        trim() {
+          local s="$1"
+          s="${s#"${s%%[![:space:]]*}"}"
+          s="${s%"${s##*[![:space:]]}"}"
+          printf '%s' "$s"
+        }
+
+        pv=$(trim "${PRERELEASE_VERSION:-}")
+        env=$(trim "${ENVIRONMENT:-}")
+        st=$(trim "${STATUS:-}")
+
+        if [[ -z "$pv" ]]; then
+          echo "::error::prerelease-version cannot be null or empty"
+          exit 1
+        fi
+        if [[ -z "$env" ]]; then
+          echo "::error::environment cannot be null or empty"
+          exit 1
+        fi
+        if [[ -z "$st" ]]; then
+          echo "::error::status cannot be null or empty"
+          exit 1
+        fi
+
+        status_tag="${pv}-${env}-${st}"
+
+        echo "=== Compose Prerelease Status Action ==="
+        echo "Prerelease version: $pv"
+        echo "Environment: $env"
+        echo "Status: $st"
+        echo "Composed tag: $status_tag"
+        echo "========================================"
+
+        echo "tag=$status_tag" >> "$GITHUB_OUTPUT"
