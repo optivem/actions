@@ -40,25 +40,25 @@ jobs:
           # For demo purposes, we'll assume tests pass
           echo "status=passed" >> $GITHUB_OUTPUT
           
-      - name: Generate deployment version
-        id: version
-        uses: optivem/generate-status-version-action@v1
+      - name: Compose deployment status tag
+        id: status-tag
+        uses: optivem/actions/compose-prerelease-status@v1
         with:
-          version: ${{ github.sha }}
+          prerelease-version: ${{ github.sha }}
           environment: ${{ steps.env.outputs.environment }}
           status: ${{ steps.tests.outputs.status }}
-          
+
       - name: Deploy application
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "Deploying version: ${{ steps.version.outputs.version }}"
+          echo "Deploying status tag: ${{ steps.status-tag.outputs.tag }}"
           echo "Environment: ${{ steps.env.outputs.environment }}"
           # Add your deployment steps here
-          
+
       - name: Create deployment tag
         if: github.ref == 'refs/heads/main' && steps.tests.outputs.status == 'passed'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git tag ${{ steps.version.outputs.version }}
-          git push origin ${{ steps.version.outputs.version }}
+          git tag ${{ steps.status-tag.outputs.tag }}
+          git push origin ${{ steps.status-tag.outputs.tag }}

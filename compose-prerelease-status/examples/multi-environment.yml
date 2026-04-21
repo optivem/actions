@@ -49,18 +49,18 @@ jobs:
             echo "status=deployed" >> $GITHUB_OUTPUT
           fi
           
-      - name: Generate version with status
-        id: version
-        uses: optivem/generate-status-version-action@v1
+      - name: Compose status tag
+        id: status-tag
+        uses: optivem/actions/compose-prerelease-status@v1
         with:
-          version: ${{ github.event.inputs.version }}
+          prerelease-version: ${{ github.event.inputs.version }}
           environment: ${{ matrix.environment }}
           status: ${{ steps.deploy_status.outputs.status }}
-          
+
       - name: Record deployment
         run: |
           echo "Deployment completed:"
-          echo "- Version: ${{ steps.version.outputs.version }}"
+          echo "- Status tag: ${{ steps.status-tag.outputs.tag }}"
           echo "- Environment: ${{ matrix.environment }}"
           echo "- Status: ${{ steps.deploy_status.outputs.status }}"
           echo "- Timestamp: $(date)"

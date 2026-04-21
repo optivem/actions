@@ -33,35 +33,35 @@ jobs:
           # Add your test steps here
           echo "status=passed" >> $GITHUB_OUTPUT
           
-      - name: Generate release version
-        id: release_version
-        uses: optivem/generate-status-version-action@v1
+      - name: Compose release status tag
+        id: status-tag
+        uses: optivem/actions/compose-prerelease-status@v1
         with:
-          version: ${{ steps.tag.outputs.version }}
+          prerelease-version: ${{ steps.tag.outputs.version }}
           environment: 'production'
           status: ${{ steps.tests.outputs.status }}
-          
+
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.tag.outputs.version }}
-          release_name: Release ${{ steps.release_version.outputs.version }}
+          release_name: Release ${{ steps.status-tag.outputs.tag }}
           body: |
-            Release Notes for ${{ steps.release_version.outputs.version }}
-            
+            Release Notes for ${{ steps.status-tag.outputs.tag }}
+
             This release has been built and tested successfully.
-            
+
             Version Details:
             - Base Version: ${{ steps.tag.outputs.version }}
             - Environment: production
             - Status: ${{ steps.tests.outputs.status }}
-            - Full Version: ${{ steps.release_version.outputs.version }}
+            - Full Tag: ${{ steps.status-tag.outputs.tag }}
           draft: false
           prerelease: false
-          
+
       - name: Deploy to production
         run: |
-          echo "Deploying ${{ steps.release_version.outputs.version }} to production..."
+          echo "Deploying ${{ steps.status-tag.outputs.tag }} to production..."
           # Add your production deployment steps here

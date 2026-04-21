@@ -1,0 +1,31 @@
+name: 'Compose Prerelease Status'
+description: 'Composes a status-marker tag from a prerelease version by appending environment and status (e.g., v1.0.0-rc.1 + qa + deployed → v1.0.0-rc.1-qa-deployed). Used to tag RCs as they cross pipeline gates. Output is a git tag, not a SemVer version.'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  prerelease-version:
+    description: 'Prerelease version to build from (e.g., v1.0.0-rc.1)'
+    required: true
+  environment:
+    description: 'Environment name (e.g., qa, staging, prod)'
+    required: true
+  status:
+    description: 'Status marker (e.g., deployed, passed, failed, approved)'
+    required: true
+
+outputs:
+  tag:
+    description: 'Composed status-marker tag string (e.g., v1.0.0-rc.1-qa-deployed)'
+    value: ${{ steps.build.outputs.tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compose Prerelease Status
+      id: build
+      run: .\Compose-PrereleaseStatus.ps1 -PrereleaseVersion "${{ inputs.prerelease-version }}" -Environment "${{ inputs.environment }}" -Status "${{ inputs.status }}"
+      working-directory: ${{ github.action_path }}
+      shell: pwsh
