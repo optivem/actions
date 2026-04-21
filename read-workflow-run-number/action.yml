@@ -1,0 +1,35 @@
+name: 'Read Workflow Run Number'
+description: 'Given a workflow run database ID, return its run_number (the per-workflow sequential counter shown in the UI, e.g. 42 for run #42).'
+
+inputs:
+  run-id:
+    description: 'The database ID of the workflow run (as returned by gh run list --json databaseId)'
+    required: true
+  repository:
+    description: 'Repository in owner/repo format'
+    required: false
+    default: ${{ github.repository }}
+  github-token:
+    description: 'Token used to authenticate the GitHub API call'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  run-number:
+    description: 'The run_number of the workflow run'
+    value: ${{ steps.read.outputs.run-number }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: read
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      shell: bash
+      run: |
+        run_number=$(gh api "/repos/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}" --jq '.run_number')
+        if [ -z "$run_number" ] || [ "$run_number" = "null" ]; then
+          echo "::error::Could not read run_number for run ${{ inputs.run-id }} in ${{ inputs.repository }}"
+          exit 1
+        fi
+        echo "run-number=$run_number" >> "$GITHUB_OUTPUT"
