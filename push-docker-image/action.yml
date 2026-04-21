@@ -71,25 +71,30 @@ runs:
         push_with_retry() {
           local image="$1"
           local max_attempts=3
-          local attempt
+          local attempt rc
+          local output=""
           for attempt in $(seq 1 $max_attempts); do
             set +e
-            docker push "$image"
-            local rc=$?
+            output=$(docker push "$image" 2>&1)
+            rc=$?
             set -e
             if [ $rc -eq 0 ]; then
+              printf '%s\n' "$output"
               return 0
             fi
             if [ $attempt -lt $max_attempts ]; then
-              echo "⚠️ Push failed (attempt $attempt/$max_attempts), retrying in 10s..."
+              echo "⚠️ Push failed (attempt $attempt/$max_attempts), retrying in 10s..." >&2
               sleep 10
             fi
           done
-          echo "❌ Push failed after $max_attempts attempts"
+          printf '%s\n' "$output" >&2
+          echo "❌ Push failed after $max_attempts attempts" >&2
           return 1
         }
 
-        DIGEST=$(docker push "$IMAGE_SHA_TAG" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
+        sha_push_output=$(push_with_retry "$IMAGE_SHA_TAG")
+        echo "$sha_push_output"
+        DIGEST=$(printf '%s' "$sha_push_output" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
         echo "✅ Pushed SHA tagged image: $IMAGE_SHA_TAG"
         echo "📝 Image digest: $DIGEST"
 
