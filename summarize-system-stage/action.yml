@@ -1,5 +1,5 @@
 name: 'Summarize System Stage'
-description: 'Creates a comprehensive summary of system stage execution results for CI/CD pipelines'
+description: 'Thin composite: validates inputs, formats success + latest artifact arrays via `format-artifact-list`, renders via `summarize-stage`, and emits a `::notice` annotation on skipped.'
 author: 'Optivem'
 
 branding:
@@ -45,19 +45,17 @@ runs:
         & $scriptPath -StageResult "${{ inputs.stage-result }}" -SuccessVersion "${{ inputs.success-version }}"
       shell: pwsh
 
-    - name: Process Success Artifact IDs
-      id: process-success-artifacts
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "scripts/Process-Artifacts.ps1"
-        & $scriptPath -ArtifactsInput '${{ inputs.success-artifact-ids }}'
-      shell: pwsh
+    - name: Format Success Artifacts
+      id: format-success
+      uses: optivem/actions/format-artifact-list@v1
+      with:
+        artifacts: ${{ inputs.success-artifact-ids }}
 
-    - name: Process Latest Artifact IDs
-      id: process-latest-artifacts
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "scripts/Process-Artifacts.ps1"
-        & $scriptPath -ArtifactsInput '${{ inputs.latest-artifact-ids }}'
-      shell: pwsh
+    - name: Format Latest Artifacts
+      id: format-latest
+      uses: optivem/actions/format-artifact-list@v1
+      with:
+        artifacts: ${{ inputs.latest-artifact-ids }}
 
     - name: Generate System Stage Summary
       uses: optivem/actions/summarize-stage@v1
@@ -69,7 +67,7 @@ runs:
         stage-success-content: |
           🎯 **Release Candidate:** ${{ inputs.success-version }}
 
-          ${{ steps.process-success-artifacts.outputs.artifacts-formatted && format('🔗 **Artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-success-artifacts.outputs.artifacts-formatted) || '' }}
+          ${{ steps.format-success.outputs.formatted && format('🔗 **Artifacts:**{0}{1}', fromJSON('"\n"'), steps.format-success.outputs.formatted) || '' }}
         stage-skipped-content: |
           ${{ inputs.skipped-reason && format('ℹ️ **Reason:** {0}', inputs.skipped-reason) || '' }}
 
@@ -77,7 +75,7 @@ runs:
 
           ${{ inputs.last-run-at && format('✅ **Last successful run at:** `{0}`', inputs.last-run-at) || '' }}
 
-          ${{ steps.process-latest-artifacts.outputs.artifacts-formatted && format('🔗 **Latest known artifacts:**{0}{1}', fromJSON('"\n"'), steps.process-latest-artifacts.outputs.artifacts-formatted) || '' }}
+          ${{ steps.format-latest.outputs.formatted && format('🔗 **Latest known artifacts:**{0}{1}', fromJSON('"\n"'), steps.format-latest.outputs.formatted) || '' }}
 
     - name: Annotate Skipped Reason
       if: inputs.stage-result == 'skipped' && inputs.skipped-reason != ''

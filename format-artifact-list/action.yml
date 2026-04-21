@@ -1,0 +1,26 @@
+name: 'Format Artifact List'
+description: 'Formats a JSON array of artifact identifiers (image URLs, release URLs, arbitrary strings) into a bulleted markdown list. Pure string transform — no side effects.'
+author: 'Optivem'
+branding:
+  icon: 'list'
+  color: 'blue'
+
+inputs:
+  artifacts:
+    description: 'JSON array of artifact identifiers, e.g. ["docker.io/app:v1"] or ["url1","url2"]. Empty string returns empty output.'
+    required: false
+    default: ''
+
+outputs:
+  formatted:
+    description: 'Bulleted markdown list (one "• <item>" per line). Empty string if no artifacts provided.'
+    value: ${{ steps.format.outputs.formatted }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: format
+      shell: pwsh
+      run: |
+        $scriptPath = Join-Path ${{ github.action_path }} "Format-ArtifactList.ps1"
+        & $scriptPath -ArtifactsInput '${{ inputs.artifacts }}'
