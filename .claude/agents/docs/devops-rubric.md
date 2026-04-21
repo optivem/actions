@@ -48,6 +48,24 @@ Default recommendation for an output "unread today" is **keep**. An output's cos
 ## 1.4 Secrets, supply chain, observability, shell, branding
 
 - **Secrets / auth.** Flag actions that hardcode tokens, require unusual environment shapes, or bypass `GITHUB_TOKEN` conventions.
+- **Token contract — input, not implicit env.** Actions that need a token must declare it as a named input (`token`, `github-token`, or domain-specific like `npm-token`), typically with `default: ${{ github.token }}` when `GITHUB_TOKEN`'s default permissions suffice. Flag actions that instead expect the caller to set a step-level `env:` variable that the action reads via `${{ env.X }}` — that pattern has no interface contract visible in `action.yml`, isn't discoverable, and fails silently when a caller forgets to set it. Reference: `actions/checkout`, `actions/setup-node`, `actions/github-script`, `docker/login-action`, `softprops/action-gh-release` — all take the token as a named input.
+- **Token usage — bridge input to env, never interpolate into `run:`.** Inside a composite action, do NOT write `${{ inputs.token }}` (or `${{ env.TOKEN }}`) directly in a `run:` shell script. The expression engine renders the literal secret into the command string *before* execution, which leaks under `set -x`, error dumps, or tracing — GitHub's secret masker is best-effort and fails on transforms. Correct pattern: set the token on the step's `env:` block and reference it as a shell variable (`echo "$GH_TOKEN" | ...`). Cite GitHub's [Security hardening for GitHub Actions](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-secrets-in-a-workflow) — "Consider accessing secrets via environment variables rather than as an input."
+
+  ```yaml
+  # WRONG — secret interpolated into rendered command
+  - run: echo "${{ inputs.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+    shell: bash
+
+  # WRONG — same risk, just sourced from env instead of input; also no interface contract
+  - run: echo "${{ env.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+    shell: bash
+
+  # RIGHT — input bridged to env, shell reads env var
+  - run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+    shell: bash
+    env:
+      GH_TOKEN: ${{ inputs.token }}
+  ```
 - **Supply chain.** Flag actions whose `uses:` references point at a mutable ref (`@main`, `@master`, `@latest`, any branch name), or at an action from an untrusted author. Pinning to a major tag (`@v4`) is acceptable for Marketplace-trusted actions (`actions/*`, well-known vendors); pinning to a SHA is preferred for untrusted sources. Cite GitHub's hardening guide for GitHub Actions and SLSA level-3 build integrity.
 - **Observability — dual surface.** For human review: useful logs and step summaries when the action does significant work. For downstream pipeline decisions: where an action can fail in a recoverable way, expose a structured failure reason as an output (e.g. `status`, `failure-reason`) rather than only exiting non-zero. Flag actions that use `exit 1` for recoverable conditions a caller might want to branch on. Source: SRE ch. 4 "Service Level Objectives", ch. 11 "Being On-Call".
 - **Shell portability.** Prefer `shell: bash` for actions that could run on any POSIX-capable runner. Flag `shell: pwsh` usage unless the logic genuinely benefits from PowerShell object handling. When an action does use `pwsh`, its description should state the runner constraint explicitly so callers don't hit runtime failures on PowerShell-less self-hosted runners.
@@ -288,4 +306,6 @@ A thin composite wrapper (`publish-docker-release`) that runs these three in thi
 | Composite hides logic that can't be replicated step-by-step | DevOps alignment → **Composite opacity** |
 | Composite runs steps in an order where early-step failure leaves a dangling reference | DevOps alignment → **Composition ordering** |
 | Primitive fails on rerun because "the thing already exists" | DevOps alignment → **Idempotence** |
+| Action expects caller to set an implicit `env:` for a token instead of declaring it as a named input | DevOps alignment → **Secrets / auth** |
+| Action interpolates `${{ inputs.token }}` or `${{ env.TOKEN }}` directly into a `run:` shell line instead of bridging via step-level `env:` | DevOps alignment → **Secrets / auth** |
 | Everything else DevOps-related that doesn't fit above | DevOps alignment → **Other** |
