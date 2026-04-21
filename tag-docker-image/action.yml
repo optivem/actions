@@ -1,4 +1,4 @@
-name: 'Tag Docker Image (Local)'
+name: 'Tag Docker Image'
 description: 'Applies one or more registry-qualified tags to an already-built local Docker image. Pure local operation — no network, no registry authentication, no push. Each output URL has shape {registry}/{namespace}/{image-name}:{tag}.'
 author: 'Optivem'
 branding:

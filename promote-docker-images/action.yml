@@ -1,5 +1,5 @@
-name: 'Tag Docker Images'
-description: 'Tags Docker images with new tags for production releases and versioning workflows'
+name: 'Promote Docker Images'
+description: 'Promotes Docker images by pulling each source image, applying a new tag, and pushing the retagged image to the registry. Used for moving an already-built artifact through pipeline stages (Farley promotion).'
 author: 'Optivem'
 branding:
   icon: 'tag'
@@ -42,10 +42,10 @@ runs:
         REGISTRY_USERNAME: ${{ inputs.registry-username }}
         REGISTRY_TOKEN: ${{ inputs.token }}
 
-    - name: Tag Docker Images
+    - name: Promote Docker Images
       id: tag-images
       shell: bash
       env:
         IMAGE_URLS: ${{ inputs.image-urls }}
         TARGET_TAG: ${{ inputs.tag }}
-      run: bash "${{ github.action_path }}/tag-docker-images.sh"
+      run: bash "${{ github.action_path }}/promote-docker-images.sh"
