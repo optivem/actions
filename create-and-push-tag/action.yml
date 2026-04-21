@@ -1,5 +1,5 @@
 name: 'Create and Push Tag'
-description: 'Creates a git tag at a given commit SHA (or the current HEAD) and pushes it to origin, using the github-actions[bot] identity.'
+description: 'Creates a git tag at a given commit SHA (or the current HEAD) and pushes it to origin, using the github-actions[bot] identity. Idempotent — no-ops if the tag already exists at the same commit, tolerates concurrent creation, fails hard only if the remote tag points at a different commit.'
 author: 'Optivem'
 branding:
   icon: 'tag'
@@ -21,12 +21,41 @@ runs:
         TAG: ${{ inputs.tag }}
         SHA: ${{ inputs.sha }}
       run: |
+        set -euo pipefail
+
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        target_sha="${SHA:-$(git rev-parse HEAD)}"
+
+        existing=$(git ls-remote --tags origin "refs/tags/$TAG" | cut -f1)
+        if [ -n "$existing" ]; then
+          if [ "$existing" = "$target_sha" ]; then
+            echo "Tag $TAG already exists on remote at $target_sha — no-op"
+            echo "Tag $TAG already existed at $target_sha (no-op)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::error::Tag $TAG already exists on remote at $existing, but caller requested $target_sha"
+          exit 1
+        fi
+
         if [ -n "$SHA" ]; then
           git tag "$TAG" "$SHA"
         else
           git tag "$TAG"
         fi
-        git push origin "$TAG"
-        echo "Created and pushed tag $TAG${SHA:+ at $SHA}" >> "$GITHUB_STEP_SUMMARY"
+
+        if git push origin "$TAG" 2>/dev/null; then
+          echo "Created and pushed tag $TAG at $target_sha" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        remote_sha=$(git ls-remote --tags origin "refs/tags/$TAG" | cut -f1)
+        if [ -n "$remote_sha" ] && [ "$remote_sha" = "$target_sha" ]; then
+          echo "Tag $TAG created by concurrent run at same commit — tolerating"
+          echo "Tag $TAG created by concurrent run at $target_sha" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        echo "::error::Failed to push tag $TAG (remote: $remote_sha, local: $target_sha)"
+        exit 1
