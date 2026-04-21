@@ -1,0 +1,64 @@
+name: 'Resolve Latest Prerelease Tag'
+description: 'Finds the latest git tag in a GitHub repository that matches a given prefix, using version-aware sort. Tool-agnostic — uses git ls-remote, no releases API dependency. Pairs with ensure-tag-exists for the "validate an explicit tag" case.'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'green'
+
+inputs:
+  tag-prefix:
+    description: 'Required tag prefix (e.g. "monolith-java-v"). Tags matching "${tag-prefix}*" are considered; the highest by version-aware sort wins.'
+    required: true
+  repository:
+    description: 'Repository in owner/repo format'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'Token for authenticating to the remote'
+    required: false
+    default: ${{ github.token }}
+  git-host:
+    description: 'Git host to query (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
+
+outputs:
+  tag:
+    description: 'The latest tag matching tag-prefix'
+    value: ${{ steps.resolve.outputs.tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        PREFIX: ${{ inputs.tag-prefix }}
+        REPO: ${{ inputs.repository }}
+        TOKEN: ${{ inputs.token }}
+        GIT_HOST: ${{ inputs.git-host }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$PREFIX" ]; then
+          echo "::error::tag-prefix is required."
+          exit 1
+        fi
+
+        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+
+        TAG=$(git ls-remote --tags "$remote_url" "refs/tags/${PREFIX}*" 2>/dev/null \
+          | awk '{print $2}' \
+          | sed 's#refs/tags/##' \
+          | grep -v '\^{}$' \
+          | sort -V \
+          | tail -n 1)
+
+        if [ -z "$TAG" ]; then
+          echo "::error::No ${PREFIX}* git tag found in $REPO — create a ${PREFIX}* tag first, or pass an explicit tag elsewhere."
+          exit 1
+        fi
+
+        echo "Resolved latest ${PREFIX}* git tag in $REPO: $TAG"
+        echo "Using latest ${PREFIX}* git tag from $REPO: $TAG" >> "$GITHUB_STEP_SUMMARY"
+        echo "tag=$TAG" >> "$GITHUB_OUTPUT"
