@@ -1,0 +1,30 @@
+name: 'Compose Component Tag'
+description: 'Pure-string primitive: composes a component tag of the form "{component}-v{version}" from a component name and a semantic version.'
+author: 'Optivem'
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  component:
+    description: 'Component name (e.g., monolith-system-java)'
+    required: true
+  version:
+    description: 'Semantic version without leading v (e.g., 1.0.0)'
+    required: true
+
+outputs:
+  tag:
+    description: 'Composed tag name in the form "{component}-v{version}"'
+    value: ${{ steps.compose.outputs.tag }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: compose
+      shell: bash
+      env:
+        COMPONENT: ${{ inputs.component }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        echo "tag=${COMPONENT}-v${VERSION}" >> "$GITHUB_OUTPUT"

@@ -24,6 +24,10 @@ inputs:
     description: 'Pause when remaining API requests fall below this number (default: 50)'
     required: false
     default: '50'
+  token:
+    description: 'GitHub token used to dispatch and watch the workflow run. Callers may pass a higher-scoped token (e.g. a PAT) when cross-repo workflow_dispatch is required. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 outputs:
   run-id:
     description: 'The database ID of the triggered workflow run'
@@ -35,7 +39,7 @@ runs:
     - name: Trigger ${{ inputs.workflow }}
       id: trigger
       env:
-        GH_TOKEN: ${{ env.GH_TOKEN || github.token }}
+        GH_TOKEN: ${{ inputs.token }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
@@ -78,7 +82,7 @@ runs:
 
     - name: Wait for ${{ inputs.workflow }}
       env:
-        GH_TOKEN: ${{ env.GH_TOKEN || github.token }}
+        GH_TOKEN: ${{ inputs.token }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"

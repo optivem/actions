@@ -18,6 +18,10 @@ inputs:
     description: 'Maximum number of retries per file on SHA-precondition conflict (HTTP 409/422)'
     required: false
     default: '3'
+  token:
+    description: 'GitHub token with contents:write permission on the target branch. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   commits:
@@ -34,7 +38,7 @@ runs:
       id: commit
       shell: bash
       env:
-        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ inputs.token }}
         FILES_JSON: ${{ inputs.files }}
         BRANCH: ${{ inputs.branch }}
         REPOSITORY: ${{ github.repository }}
