@@ -8,7 +8,7 @@ All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothin
 - New scripts are `.sh`, not `.ps1`. Inline the bash directly in `action.yml` when practical — it's the prevailing pattern in this repo.
 - Use [shared/gh-retry.sh](shared/gh-retry.sh) (`gh_retry` wrapper) for any `gh` CLI calls, and `jq` for JSON handling.
 
-Existing pwsh files stay in place until independently touched. When you open one for any reason (bug fix, feature change, retry-wrapper adoption), port the surrounding `pwsh` step or `.ps1` script to bash **in the same PR** unless doing so would triple the diff. Over time the pwsh surface area shrinks to zero and the PS1 helper (`shared/Invoke-GhWithRetry.ps1`) can be deleted.
+Existing pwsh files stay in place until independently touched. When you open one for any reason (bug fix, feature change, retry-wrapper adoption), port the surrounding `pwsh` step or `.ps1` script to bash **in the same PR** unless doing so would triple the diff.
 
 A lint check ([shared/_lint/check-no-new-pwsh.sh](shared/_lint/check-no-new-pwsh.sh), wired via `.github/workflows/lint-shell-policy.yml`) fails PRs that introduce new `shell: pwsh` steps or new `.ps1` files.
 

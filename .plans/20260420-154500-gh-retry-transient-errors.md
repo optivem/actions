@@ -36,52 +36,6 @@ Root cause: transient GitHub API error on `gh release create`. The step has no r
 
 ## Items
 
-### Phase 1 — build shared helpers
-
-- [ ] **Create `shared/Invoke-GhWithRetry.ps1`** — PowerShell helper exposing `Invoke-GhWithRetry` (positional args-array parameter, returns the gh output string, throws on final failure with combined attempt history). Encodes the retry policy above. Emits structured `Write-Host` log lines prefixed `[gh-retry]` for each attempt.
-  - Affects: new `shared/Invoke-GhWithRetry.ps1`
-  - Consumers to update: phase 2 updates 5 `.ps1` scripts
-  - Category: new
-
-- [ ] **Create `shared/gh-retry.sh`** — bash helper exposing `gh_retry` function (same policy). Uses `set -o pipefail`-safe patterns, captures combined stdout+stderr, inspects via regex (`grep -Eqi`), sleeps with `sleep`, emits `::notice::[gh-retry] ...` lines per attempt so they surface in the Actions log.
-  - Affects: new `shared/gh-retry.sh`
-  - Consumers to update: phase 3 updates ~15 `action.yml` files
-  - Category: new
-
-- [ ] **Add a small self-test harness** — `shared/_test-gh-retry.sh` + `shared/_test-gh-retry.ps1` that injects a fake `gh` on `$PATH` (or via function override) returning a scripted sequence (e.g. `502, 502, 200`) and asserts the wrapper retries + succeeds. Run locally during development; not wired into CI unless trivial.
-  - Affects: new `shared/_test-gh-retry.*`
-  - Consumers to update: 0
-  - Category: new
-
-### Phase 2 — migrate PowerShell scripts
-
-For each file: dot-source the helper at the top, replace every `& gh @args` / `gh ...` invocation with `Invoke-GhWithRetry @args`, keep argument construction identical. Do not retry `gh auth status` (that's a local auth probe, not an API call). Do not retry commands whose non-zero exit code is already used for flow control (e.g. `gh release view` to detect absence — the 404 case is non-transient and the wrapper won't retry it, but double-check each site).
-
-- [ ] **Migrate `create-github-release/Create-Release.ps1`** — 3 `gh` calls: `gh auth status` (skip — local), `gh release view` (wrap — 404 is non-retryable so safe), `gh release delete`, `gh release create` (the one that just 502'd).
-  - Affects: `create-github-release/Create-Release.ps1`
-  - Consumers to update: 0 (action contract unchanged)
-  - Category: refactor
-
-- [ ] **Migrate `cleanup-prereleases/Cleanup-PrereleaseVersions.ps1`** — 10 `gh` calls (list, view, delete loop). Wrapping is high-value: this script does bulk ops and any mid-loop 502 today aborts the whole cleanup.
-  - Affects: `cleanup-prereleases/Cleanup-PrereleaseVersions.ps1`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate `cleanup-deployments/Cleanup-Deployments.ps1`** — 5 `gh` calls.
-  - Affects: `cleanup-deployments/Cleanup-Deployments.ps1`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate `ensure-release-exists/Check-VersionReleaseExists.ps1`** — 1 `gh` call (release-exists probe). Wrap; 404 stays non-retryable so the probe semantics are preserved.
-  - Affects: `ensure-release-exists/Check-VersionReleaseExists.ps1`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate `find-release-by-run/Find-ReleaseByRun.ps1`** — 1 `gh api graphql` call.
-  - Affects: `find-release-by-run/Find-ReleaseByRun.ps1`
-  - Consumers to update: 0
-  - Category: refactor
-
 ### Phase 4 — guardrails
 
 - [ ] **Add a lint check to prevent raw `gh ` usage going forward** — A small script (bash or PS1) under `shared/_lint/check-no-raw-gh.sh` that greps every `action.yml` and `*.ps1` outside `shared/` for `\bgh\s+(api|release|workflow|run|repo|pr|issue)` and fails if any match is not preceded by `gh_retry` / `Invoke-GhWithRetry`. Wire into a GitHub Action workflow in the `optivem/actions` repo that runs on PRs. Whitelist `gh auth status` and `gh api rate_limit`.
