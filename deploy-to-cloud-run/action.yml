@@ -93,10 +93,8 @@ runs:
 
         SERVICE_NAME="${SERVICE_NAME_INPUT}-${ENVIRONMENT}"
 
-        echo "🚀 Deploying version $VERSION to Cloud Run ($ENVIRONMENT environment)..."
-        echo "📦 Image: $IMAGE_URL"
-        echo "🌍 Service: $SERVICE_NAME"
-        echo "📍 Region: $REGION"
+        echo "Deploying $VERSION to Cloud Run service $SERVICE_NAME in $REGION (environment: $ENVIRONMENT)"
+        echo "Image: $IMAGE_URL"
 
         deploy_args=(
           run deploy "$SERVICE_NAME"
@@ -126,7 +124,6 @@ runs:
           deploy_args+=(--allow-unauthenticated)
         fi
 
-        echo "🐳 Running deployment..."
         gcloud "${deploy_args[@]}"
 
         SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" \
@@ -135,7 +132,20 @@ runs:
           --format='value(status.url)')
 
         echo "service-url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
-        echo "✅ Deployed to: $SERVICE_URL"
+        echo "Deployed to: $SERVICE_URL"
+
+        {
+          echo "### Cloud Run deployment"
+          echo
+          echo "| Field | Value |"
+          echo "| --- | --- |"
+          echo "| Service | \`$SERVICE_NAME\` |"
+          echo "| Environment | \`$ENVIRONMENT\` |"
+          echo "| Version | \`$VERSION\` |"
+          echo "| Region | \`$REGION\` |"
+          echo "| Image | \`$IMAGE_URL\` |"
+          echo "| Service URL | $SERVICE_URL |"
+        } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Wait for Service to be Ready
       if: inputs.wait-for-ready == 'true'
