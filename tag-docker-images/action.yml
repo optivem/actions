@@ -12,6 +12,10 @@ inputs:
   tag:
     description: 'Target tag to apply to images (e.g., v1.0.5, latest, production)'
     required: true
+  token:
+    description: 'Token used to authenticate against ghcr.io. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   image-urls:
@@ -22,8 +26,10 @@ runs:
   using: 'composite'
   steps:
     - name: Log in to GitHub Container Registry
-      run: echo "${{ env.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      run: echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
 
     - name: Tag Docker Images
       id: tag-images
