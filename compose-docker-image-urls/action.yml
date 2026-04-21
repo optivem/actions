@@ -1,5 +1,5 @@
-name: 'Resolve Docker Images'
-description: 'Resolves base image URLs to versioned URLs and validates they exist'
+name: 'Compose Docker Image URLs'
+description: 'String-composition helper. Takes base image URLs and a tag, returns a JSON array of `{base}:{tag}` URLs. No registry lookup (see `resolve-docker-image-digests` for that).'
 author: 'Optivem'
 branding:
   icon: 'package'
@@ -21,10 +21,10 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Resolve Docker Images
+    - name: Compose Docker Image URLs
       id: resolve-images
       shell: bash
       env:
         TAG: ${{ inputs.tag }}
         BASE_IMAGE_URLS: ${{ inputs.base-image-urls }}
-      run: bash "${{ github.action_path }}/resolve-docker-images.sh"
+      run: bash "${{ github.action_path }}/compose-docker-image-urls.sh"
