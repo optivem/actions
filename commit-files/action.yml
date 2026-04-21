@@ -1,4 +1,4 @@
-name: 'Commit Files via GitHub Contents API'
+name: 'Commit Files'
 description: 'GitHub-API primitive: writes a set of files to a branch via the Contents API with SHA preconditions, retrying on conflict. Race-safe alternative to `git push` for workflows that may run concurrently on the same branch.'
 author: 'Optivem'
 

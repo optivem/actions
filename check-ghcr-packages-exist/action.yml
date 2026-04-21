@@ -1,4 +1,4 @@
-name: 'Check GitHub Container Packages Exist'
+name: 'Check GHCR Packages Exist'
 description: 'Checks if container packages exist for the repository using the GitHub Packages API. Useful for skipping pipeline stages when no artifacts have been built yet.'
 author: 'Optivem'
 branding:

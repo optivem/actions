@@ -1,5 +1,5 @@
-name: 'Wait for GitHub Commit-Triggered Run'
-description: 'Wait for a workflow run triggered by a specific commit SHA. Includes GitHub API rate-limit protection.'
+name: 'Wait for GitHub Workflow'
+description: 'Waits for a GitHub Actions workflow run triggered by a specific commit SHA to complete. Polls by head-sha to find the run, then uses `gh run watch --exit-status` to block until finished. Includes GitHub API rate-limit protection. Sibling of `trigger-and-wait-for-github-workflow` — use that when you need to dispatch the workflow yourself.'
 inputs:
   workflow:
     description: 'Workflow filename to wait for (e.g., java-commit-stage.yml)'

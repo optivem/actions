@@ -121,7 +121,7 @@ Three conceptual tiers. Only the third gets a prefix.
 
   *Implementation sub-rule for Tier 2:* Tier 2 actions must not hardcode `github.com` in their implementation. Remote URLs should be parameterised — either accept a `git-host` input with default `github.com`, or derive the host from a `repo` input given in URL form. The pattern `https://x-access-token:${TOKEN}@github.com/...` breaks Tier 2's portability claim: a student porting to GitLab, Bitbucket, Gitea, or self-hosted would have to edit every Tier 2 action. Flag actions that hardcode the git host as a **portability violation** under **DevOps alignment findings** → "Tool-agnostic composition".
 
-- **Tier 3 — GitHub-platform-specific** (requires GitHub, not just git). `github` segment required. These are concepts that genuinely do not exist in vanilla git: Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs. Examples: `create-github-release`, `create-github-commit-status`, `trigger-and-wait-for-github-workflow`, `cleanup-github-deployments`, `check-github-container-packages-exist`.
+- **Tier 3 — GitHub-platform-specific** (requires GitHub, not just git). `github` segment required. These are concepts that genuinely do not exist in vanilla git: Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs. Examples: `create-github-release`, `create-commit-status`, `trigger-and-wait-for-github-workflow`, `cleanup-github-deployments`, `check-ghcr-packages-exist`.
 
   *Porting caveat for Tier 3:* a Tier 3 concept may not have identical shape on other platforms. `create-github-release` ports to an Azure DevOps "Release" but Azure Releases model deployment stages, which GitHub Releases do not; `has-update-since-last-github-workflow-run` ports to GitLab as pipeline-runs, which contain jobs rather than runs. Treat Tier 3 renames as **"start here", not "done"** — the rename is the first step; inputs/outputs may also shift when the target concept has a different shape.
 
@@ -237,8 +237,8 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 | **Artifact release tagging** | release | `docker tag :v{version}` / `npm publish --tag` / Maven release plugin | `tag-docker-images`, future: `tag-npm-package`, `publish-maven-artifact` |
 | **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `create-and-push-tag`, `ensure-tag-exists` |
 | **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `create-github-release` |
-| **Commit of generated files** | release | `git push` / Contents API / merge-request PR | `commit-files-via-github-contents-api` |
-| **Status / approval signalling** | release | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-github-commit-status` |
+| **Commit of generated files** | release | `git push` / Contents API / merge-request PR | `commit-files` |
+| **Status / approval signalling** | release | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-commit-status` |
 
 **Factor V violation signal:** an action named `build-*` that also performs release-stage tagging (e.g. `docker tag :v{version}`) is mixing the *build* and *release* stages. Flag it as a concern-mixing violation and cite Factor V — [The Twelve-Factor App](https://12factor.net/build-release-run).
 

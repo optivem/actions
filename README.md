@@ -35,7 +35,7 @@ Runs `docker build` against a Dockerfile in a working directory and tags the res
 
 ### bump-patch-versions
 
-For each `path:tag-prefix1,tag-prefix2,...` entry, reads the VERSION file and — if any `{prefix}{current-version}` tag exists on the remote (`git ls-remote`) — computes a patch bump. Reads only; writes nothing to disk. Pair with `commit-files-via-github-contents-api` to persist the bumps.
+For each `path:tag-prefix1,tag-prefix2,...` entry, reads the VERSION file and — if any `{prefix}{current-version}` tag exists on the remote (`git ls-remote`) — computes a patch bump. Reads only; writes nothing to disk. Pair with `commit-files` to persist the bumps.
 
 **Inputs**
 
@@ -74,7 +74,7 @@ Walks tag patterns in priority order, resolves the most recent matching tag as a
 
 **Notes:** Requires the caller to have checked out with `fetch-depth: 0` (or equivalent) so tag history is available. A defensive `git fetch --tags` runs first.
 
-### check-github-container-packages-exist
+### check-ghcr-packages-exist
 
 Calls `gh api repos/{repo}/packages?package_type=container` (via `gh_retry`) and sets `exist=true`/`false` based on whether the list is non-empty. Useful for skipping pipeline stages when no artifacts have been built yet.
 
@@ -128,7 +128,7 @@ Queries a remote git repository with `git ls-remote --tags "refs/tags/<pattern>"
 |---|---|
 | `exists` | Whether at least one matching tag exists (`true`/`false`) |
 
-### check-unverified-github-commit-status
+### check-unverified-commit-status
 
 Fetches commit statuses on `head-sha` via `gh api repos/{repo}/commits/{sha}/statuses` and checks whether any entry has `context == status-context`, `description == subject-sha`, and `state == success`. Used to skip re-verification when the same subject has already been verified on this HEAD. Fails open to `changed=true` on transient API errors.
 
@@ -213,7 +213,7 @@ Cleans up prerelease git tags, GitHub releases, and (optionally) Docker image ta
 - **Superseded prereleases** (no final release yet): after the retention period, deletes older RCs + their status tags + Docker image tags; never deletes the latest RC.
 - **Ordering:** run `cleanup-github-deployments` first (see its Notes).
 
-### commit-files-via-github-contents-api
+### commit-files
 
 For each `{path, content, message}` entry, reads the current file SHA from the GitHub Contents API (if any), base64-encodes the new content, and `PUT`s it with the SHA precondition. Retries on HTTP 409/422 (SHA conflict) with exponential backoff. Race-safe alternative to `git push` for concurrent workflows on the same branch.
 
@@ -365,17 +365,7 @@ Configures the `github-actions[bot]` git identity, creates a git tag at a given 
 | `tag` | yes | — | Git tag name to create (e.g., `v1.0.3-rc.1`) |
 | `sha` | no | `` | Commit SHA to tag. Empty = current HEAD. |
 
-### create-component-tags
-
-For each `component-name:version-file-path` entry, reads the VERSION file and creates + pushes a git tag `{component-name}-v{version}` using the `github-actions[bot]` identity. Idempotent: skips tags already on the remote, tolerates concurrent creation at the same commit.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `components` | yes | — | Newline-separated list of `component-name:version-file-path` entries (e.g., `monolith-system-java:system/monolith/java/VERSION`) |
-
-### create-github-commit-status
+### create-commit-status
 
 Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit status with the given context, state, description, and target URL. Defaults `sha` to `github.sha` and `target-url` to the current workflow run URL.
 
@@ -389,6 +379,16 @@ Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit sta
 | `description` | no | `` | Short human-readable description (often the subject identifier, e.g. the verified upstream SHA) |
 | `target-url` | no | `` | URL the status links to. Empty = link to the current workflow run. |
 | `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+
+### create-component-tags
+
+For each `component-name:version-file-path` entry, reads the VERSION file and creates + pushes a git tag `{component-name}-v{version}` using the `github-actions[bot]` identity. Idempotent: skips tags already on the remote, tolerates concurrent creation at the same commit.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `components` | yes | — | Newline-separated list of `component-name:version-file-path` entries (e.g., `monolith-system-java:system/monolith/java/VERSION`) |
 
 ### create-github-release
 
@@ -508,7 +508,7 @@ Pure string transform. Parses a JSON array of identifiers via `jq` and formats a
 |---|---|
 | `formatted` | Bulleted markdown list (one `• <item>` per line). Empty string if no artifacts provided. |
 
-### get-github-commit-status
+### get-commit-status
 
 Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selects the first match by context (and optionally state). Fails the step if no match is found. Writes description/state/target-url to outputs and appends a line to `$GITHUB_STEP_SUMMARY`.
 
@@ -529,6 +529,24 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 | `description` | The description field of the matched status |
 | `state` | The state of the matched status |
 | `target-url` | The `target_url` of the matched status |
+
+### get-github-workflow-run-number
+
+Calls `gh api /repos/{repo}/actions/runs/{run-id}` (via `gh_retry`) with `--jq '.run_number'` to return the sequential run counter (the `#N` shown in the UI) for a given workflow run database ID.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `run-id` | yes | — | The database ID of the workflow run (as returned by `gh run list --json databaseId`) |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
+| `token` | no | `${{ github.token }}` | Token used to authenticate the GitHub API call |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `run-number` | The `run_number` of the workflow run |
 
 ### map-signoff-to-stage-result
 
@@ -586,24 +604,6 @@ Logs in to a Docker registry, then runs `docker push` on the SHA-tagged image (w
 | Name | Description |
 |---|---|
 | `image-digest-url` | Full image URL with SHA256 digest (`{base-image}@sha256:...`) |
-
-### read-github-workflow-run-number
-
-Calls `gh api /repos/{repo}/actions/runs/{run-id}` (via `gh_retry`) with `--jq '.run_number'` to return the sequential run counter (the `#N` shown in the UI) for a given workflow run database ID.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `run-id` | yes | — | The database ID of the workflow run (as returned by `gh run list --json databaseId`) |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
-| `token` | no | `${{ github.token }}` | Token used to authenticate the GitHub API call |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `run-number` | The `run_number` of the workflow run |
 
 ### read-target-version
 
@@ -672,25 +672,6 @@ Delegates to `resolve-docker-image-digests.sh`. For each input image URL, querie
 | `image-digest-urls` | JSON array of digest URLs in the same order as input |
 | `latest-image-timestamp` | Timestamp of the most recently created image among all processed images |
 
-### resolve-github-prerelease-tag
-
-Calls `gh api` (via `gh_retry`) to look up published GitHub releases. If `input-tag` is empty, returns the latest release whose tag starts with `tag-prefix` (sorted by `created_at`). If `input-tag` is set, validates it starts with `tag-prefix`, rejects `main`/`refs/heads/main`, and confirms it corresponds to a published release.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `repository` | yes | — | Repository in `owner/name` form (e.g. `optivem/shop`) |
-| `input-tag` | no | `` | Explicit tag to validate. Empty = resolve to the latest published release matching `tag-prefix`. |
-| `tag-prefix` | no | `meta-v` | Required tag prefix (e.g. `meta-v`). Used to filter releases when `input-tag` is empty, and to validate `input-tag` when set. |
-| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `tag` | The validated tag |
-
 ### resolve-latest-tag-from-sha
 
 Calls `git ls-remote --tags` against the remote URL, filters by the given glob pattern, matches tags (lightweight or annotated, peeled) against the target SHA, and picks the highest by `sort -V` (version sort). Returns empty if no matching tag points at the SHA.
@@ -712,6 +693,25 @@ Calls `git ls-remote --tags` against the remote URL, filters by the given glob p
 | `tag` | The highest tag (by version sort) matching the pattern and pointing at the SHA, or empty string if none found |
 
 **Notes:** `git ls-remote --tags` fetches the full tag list and filters client-side. Fine at current scale (dozens of tags); for thousands of tags, a paginated `gh api /repos/.../tags` would be faster.
+
+### resolve-prerelease-tag
+
+Calls `gh api` (via `gh_retry`) to look up published GitHub releases. If `input-tag` is empty, returns the latest release whose tag starts with `tag-prefix` (sorted by `created_at`). If `input-tag` is set, validates it starts with `tag-prefix`, rejects `main`/`refs/heads/main`, and confirms it corresponds to a published release.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `repository` | yes | — | Repository in `owner/name` form (e.g. `optivem/shop`) |
+| `input-tag` | no | `` | Explicit tag to validate. Empty = resolve to the latest published release matching `tag-prefix`. |
+| `tag-prefix` | no | `meta-v` | Required tag prefix (e.g. `meta-v`). Used to filter releases when `input-tag` is empty, and to validate `input-tag` when set. |
+| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `tag` | The validated tag |
 
 ### resolve-tag-from-sha
 
@@ -810,9 +810,9 @@ Probes the GitHub rate limit (and sleeps until reset if below threshold), dispat
 
 **Notes:** The run-ID lookup uses `gh run list --limit 1` against `workflow` + `ref`, with a 10s sleep before the lookup. Under heavy concurrent dispatches this could race with a sibling run — acceptable at current scale.
 
-### wait-for-github-commit-run
+### wait-for-github-workflow
 
-Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `headSha == <commit-sha>` until a match is found, then `gh run watch --exit-status`es the run to fail the step if it fails. Includes the same rate-limit-awareness as `trigger-and-wait-for-github-workflow`.
+Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `headSha == <commit-sha>` until a match is found, then `gh run watch --exit-status`es the run to fail the step if it fails. Sibling of `trigger-and-wait-for-github-workflow` — use that when you need to dispatch the workflow yourself; use this when a commit push has already triggered it.
 
 **Inputs**
 

@@ -1,5 +1,5 @@
 name: 'Bump Patch Versions'
-description: 'Computes patch-version bumps for VERSION files whose matching release tag already exists on the remote. Reads files from the checked-out workspace; writes nothing. Tool-agnostic — uses git ls-remote, no platform API dependency. Pair with commit-files-via-github-contents-api (or an equivalent for your platform) to persist the bumps.'
+description: 'Computes patch-version bumps for VERSION files whose matching release tag already exists on the remote. Reads files from the checked-out workspace; writes nothing. Tool-agnostic — uses git ls-remote, no platform API dependency. Pair with commit-files (or an equivalent for your platform) to persist the bumps.'
 
 inputs:
   version-files:

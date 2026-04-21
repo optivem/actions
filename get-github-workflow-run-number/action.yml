@@ -1,4 +1,4 @@
-name: 'Read GitHub Workflow Run Number'
+name: 'Get GitHub Workflow Run Number'
 description: 'Given a workflow run database ID, return its run_number (the per-workflow sequential counter shown in the UI, e.g. 42 for run #42).'
 
 inputs:
