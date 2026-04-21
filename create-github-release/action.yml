@@ -1,174 +1,83 @@
 name: 'Create GitHub Release'
-description: 'GitHub-API primitive: creates a GitHub Release record (via `gh release create`) with a composed release-notes body, artifact URLs, and prerelease flag'
+description: 'GitHub-API primitive. Creates or updates (idempotent) a GitHub Release record for a given tag using a pre-composed title and notes file. Preserves asset uploads across re-runs via `gh release edit` when the release already exists.'
 author: 'Optivem'
 branding:
   icon: 'tag'
   color: 'blue'
 
 inputs:
-  base-version:
-    description: 'Original version that triggered the workflow (e.g., v1.0.0-rc.1)'
+  tag:
+    description: 'Git tag the release is attached to (must already exist on the remote).'
     required: true
-  release-version:
-    description: 'Release version tag to create (e.g., v1.0.0-rc.1-qa-deployed)'
+  title:
+    description: 'Release title.'
     required: true
-  environment:
-    description: 'Environment name (e.g., qa, staging, prod)'
+  notes-file:
+    description: 'Path to a file containing the release notes body (markdown).'
     required: true
-  status:
-    description: 'Status (e.g., deployed, passed, failed)'
-    required: true
-  artifact-urls:
-    description: 'JSON array of artifact URLs (Docker images, packages, etc.)'
-    required: false
-    default: '[]'
   is-prerelease:
-    description: 'Whether this is a prerelease'
+    description: 'Whether to mark the release as a prerelease.'
     required: false
-    default: 'true'
+    default: 'false'
+  repository:
+    description: 'Repository in owner/repo form. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token for release API calls. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   release-url:
-    description: 'URL of the created GitHub release'
-    value: ${{ steps.create-release.outputs.release-url }}
+    description: 'URL of the created or updated GitHub release.'
+    value: ${{ steps.create.outputs.release-url }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Create Release
-      id: create-release
+    - id: create
       shell: bash
       env:
-        GH_TOKEN: ${{ env.GITHUB_TOKEN }}
-        STATUS_VERSION: ${{ inputs.release-version }}
-        ORIGINAL_VERSION: ${{ inputs.base-version }}
-        ENVIRONMENT: ${{ inputs.environment }}
-        STATUS: ${{ inputs.status }}
-        ARTIFACT_URLS: ${{ inputs.artifact-urls }}
+        GH_TOKEN: ${{ inputs.token }}
+        TAG: ${{ inputs.tag }}
+        TITLE: ${{ inputs.title }}
+        NOTES_FILE: ${{ inputs.notes-file }}
         IS_PRERELEASE: ${{ inputs.is-prerelease }}
-        REPOSITORY: ${{ github.repository }}
-        SERVER_URL: ${{ github.server_url }}
-        RUN_ID: ${{ github.run_id }}
-        COMMIT_SHA: ${{ github.sha }}
-        ACTOR: ${{ github.actor }}
+        REPOSITORY: ${{ inputs.repository }}
       run: |
         set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-
-        echo "🚀 Creating GitHub release for $ENVIRONMENT $STATUS..."
-        echo "📦 Status Version: $STATUS_VERSION"
-        echo "🏷️ Original Version: $ORIGINAL_VERSION"
-        echo "🌍 Environment: $ENVIRONMENT"
-        echo "📊 Status: $STATUS"
-        echo "🔖 Is Prerelease: $IS_PRERELEASE"
-
-        # Map status → icon.
-        status_lower=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
-        case "$status_lower" in
-          deployed)   status_icon="🚀" ;;
-          prerelease) status_icon="📦" ;;
-          approved|rejected) status_icon="🧑‍💻" ;;
-          *)          status_icon="📊" ;;
-        esac
-
-        # Map environment → short uppercase label.
-        env_lower=$(echo "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
-        case "$env_lower" in
-          acceptance) env_label="ACC" ;;
-          qa)         env_label="QA" ;;
-          prod)       env_label="PROD" ;;
-          *)          env_label=$(echo "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]') ;;
-        esac
-
-        # Use original version for signoff statuses, status version otherwise.
-        case "$status_lower" in
-          approved|rejected) display_version="$ORIGINAL_VERSION" ;;
-          *)                 display_version="$STATUS_VERSION" ;;
-        esac
-
-        # Status suffix only for signoff actions.
-        case "$status_lower" in
-          approved) status_suffix=" APPROVED" ;;
-          rejected) status_suffix=" REJECTED" ;;
-          *)        status_suffix="" ;;
-        esac
-
-        release_title="$status_icon $display_version $env_label$status_suffix"
-        short_sha="${COMMIT_SHA:0:7}"
-        timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
-
-        # Build release body in a tempfile (multi-line markdown).
-        notes_file=$(mktemp)
-        {
-          echo "# $status_icon $display_version $env_label$status_suffix"
-          echo
-          echo "**Original Version:** $ORIGINAL_VERSION  "
-          echo "**Status Version:** $STATUS_VERSION  "
-          echo "**Environment:** $ENVIRONMENT  "
-          echo "**Status:** $STATUS  "
-          echo "**Workflow:** [$RUN_ID]($SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID)  "
-          echo "**Commit:** [$short_sha]($SERVER_URL/$REPOSITORY/commit/$COMMIT_SHA)  "
-          echo "**Actor:** $ACTOR  "
-          echo
-        } > "$notes_file"
-
-        # Optional artifacts section.
-        artifact_count=0
-        if [[ -n "$ARTIFACT_URLS" && "$ARTIFACT_URLS" != "[]" ]]; then
-          if artifact_count=$(jq 'length' <<<"$ARTIFACT_URLS" 2>/dev/null); then
-            if (( artifact_count > 0 )); then
-              echo "📋 Found $artifact_count artifact(s)"
-              {
-                echo "## 📦 Artifacts"
-                echo
-                jq -r '.[] | "- \(.)"' <<<"$ARTIFACT_URLS"
-                echo
-              } >> "$notes_file"
-            fi
-          else
-            echo "⚠️ Could not parse artifact URLs, proceeding without artifacts"
-          fi
-        fi
-
-        {
-          echo "---"
-          echo "*Created: $timestamp*"
-        } >> "$notes_file"
-
-        echo "📝 Release Title: $release_title"
-        echo "📄 Checking if release already exists..."
-
-        # If release exists, delete it (idempotent re-runs on the same tag).
-        if gh_retry release view "$STATUS_VERSION" --repo "$REPOSITORY" >/dev/null 2>&1; then
-          echo "🗑️ Found existing release $STATUS_VERSION, deleting it..."
-          if gh_retry release delete "$STATUS_VERSION" --repo "$REPOSITORY" --yes 2>&1; then
-            echo "✅ Successfully deleted existing release"
-          else
-            echo "⚠️ Failed to delete existing release — proceeding to create anyway"
-          fi
-        else
-          echo "📄 No existing release found"
-        fi
-
-        echo "📄 Creating release with GitHub CLI..."
 
         prerelease_flag=()
         if [[ "$IS_PRERELEASE" == "true" ]]; then
           prerelease_flag=(--prerelease)
         fi
 
-        if release_url=$(gh_retry release create "$STATUS_VERSION" \
-            --title "$release_title" \
-            --notes-file "$notes_file" \
-            --repo "$REPOSITORY" \
-            "${prerelease_flag[@]}" 2>&1); then
-          release_url=$(echo "$release_url" | tail -n1 | tr -d '[:space:]')
-          echo "✅ Successfully created release: $release_url"
-          echo "release-url=$release_url" >> "$GITHUB_OUTPUT"
+        if gh_retry release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+          echo "📝 Release $TAG exists — editing title/notes (preserves assets)..."
+          if ! gh_retry release edit "$TAG" \
+              --repo "$REPOSITORY" \
+              --title "$TITLE" \
+              --notes-file "$NOTES_FILE" \
+              "${prerelease_flag[@]}" >/dev/null; then
+            echo "::error::Failed to edit existing release $TAG"
+            exit 1
+          fi
+          release_url=$(gh_retry release view "$TAG" --repo "$REPOSITORY" --json url --jq '.url')
+          echo "✅ Release updated: $release_url"
         else
-          echo "::error::Failed to create release. gh CLI output: $release_url"
-          rm -f "$notes_file"
-          exit 1
+          echo "📄 Creating new release $TAG..."
+          if ! create_output=$(gh_retry release create "$TAG" \
+              --title "$TITLE" \
+              --notes-file "$NOTES_FILE" \
+              --repo "$REPOSITORY" \
+              "${prerelease_flag[@]}" 2>&1); then
+            echo "::error::Failed to create release. gh CLI output: $create_output"
+            exit 1
+          fi
+          release_url=$(echo "$create_output" | tail -n1 | tr -d '[:space:]')
+          echo "✅ Release created: $release_url"
         fi
 
-        rm -f "$notes_file"
+        echo "release-url=$release_url" >> "$GITHUB_OUTPUT"

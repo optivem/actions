@@ -1,0 +1,122 @@
+name: 'Compose Release Notes'
+description: 'Pure string-transform helper. Composes a GitHub release title and a markdown notes file from pipeline metadata (environment, status, actor, artifacts). No platform API calls.'
+author: 'Optivem'
+branding:
+  icon: 'file-text'
+  color: 'blue'
+
+inputs:
+  base-version:
+    description: 'Original version that triggered the workflow (e.g., v1.0.0-rc.1)'
+    required: true
+  release-version:
+    description: 'Release version tag (e.g., v1.0.0-rc.1-qa-deployed). For signoff statuses (approved/rejected) the title falls back to base-version.'
+    required: true
+  environment:
+    description: 'Environment name (e.g., qa, staging, prod). Mapped to a short uppercase label in the title.'
+    required: true
+  status:
+    description: 'Status (e.g., deployed, passed, failed, approved, rejected). Selects icon and title-suffix mapping.'
+    required: true
+  artifact-urls:
+    description: 'JSON array of artifact URLs to include in the notes. Empty array or empty string skips the artifacts section.'
+    required: false
+    default: '[]'
+
+outputs:
+  title:
+    description: 'Composed release title (e.g., "🚀 v1.0.0-rc.1-qa-deployed QA")'
+    value: ${{ steps.compose.outputs.title }}
+  notes-file:
+    description: 'Path to a tempfile containing the composed markdown release notes'
+    value: ${{ steps.compose.outputs.notes-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: compose
+      shell: bash
+      env:
+        STATUS_VERSION: ${{ inputs.release-version }}
+        ORIGINAL_VERSION: ${{ inputs.base-version }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        STATUS: ${{ inputs.status }}
+        ARTIFACT_URLS: ${{ inputs.artifact-urls }}
+        REPOSITORY: ${{ github.repository }}
+        SERVER_URL: ${{ github.server_url }}
+        RUN_ID: ${{ github.run_id }}
+        COMMIT_SHA: ${{ github.sha }}
+        ACTOR: ${{ github.actor }}
+      run: |
+        set -euo pipefail
+
+        status_lower=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
+        case "$status_lower" in
+          deployed)   status_icon="🚀" ;;
+          prerelease) status_icon="📦" ;;
+          approved|rejected) status_icon="🧑‍💻" ;;
+          *)          status_icon="📊" ;;
+        esac
+
+        env_lower=$(echo "$ENVIRONMENT" | tr '[:upper:]' '[:lower:]')
+        case "$env_lower" in
+          acceptance) env_label="ACC" ;;
+          qa)         env_label="QA" ;;
+          prod)       env_label="PROD" ;;
+          *)          env_label=$(echo "$ENVIRONMENT" | tr '[:lower:]' '[:upper:]') ;;
+        esac
+
+        case "$status_lower" in
+          approved|rejected) display_version="$ORIGINAL_VERSION" ;;
+          *)                 display_version="$STATUS_VERSION" ;;
+        esac
+
+        case "$status_lower" in
+          approved) status_suffix=" APPROVED" ;;
+          rejected) status_suffix=" REJECTED" ;;
+          *)        status_suffix="" ;;
+        esac
+
+        release_title="$status_icon $display_version $env_label$status_suffix"
+        short_sha="${COMMIT_SHA:0:7}"
+        timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+        notes_file=$(mktemp)
+        {
+          echo "# $status_icon $display_version $env_label$status_suffix"
+          echo
+          echo "**Original Version:** $ORIGINAL_VERSION  "
+          echo "**Status Version:** $STATUS_VERSION  "
+          echo "**Environment:** $ENVIRONMENT  "
+          echo "**Status:** $STATUS  "
+          echo "**Workflow:** [$RUN_ID]($SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID)  "
+          echo "**Commit:** [$short_sha]($SERVER_URL/$REPOSITORY/commit/$COMMIT_SHA)  "
+          echo "**Actor:** $ACTOR  "
+          echo
+        } > "$notes_file"
+
+        if [[ -n "$ARTIFACT_URLS" && "$ARTIFACT_URLS" != "[]" ]]; then
+          if artifact_count=$(jq 'length' <<<"$ARTIFACT_URLS" 2>/dev/null); then
+            if (( artifact_count > 0 )); then
+              {
+                echo "## 📦 Artifacts"
+                echo
+                jq -r '.[] | "- \(.)"' <<<"$ARTIFACT_URLS"
+                echo
+              } >> "$notes_file"
+            fi
+          else
+            echo "⚠️ Could not parse artifact URLs; skipping artifacts section" >&2
+          fi
+        fi
+
+        {
+          echo "---"
+          echo "*Created: $timestamp*"
+        } >> "$notes_file"
+
+        echo "title=$release_title" >> "$GITHUB_OUTPUT"
+        echo "notes-file=$notes_file" >> "$GITHUB_OUTPUT"
+
+        echo "📝 Composed release title: $release_title"
+        echo "📄 Notes file: $notes_file"
