@@ -38,7 +38,9 @@ runs:
         GH_TOKEN: ${{ env.GH_TOKEN || github.token }}
       shell: bash
       run: |
-        # --- Rate limit check ---
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+
+        # --- Rate limit check (skip retry wrapper — local probe) ---
         remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
         threshold=${{ inputs.rate-limit-threshold }}
         if [ "$remaining" -lt "$threshold" ]; then
@@ -58,7 +60,7 @@ runs:
         fi
 
         # --- Trigger workflow ---
-        gh workflow run "${{ inputs.workflow }}" \
+        gh_retry workflow run "${{ inputs.workflow }}" \
           --repo "${{ inputs.repo }}" \
           --ref "${{ inputs.ref }}" \
           $input_flags
@@ -67,7 +69,7 @@ runs:
         sleep 10
 
         # --- Capture run ID ---
-        run_id=$(gh run list \
+        run_id=$(gh_retry run list \
           --workflow="${{ inputs.workflow }}" \
           --repo "${{ inputs.repo }}" \
           --branch "${{ inputs.ref }}" \
@@ -79,9 +81,10 @@ runs:
         GH_TOKEN: ${{ env.GH_TOKEN || github.token }}
       shell: bash
       run: |
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
         run_id="${{ steps.trigger.outputs.run_id }}"
         echo "Waiting for run $run_id..."
-        gh run watch "$run_id" \
+        gh_retry run watch "$run_id" \
           --repo "${{ inputs.repo }}" \
           --exit-status \
           --interval ${{ inputs.poll-interval }}

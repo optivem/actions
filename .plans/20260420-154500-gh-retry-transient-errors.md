@@ -82,35 +82,6 @@ For each file: dot-source the helper at the top, replace every `& gh @args` / `g
   - Consumers to update: 0
   - Category: refactor
 
-### Phase 3 — migrate `action.yml` inline bash steps
-
-Pattern for each step: before any `gh ...` line, add `source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"` once at the top of the `run:` block, then replace `gh ...` with `gh_retry ...`. Preserve all existing flags, jq filters, output redirection. Skip `gh auth status` probes.
-
-- [ ] **Migrate `trigger-and-wait/action.yml`** — 5 `gh` sites: `gh api rate_limit` (×2 — skip, local-only rate-limit check), `gh workflow run`, `gh run list`, `gh run watch`. Wrap the last three.
-  - Affects: `trigger-and-wait/action.yml`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate `wait-for-commit-run/action.yml`** — 5 `gh` sites. Wrap all API-bound ones.
-  - Affects: `wait-for-commit-run/action.yml`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate `bump-patch-versions/action.yml`** — 3 `gh` sites.
-  - Affects: `bump-patch-versions/action.yml`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate `resolve-prerelease-tag/action.yml`** — 2 `gh` sites.
-  - Affects: `resolve-prerelease-tag/action.yml`
-  - Consumers to update: 0
-  - Category: refactor
-
-- [ ] **Migrate remaining single-call action.yml files** — `check-artifacts-exist`, `create-commit-status`, `create-github-release` (wrapper-yml's own `gh` if any beyond the PS1), `get-commit-status`, `has-unverified-sha`, `has-update-since-last-run`, `resolve-commit`, `resolve-tag-from-sha`, `summarize-system-stage`. One `gh` call each. Batch into a single PR if diffs stay small.
-  - Affects: 9 `action.yml` files
-  - Consumers to update: 0
-  - Category: refactor
-
 ### Phase 4 — guardrails
 
 - [ ] **Add a lint check to prevent raw `gh ` usage going forward** — A small script (bash or PS1) under `shared/_lint/check-no-raw-gh.sh` that greps every `action.yml` and `*.ps1` outside `shared/` for `\bgh\s+(api|release|workflow|run|repo|pr|issue)` and fails if any match is not preceded by `gh_retry` / `Invoke-GhWithRetry`. Wire into a GitHub Action workflow in the `optivem/actions` repo that runs on PRs. Whitelist `gh auth status` and `gh api rate_limit`.

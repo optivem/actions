@@ -41,12 +41,13 @@ runs:
         CONTEXT: ${{ inputs.context }}
         STATE_FILTER: ${{ inputs.state }}
       run: |
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
         if [ -n "$STATE_FILTER" ]; then
           JQ="[.[] | select(.context==\"$CONTEXT\" and .state==\"$STATE_FILTER\")][0]"
         else
           JQ="[.[] | select(.context==\"$CONTEXT\")][0]"
         fi
-        STATUS_JSON=$(gh api "repos/$REPO/commits/$SHA/statuses" --jq "$JQ")
+        STATUS_JSON=$(gh_retry api "repos/$REPO/commits/$SHA/statuses" --jq "$JQ")
         if [ -z "$STATUS_JSON" ] || [ "$STATUS_JSON" = "null" ]; then
           echo "::error::No ${STATE_FILTER:+$STATE_FILTER }commit status with context '$CONTEXT' found on $REPO commit $SHA"
           exit 1

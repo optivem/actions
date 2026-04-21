@@ -51,6 +51,7 @@ runs:
         REPO_NAME: ${{ inputs.repo-name }}
       run: |
         set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
         if [[ -z "$HEAD_SHA" ]]; then
           echo "::error::head-sha is empty"
@@ -61,7 +62,7 @@ runs:
         echo "Subject SHA: $SUBJECT_SHA"
         echo "Status context: $STATUS_CONTEXT"
 
-        if ! statuses=$(gh api "repos/${REPO_OWNER}/${REPO_NAME}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
+        if ! statuses=$(gh_retry api "repos/${REPO_OWNER}/${REPO_NAME}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
           echo "::warning::Could not fetch commit statuses — failing open to changed=true. Details: $statuses"
           {
             echo "changed=true"

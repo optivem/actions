@@ -46,6 +46,7 @@ runs:
         REPO_NAME: ${{ inputs.repo-name }}
       run: |
         set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
         if [[ -z "$LAST_UPDATED_AT" ]]; then
           echo "::error::last-updated-at is empty"
@@ -54,7 +55,7 @@ runs:
 
         # Most recent successful run of this workflow. Limit 50 to handle short bursts
         # of failed/in-progress runs preceding the last success.
-        last_run_at=$(gh run list \
+        last_run_at=$(gh_retry run list \
           --repo "${REPO_OWNER}/${REPO_NAME}" \
           --workflow "$WORKFLOW_NAME" \
           --status completed \

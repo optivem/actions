@@ -27,7 +27,8 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       shell: bash
       run: |
-        run_number=$(gh api "/repos/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}" --jq '.run_number')
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+        run_number=$(gh_retry api "/repos/${{ inputs.repository }}/actions/runs/${{ inputs.run-id }}" --jq '.run_number')
         if [ -z "$run_number" ] || [ "$run_number" = "null" ]; then
           echo "::error::Could not read run_number for run ${{ inputs.run-id }} in ${{ inputs.repository }}"
           exit 1

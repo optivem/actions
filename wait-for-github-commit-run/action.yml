@@ -37,11 +37,12 @@ runs:
         GH_TOKEN: ${{ github.token }}
       shell: bash
       run: |
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
         commit_sha="${{ inputs.commit-sha }}"
         echo "Waiting for ${{ inputs.workflow }} (commit: $commit_sha)..."
 
         while true; do
-          # --- Rate limit check ---
+          # --- Rate limit check (skip retry wrapper — local probe) ---
           remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
           threshold=${{ inputs.rate-limit-threshold }}
           if [ "$remaining" -lt "$threshold" ]; then
@@ -54,7 +55,7 @@ runs:
           fi
 
           # --- Find run by commit SHA ---
-          run_id=$(gh run list \
+          run_id=$(gh_retry run list \
             --workflow="${{ inputs.workflow }}" \
             --repo "${{ inputs.repo }}" \
             --limit 5 \
@@ -64,7 +65,7 @@ runs:
           if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
             echo "Found run $run_id, watching..."
             echo "run_id=$run_id" >> $GITHUB_OUTPUT
-            gh run watch "$run_id" \
+            gh_retry run watch "$run_id" \
               --repo "${{ inputs.repo }}" \
               --exit-status \
               --interval ${{ inputs.watch-interval }}
