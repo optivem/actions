@@ -1,17 +1,15 @@
 # optivem/actions
 
-## Shell choice — bash only for new work
+## Shell choice — bash only
 
-All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothing a bash toolchain doesn't already cover. To avoid paying every cross-cutting concern twice (retry wrappers, lint rules, structured logging, auth), **new work is bash-only**:
+All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothing a bash toolchain doesn't already cover. To avoid paying every cross-cutting concern twice (retry wrappers, lint rules, structured logging, auth), **all production code is bash-only**:
 
-- New `action.yml` steps use `shell: bash`.
-- New scripts are `.sh`, not `.ps1`. Inline the bash directly in `action.yml` when practical — it's the prevailing pattern in this repo.
+- `action.yml` steps use `shell: bash`.
+- Scripts are `.sh`, not `.ps1`. Inline the bash directly in `action.yml` when practical — it's the prevailing pattern in this repo.
 - Use [shared/gh-retry.sh](shared/gh-retry.sh) (`gh_retry` wrapper) for any `gh` CLI calls, and `jq` for JSON handling.
 
-Existing pwsh files stay in place until independently touched. When you open one for any reason (bug fix, feature change, retry-wrapper adoption), port the surrounding `pwsh` step or `.ps1` script to bash **in the same PR** unless doing so would triple the diff.
-
 Two lint checks enforce the conventions:
-- [shared/_lint/check-no-new-pwsh.sh](shared/_lint/check-no-new-pwsh.sh) (via `.github/workflows/lint-shell-policy.yml`) fails PRs that introduce new `shell: pwsh` steps or new `.ps1` files.
+- [shared/_lint/check-no-pwsh.sh](shared/_lint/check-no-pwsh.sh) (via `.github/workflows/lint-shell-policy.yml`) fails PRs that contain any `shell: pwsh` or `.ps1` files (except `shared/_test-*` harnesses).
 - [shared/_lint/check-no-raw-gh.sh](shared/_lint/check-no-raw-gh.sh) (via `.github/workflows/lint-gh-usage.yml`) fails PRs that call `gh` without the `gh_retry` wrapper. Whitelist: `gh auth status`, `gh api rate_limit`.
 
 ## cleanup-prereleases

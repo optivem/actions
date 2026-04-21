@@ -20,7 +20,32 @@ runs:
   using: 'composite'
   steps:
     - id: format
-      shell: pwsh
+      shell: bash
+      env:
+        ARTIFACTS: ${{ inputs.artifacts }}
       run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Format-ArtifactList.ps1"
-        & $scriptPath -ArtifactsInput '${{ inputs.artifacts }}'
+        set -euo pipefail
+        echo "🔧 Formatting artifact list..."
+
+        formatted=""
+        trimmed="$(printf '%s' "$ARTIFACTS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+        if [[ -n "$trimmed" ]]; then
+          echo "📦 Input received: $ARTIFACTS"
+          if ! items="$(jq -r 'if type == "array" then .[] else . end' <<<"$trimmed" 2>/dev/null)"; then
+            echo "::error::Invalid JSON array format. Expected [\"value\"] or [\"v1\",\"v2\"]."
+            exit 1
+          fi
+          formatted="$(printf '%s\n' "$items" | sed '/^$/d' | sed 's/^/• /')"
+          echo "📋 Formatted output:"
+          echo "$formatted"
+        else
+          echo "ℹ️ No artifacts provided; returning empty output"
+        fi
+
+        {
+          echo "formatted<<EOF"
+          echo "$formatted"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+        echo "✅ Output written to GITHUB_OUTPUT"

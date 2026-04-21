@@ -12,5 +12,5 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check shell policy (no new pwsh)
-        run: bash shared/_lint/check-no-new-pwsh.sh "origin/${{ github.base_ref }}"
+      - name: Check shell policy (no pwsh)
+        run: bash shared/_lint/check-no-pwsh.sh

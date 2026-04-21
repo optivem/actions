@@ -8,7 +8,7 @@
 #     - `gh auth status`
 #     - `gh api rate_limit` (read-only, used by caller-side rate-limit checks)
 #
-# Scope: action.yml / action.yaml / *.sh / *.ps1 under the repo root,
+# Scope: action.yml / action.yaml / *.sh under the repo root,
 # excluding shared/, .github/, .tmp/, .plans/, .claude/. Matches are
 # filtered to ignore bash comments and YAML `description:`/`name:` prose.
 
@@ -19,7 +19,7 @@ errors=0
 # Find candidate files (tracked + untracked, excluding ignored).
 mapfile -t files < <(
   git ls-files -- \
-    '*.sh' '*.ps1' '**/action.yml' '**/action.yaml' \
+    '*.sh' '**/action.yml' '**/action.yaml' \
     | grep -Ev '^(shared/|\.github/|\.tmp/|\.plans/|\.claude/)' \
     || true
 )
