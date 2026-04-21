@@ -18,6 +18,14 @@ The caller may pass one option:
 
 If the caller does not specify, assume `backwards_compatible = false` and say so in the report header.
 
+**Publication intent for this repo: internal-only.** The `optivem/actions` repo is consumed only by sibling repos in this workspace; it is never published to the GitHub Marketplace. Therefore:
+
+- Do NOT flag missing `branding:` fields.
+- Do NOT flag Marketplace-specific input naming conventions beyond what the rubric already mandates for internal clarity.
+- Do NOT suggest adding Marketplace metadata (categories, logo, etc.).
+
+Still list these as considered-but-rejected in the report so the absence of findings is visible.
+
 # Scope
 
 Each top-level directory in the repo is one action, defined by its `action.yml`. Exclude:
