@@ -23,6 +23,10 @@ inputs:
     description: 'Username for registry authentication'
     required: false
     default: '${{ github.actor }}'
+  token:
+    description: 'Token for registry authentication. Defaults to github.token for GHCR pushes.'
+    required: false
+    default: '${{ github.token }}'
 outputs:
   image-digest-url:
     description: 'Full image URL with SHA256 digest'
@@ -33,30 +37,37 @@ runs:
     - name: Echo Information
       run: |
         echo "📤 Starting Docker push action"
-        echo "🏷️ SHA Tag: ${{ inputs.image-sha-tag }}"
-        echo "🏷️ Latest URL: ${{ inputs.image-latest-url }}"
-        if [ -n "${{ inputs.image-version-tag }}" ]; then
-          echo "🏷️ Version Tag: ${{ inputs.image-version-tag }}"
+        echo "🏷️ SHA Tag: $IMAGE_SHA_TAG"
+        echo "🏷️ Latest URL: $IMAGE_LATEST_URL"
+        if [ -n "$IMAGE_VERSION_TAG" ]; then
+          echo "🏷️ Version Tag: $IMAGE_VERSION_TAG"
         fi
-        echo "🌐 Registry: ${{ inputs.registry }}"
-        echo "👤 Username: ${{ inputs.registry-username }}"
+        echo "🌐 Registry: $REGISTRY"
+        echo "👤 Username: $REGISTRY_USERNAME"
       shell: bash
+      env:
+        IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
+        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
 
     - name: Log in to Container Registry
       run: |
-        echo "🔐 Logging in to ${{ inputs.registry }}..."
-        echo $REGISTRY_PASSWORD | docker login ${{ inputs.registry }} -u ${{ inputs.registry-username }} --password-stdin
+        echo "🔐 Logging in to $REGISTRY..."
+        echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
         echo "✅ Successfully logged in to registry"
       shell: bash
       env:
-        REGISTRY_PASSWORD: ${{ env.REGISTRY_PASSWORD }}
+        REGISTRY: ${{ inputs.registry }}
+        REGISTRY_USERNAME: ${{ inputs.registry-username }}
+        REGISTRY_TOKEN: ${{ inputs.token }}
 
     - name: Push Docker image
       id: push
       run: |
         echo "📤 Pushing Docker images..."
 
-        # Retry helper: retries a command up to 3 times with a delay
         push_with_retry() {
           local image="$1"
           local max_attempts=3
@@ -78,38 +89,44 @@ runs:
           return 1
         }
 
-        # Push SHA tagged image and capture digest
-        DIGEST=$(docker push "${{ inputs.image-sha-tag }}" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
-        echo "✅ Pushed SHA tagged image: ${{ inputs.image-sha-tag }}"
+        DIGEST=$(docker push "$IMAGE_SHA_TAG" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
+        echo "✅ Pushed SHA tagged image: $IMAGE_SHA_TAG"
         echo "📝 Image digest: $DIGEST"
 
-        # Push latest tagged image (with retry for transient GHCR permission issues)
-        push_with_retry "${{ inputs.image-latest-url }}"
-        echo "✅ Pushed tagged image: ${{ inputs.image-latest-url }}"
+        push_with_retry "$IMAGE_LATEST_URL"
+        echo "✅ Pushed tagged image: $IMAGE_LATEST_URL"
 
-        # Push version tagged image (if provided)
-        if [ -n "${{ inputs.image-version-tag }}" ]; then
-          push_with_retry "${{ inputs.image-version-tag }}"
-          echo "✅ Pushed version tagged image: ${{ inputs.image-version-tag }}"
+        if [ -n "$IMAGE_VERSION_TAG" ]; then
+          push_with_retry "$IMAGE_VERSION_TAG"
+          echo "✅ Pushed version tagged image: $IMAGE_VERSION_TAG"
         fi
 
-        # Extract base image (everything before the last colon)
-        BASE_IMAGE=$(echo "${{ inputs.image-sha-tag }}" | sed 's/:[^:]*$//')
+        BASE_IMAGE=$(echo "$IMAGE_SHA_TAG" | sed 's/:[^:]*$//')
         IMAGE_DIGEST_URL="${BASE_IMAGE}@${DIGEST}"
-        echo "image-digest-url=$IMAGE_DIGEST_URL" >> $GITHUB_OUTPUT
+        echo "image-digest-url=$IMAGE_DIGEST_URL" >> "$GITHUB_OUTPUT"
 
-        echo "🎉 Successfully pushed all Docker images to ${{ inputs.registry }}"
+        echo "🎉 Successfully pushed all Docker images to $REGISTRY"
       shell: bash
+      env:
+        IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
+        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
+        REGISTRY: ${{ inputs.registry }}
 
     - name: Output Summary
       run: |
         echo "📋 Push Outputs Summary:"
         echo "========================="
-        echo "🔗 SHA Tag: ${{ inputs.image-sha-tag }}"
-        echo "🔗 Latest URL: ${{ inputs.image-latest-url }}"
-        if [ -n "${{ inputs.image-version-tag }}" ]; then
-          echo "🔗 Version Tag: ${{ inputs.image-version-tag }}"
+        echo "🔗 SHA Tag: $IMAGE_SHA_TAG"
+        echo "🔗 Latest URL: $IMAGE_LATEST_URL"
+        if [ -n "$IMAGE_VERSION_TAG" ]; then
+          echo "🔗 Version Tag: $IMAGE_VERSION_TAG"
         fi
-        echo "🔗 Digest URL: ${{ steps.push.outputs.image-digest-url }}"
+        echo "🔗 Digest URL: $IMAGE_DIGEST_URL"
         echo "========================="
       shell: bash
+      env:
+        IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
+        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
+        IMAGE_DIGEST_URL: ${{ steps.push.outputs.image-digest-url }}
