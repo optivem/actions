@@ -5,9 +5,10 @@ branding:
   icon: 'tag'
   color: 'green'
 inputs:
-  repo:
+  repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
-    required: true
+    required: false
+    default: ${{ github.repository }}
   input-tag:
     description: 'Explicit tag to validate. Empty = resolve to the latest published release matching tag-prefix.'
     required: false
@@ -16,6 +17,10 @@ inputs:
     description: 'Required tag prefix (e.g. "meta-v"). Used to filter releases when input-tag is empty, and to validate input-tag when set.'
     required: false
     default: 'meta-v'
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 outputs:
   tag:
     description: 'The validated tag'
@@ -26,10 +31,10 @@ runs:
     - id: resolve
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-        REPO="${{ inputs.repo }}"
+        REPO="${{ inputs.repository }}"
         INPUT_TAG="${{ inputs.input-tag }}"
         PREFIX="${{ inputs.tag-prefix }}"
 

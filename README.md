@@ -12,7 +12,7 @@ Two lint checks enforce the conventions:
 - [shared/_lint/check-no-pwsh.sh](shared/_lint/check-no-pwsh.sh) (via `.github/workflows/lint-shell-policy.yml`) fails PRs that contain any `shell: pwsh` or `.ps1` files (except `shared/_test-*` harnesses).
 - [shared/_lint/check-no-raw-gh.sh](shared/_lint/check-no-raw-gh.sh) (via `.github/workflows/lint-gh-usage.yml`) fails PRs that call `gh` without the `gh_retry` wrapper. Whitelist: `gh auth status`, `gh api rate_limit`.
 
-## cleanup-prereleases
+## cleanup-github-prereleases
 
 Cleans up prerelease git tags, GitHub releases, and Docker image tags that are no longer needed.
 
@@ -29,7 +29,7 @@ Cleans up prerelease git tags, GitHub releases, and Docker image tags that are n
 ### Usage
 
 ```yaml
-- uses: optivem/actions/cleanup-prereleases@v1
+- uses: optivem/actions/cleanup-github-prereleases@v1
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -82,6 +82,6 @@ Cleans up superseded GitHub deployments that are no longer needed.
 
 ### Ordering note
 
-Run this action **before** `cleanup-prereleases` in the same workflow — the
+Run this action **before** `cleanup-github-prereleases` in the same workflow — the
 released-RC logic relies on RC git tags being present to resolve SHAs, and
-`cleanup-prereleases` deletes those tags immediately for released versions.
+`cleanup-github-prereleases` deletes those tags immediately for released versions.

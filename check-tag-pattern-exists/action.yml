@@ -9,11 +9,11 @@ inputs:
   tag-pattern:
     description: 'Tag pattern to match (e.g., meta-v*)'
     required: true
-  repo:
+  repository:
     description: 'Repository in owner/repo format'
     required: false
     default: ${{ github.repository }}
-  github-token:
+  token:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
@@ -35,8 +35,8 @@ runs:
       shell: bash
       env:
         TAG_PATTERN: ${{ inputs.tag-pattern }}
-        REPO: ${{ inputs.repo }}
-        TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
         echo "Checking for tags matching '$TAG_PATTERN' in $REPO..."

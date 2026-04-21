@@ -2,7 +2,7 @@
 #
 # cleanup-deployments.sh — delete superseded GitHub deployments.
 #
-# Mirrors cleanup-prereleases logic, adapted for deployments:
+# Mirrors cleanup-github-prereleases logic, adapted for deployments:
 #
 # Scenario 1 — Released versions (final tag vX.Y.Z exists):
 #   - Immediately delete deployments whose SHA corresponds to any
@@ -16,7 +16,7 @@
 # GitHub requires a deployment to be inactive before deletion, so each
 # deployment gets a new "inactive" status created before the DELETE call.
 #
-# IMPORTANT: run this action BEFORE cleanup-prereleases — Scenario 1
+# IMPORTANT: run this action BEFORE cleanup-github-prereleases — Scenario 1
 # relies on the RC git tags still being present to resolve SHAs.
 
 set -euo pipefail

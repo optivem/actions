@@ -16,14 +16,14 @@ inputs:
     description: 'Commit whose statuses are inspected. Defaults to `github.sha`.'
     required: false
     default: ${{ github.sha }}
-  repo-owner:
-    description: 'Repository owner (organization or username). Defaults to the current repository owner.'
+  repository:
+    description: 'Repository in "owner/name" form. Defaults to the current repository.'
     required: false
-    default: ${{ github.repository_owner }}
-  repo-name:
-    description: 'Repository name. Defaults to the current repository name.'
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
     required: false
-    default: ${{ github.event.repository.name }}
+    default: ${{ github.token }}
 
 outputs:
   changed:
@@ -43,12 +43,11 @@ runs:
       id: check
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
         SUBJECT_SHA: ${{ inputs.subject-sha }}
         STATUS_CONTEXT: ${{ inputs.status-context }}
         HEAD_SHA: ${{ inputs.head-sha }}
-        REPO_OWNER: ${{ inputs.repo-owner }}
-        REPO_NAME: ${{ inputs.repo-name }}
+        REPOSITORY: ${{ inputs.repository }}
       run: |
         set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
@@ -62,7 +61,7 @@ runs:
         echo "Subject SHA: $SUBJECT_SHA"
         echo "Status context: $STATUS_CONTEXT"
 
-        if ! statuses=$(gh_retry api "repos/${REPO_OWNER}/${REPO_NAME}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
+        if ! statuses=$(gh_retry api "repos/${REPOSITORY}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
           echo "::warning::Could not fetch commit statuses — failing open to changed=true. Details: $statuses"
           {
             echo "changed=true"

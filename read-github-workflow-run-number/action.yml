@@ -1,4 +1,4 @@
-name: 'Read Workflow Run Number'
+name: 'Read GitHub Workflow Run Number'
 description: 'Given a workflow run database ID, return its run_number (the per-workflow sequential counter shown in the UI, e.g. 42 for run #42).'
 
 inputs:
@@ -9,7 +9,7 @@ inputs:
     description: 'Repository in owner/repo format'
     required: false
     default: ${{ github.repository }}
-  github-token:
+  token:
     description: 'Token used to authenticate the GitHub API call'
     required: false
     default: ${{ github.token }}
@@ -24,7 +24,7 @@ runs:
   steps:
     - id: read
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ inputs.token }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"

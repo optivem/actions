@@ -4,7 +4,7 @@ inputs:
   workflow:
     description: 'Workflow filename to trigger (e.g., monolith-java-commit-stage.yml)'
     required: true
-  repo:
+  repository:
     description: 'Repository in owner/repo format'
     required: false
     default: ${{ github.repository }}
@@ -61,7 +61,7 @@ runs:
 
         # --- Trigger workflow ---
         gh_retry workflow run "${{ inputs.workflow }}" \
-          --repo "${{ inputs.repo }}" \
+          --repo "${{ inputs.repository }}" \
           --ref "${{ inputs.ref }}" \
           $input_flags
 
@@ -71,7 +71,7 @@ runs:
         # --- Capture run ID ---
         run_id=$(gh_retry run list \
           --workflow="${{ inputs.workflow }}" \
-          --repo "${{ inputs.repo }}" \
+          --repo "${{ inputs.repository }}" \
           --branch "${{ inputs.ref }}" \
           --limit 1 --json databaseId --jq '.[0].databaseId')
         echo "run_id=$run_id" >> $GITHUB_OUTPUT
@@ -85,6 +85,6 @@ runs:
         run_id="${{ steps.trigger.outputs.run_id }}"
         echo "Waiting for run $run_id..."
         gh_retry run watch "$run_id" \
-          --repo "${{ inputs.repo }}" \
+          --repo "${{ inputs.repository }}" \
           --exit-status \
           --interval ${{ inputs.poll-interval }}

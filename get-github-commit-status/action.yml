@@ -15,10 +15,14 @@ inputs:
     description: 'Required state filter (success, failure, pending, error). Empty = any state.'
     required: false
     default: 'success'
-  repo:
+  repository:
     description: 'Repository in "owner/name" form. Default: current repository.'
     required: false
     default: ${{ github.repository }}
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 outputs:
   description:
     description: 'The description field of the matched status'
@@ -35,8 +39,8 @@ runs:
     - id: read
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
-        REPO: ${{ inputs.repo }}
+        GH_TOKEN: ${{ inputs.token }}
+        REPO: ${{ inputs.repository }}
         SHA: ${{ inputs.sha }}
         CONTEXT: ${{ inputs.context }}
         STATE_FILTER: ${{ inputs.state }}

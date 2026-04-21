@@ -7,7 +7,7 @@ inputs:
   commit-sha:
     description: 'The commit SHA to match against'
     required: true
-  repo:
+  repository:
     description: 'Repository in owner/repo format'
     required: false
     default: ${{ github.repository }}
@@ -23,6 +23,10 @@ inputs:
     description: 'Pause when remaining API requests fall below this number (default: 50)'
     required: false
     default: '50'
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 outputs:
   run-id:
     description: 'The database ID of the matched workflow run'
@@ -34,7 +38,7 @@ runs:
     - name: Wait for ${{ inputs.workflow }}
       id: wait
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
@@ -57,7 +61,7 @@ runs:
           # --- Find run by commit SHA ---
           run_id=$(gh_retry run list \
             --workflow="${{ inputs.workflow }}" \
-            --repo "${{ inputs.repo }}" \
+            --repo "${{ inputs.repository }}" \
             --limit 5 \
             --json databaseId,headSha \
             --jq "[.[] | select(.headSha == \"$commit_sha\")] | .[0].databaseId")
@@ -66,7 +70,7 @@ runs:
             echo "Found run $run_id, watching..."
             echo "run_id=$run_id" >> $GITHUB_OUTPUT
             gh_retry run watch "$run_id" \
-              --repo "${{ inputs.repo }}" \
+              --repo "${{ inputs.repository }}" \
               --exit-status \
               --interval ${{ inputs.watch-interval }}
             break

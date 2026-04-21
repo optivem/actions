@@ -1,19 +1,21 @@
-name: 'Resolve Tag from SHA'
-description: 'Finds the first tag in a repository that points at a given commit SHA. Tool-agnostic — uses git ls-remote, works against any git remote.'
+name: 'Resolve Latest Tag from SHA'
+description: 'Finds the highest tag (by version sort) matching a glob pattern that points at a given commit SHA. Tool-agnostic — uses git ls-remote, works against any git remote.'
 author: 'Optivem'
 branding:
   icon: 'tag'
   color: 'green'
 
 inputs:
-  repository:
+  repo:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
-    required: false
-    default: ${{ github.repository }}
+    required: true
   sha:
     description: 'Commit SHA to look up'
     required: true
-  token:
+  pattern:
+    description: 'Tag glob pattern (e.g. monolith-typescript-v1.0.26-rc.*)'
+    required: true
+  github-token:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
@@ -24,7 +26,7 @@ inputs:
 
 outputs:
   tag:
-    description: 'The first tag pointing at the SHA, or empty string if none found'
+    description: 'The highest tag (by version sort) matching the pattern and pointing at the SHA, or empty string if none found'
     value: ${{ steps.resolve.outputs.tag }}
 
 runs:
@@ -33,9 +35,10 @@ runs:
     - id: resolve
       shell: bash
       env:
-        REPO: ${{ inputs.repository }}
+        REPO: ${{ inputs.repo }}
         SHA: ${{ inputs.sha }}
-        TOKEN: ${{ inputs.token }}
+        PATTERN: ${{ inputs.pattern }}
+        TOKEN: ${{ inputs.github-token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
         # TODO(scale): git ls-remote --tags fetches the full tag list and filters client-side.
@@ -47,20 +50,26 @@ runs:
         # Annotated tags appear twice: once for the tag-object SHA (refs/tags/X) and once
         # peeled to the commit it points at (refs/tags/X^{}). Lightweight tags appear once
         # with the commit SHA directly. Match on the commit SHA; strip the "refs/tags/"
-        # prefix and any "^{}" suffix to recover the tag name.
-        TAG=$(git ls-remote --tags "$remote_url" | awk -v sha="$SHA" '
-          $1 == sha {
-            ref = $2
-            sub(/^refs\/tags\//, "", ref)
-            sub(/\^\{\}$/, "", ref)
-            print ref
-            exit
-          }
-        ')
+        # prefix and any "^{}" suffix to recover the tag name. Then filter by the caller's
+        # glob pattern and pick the highest by version sort.
+        TAG=$(
+          git ls-remote --tags "$remote_url" | awk -v sha="$SHA" '
+            $1 == sha {
+              ref = $2
+              sub(/^refs\/tags\//, "", ref)
+              sub(/\^\{\}$/, "", ref)
+              print ref
+            }
+          ' | while IFS= read -r t; do
+            case "$t" in
+              $PATTERN) echo "$t" ;;
+            esac
+          done | sort -V | tail -1
+        )
 
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
         if [ -n "$TAG" ]; then
-          echo "Resolved $REPO SHA $SHA to tag: $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo "Resolved $REPO SHA $SHA to tag: $TAG (pattern: $PATTERN)" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "No tag found in $REPO pointing at $SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "No tag matching '$PATTERN' found in $REPO pointing at $SHA" >> "$GITHUB_STEP_SUMMARY"
         fi

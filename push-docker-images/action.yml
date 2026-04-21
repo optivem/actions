@@ -1,4 +1,4 @@
-name: 'Push Docker Image'
+name: 'Push Docker Images'
 description: 'Pushes a pre-built Docker image to a container registry'
 author: 'Optivem'
 branding:

@@ -7,14 +7,15 @@ branding:
   color: 'green'
 
 inputs:
-  repo:
+  repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop). Resolved against the configured git-host (defaults to github.com).'
-    required: true
+    required: false
+    default: ${{ github.repository }}
   ref:
     description: 'Git ref to resolve (branch, tag, or SHA). Empty defaults to "main".'
     required: false
     default: 'main'
-  github-token:
+  token:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
@@ -37,9 +38,9 @@ runs:
     - id: resolve
       shell: bash
       env:
-        REPO: ${{ inputs.repo }}
+        REPO: ${{ inputs.repository }}
         REF: ${{ inputs.ref }}
-        TOKEN: ${{ inputs.github-token }}
+        TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
         set -euo pipefail

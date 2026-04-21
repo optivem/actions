@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# cleanup-prereleases.sh — delete prerelease git tags, GitHub releases, and
+# cleanup-github-prereleases.sh — delete prerelease git tags, GitHub releases, and
 # Docker image tags that are no longer needed.
 #
 # Three scenarios:

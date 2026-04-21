@@ -9,11 +9,11 @@ inputs:
   tag:
     description: 'Git tag to require (e.g., meta-v1.0.0-rc.1, monolith-java-v1.0.0)'
     required: true
-  repo:
+  repository:
     description: 'Repository in owner/repo format'
     required: false
     default: ${{ github.repository }}
-  github-token:
+  token:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
@@ -29,8 +29,8 @@ runs:
       shell: bash
       env:
         TAG: ${{ inputs.tag }}
-        REPO: ${{ inputs.repo }}
-        TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ inputs.repository }}
+        TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
         echo "Checking if tag '$TAG' exists on $REPO..."

@@ -44,6 +44,19 @@ For each CD-alignment finding, cite the practice (chapter or concept name from F
 
 ---
 
+## 2b. Mainstream GitHub Actions ecosystem alignment (mainstream-first)
+
+The rubric's top-of-file "Mainstream-first principle" declares that when mainstream ecosystem conventions conflict with internal rubric conventions, mainstream wins. Enforce this when reviewing — it is a meta-rule about the rubric's own posture.
+
+Check for rules that push the audited repo toward a private style dialect rather than mainstream Marketplace / `actions/*` / well-known third-party conventions:
+
+- **Verb prescriptions that diverge from ecosystem.** `check-*` as "assert-and-fail-only" vs. `has-*` as "query" is a style-guide invention, not Marketplace convention. `get-*` as "banned in favour of `read-*`" is similarly a private dialect. Flag any rubric rule that enforces such splits.
+- **Input-name prescriptions that diverge from `actions/checkout`.** The canonical inputs are `token`, `ref`, `repository`, `path`, `working-directory`. A rubric rule that prefers short aliases (`repo`) without an explicit mainstream justification is drift.
+- **Tier-marking prefixes on universal concepts.** Adding `github` to action names for concepts that exist identically off-platform is internal tier-signalling, not mainstream. Only genuinely platform-specific concepts (Releases, Deployments, workflow runs, commit statuses, Packages) warrant the prefix.
+- **Pedagogical conventions leaking outside their scope.** The teaching-clarity override is narrow; it must require active curricular use, not just "this repo's style." Flag any expansion of teaching-clarity into general style prescription.
+
+For each finding here: quote the rule (file + line), name the mainstream counter-convention and cite where it's established (specific `actions/*` action, Marketplace listing, well-known third-party action), and propose a concrete rewrite.
+
 ## 3. Alignment with DORA, SRE, and mainstream DevOps
 
 Beyond Farley/Humble, check alignment with:

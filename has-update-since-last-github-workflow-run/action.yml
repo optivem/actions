@@ -12,14 +12,14 @@ inputs:
   workflow-name:
     description: 'Workflow file name or display name to check last successful run against (e.g. `github.workflow`).'
     required: true
-  repo-owner:
-    description: 'Repository owner (organization or username). Defaults to the current repository owner.'
+  repository:
+    description: 'Repository in "owner/name" form. Defaults to the current repository.'
     required: false
-    default: ${{ github.repository_owner }}
-  repo-name:
-    description: 'Repository name. Defaults to the current repository name.'
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
     required: false
-    default: ${{ github.event.repository.name }}
+    default: ${{ github.token }}
 
 outputs:
   changed:
@@ -39,11 +39,10 @@ runs:
       id: check
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
         LAST_UPDATED_AT: ${{ inputs.last-updated-at }}
         WORKFLOW_NAME: ${{ inputs.workflow-name }}
-        REPO_OWNER: ${{ inputs.repo-owner }}
-        REPO_NAME: ${{ inputs.repo-name }}
+        REPOSITORY: ${{ inputs.repository }}
       run: |
         set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
@@ -56,7 +55,7 @@ runs:
         # Most recent successful run of this workflow. Limit 50 to handle short bursts
         # of failed/in-progress runs preceding the last success.
         last_run_at=$(gh_retry run list \
-          --repo "${REPO_OWNER}/${REPO_NAME}" \
+          --repo "${REPOSITORY}" \
           --workflow "$WORKFLOW_NAME" \
           --status completed \
           --limit 50 \

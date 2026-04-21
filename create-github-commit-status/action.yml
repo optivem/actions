@@ -24,12 +24,16 @@ inputs:
     description: 'URL the status links to. Empty = link to the current workflow run.'
     required: false
     default: ''
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 runs:
   using: 'composite'
   steps:
     - shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
         INPUT_SHA: ${{ inputs.sha }}
         CONTEXT: ${{ inputs.context }}
         STATE: ${{ inputs.state }}

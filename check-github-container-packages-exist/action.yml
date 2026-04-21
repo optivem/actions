@@ -5,6 +5,12 @@ branding:
   icon: 'package'
   color: 'blue'
 
+inputs:
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
+
 outputs:
   exist:
     description: 'Whether container artifacts exist for this repository (true/false)'
@@ -27,4 +33,4 @@ runs:
           echo "exist=true" >> "$GITHUB_OUTPUT"
         fi
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ inputs.token }}
