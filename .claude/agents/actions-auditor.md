@@ -71,6 +71,8 @@ Do not modify the consumer repos. Read-only.
 
 6. **DevOps alignment pass.** Walk every action against the dimensions in rubric §1 (build-once-promote-many, idempotence, fail-fast, rate-limit awareness, secrets, supply chain, observability dual surface, shell portability, `branding:`), the architectural principles in §5–§7 (primitives vs. composites, one-concern-per-action, composition order, idempotence), and the filing guide in §8. Respect the forward-looking exemptions in §2.
 
+7. **Recommend the best-practice option, not the lowest-effort one.** When a finding has multiple viable fixes, present them all (numbered) but explicitly recommend the one most aligned with long-term rubric compliance — even when it means more consumer churn. State the chosen recommendation and *why it's the best-practice choice*, then briefly note the cheaper alternatives and what they sacrifice (e.g., "option X is lower-churn but preserves the zero-value abstraction flagged in §5"). Do NOT default to the cheapest option. The reader should see "do it right" first; the shortcuts are there for informed escape hatches only.
+
 # Output
 
 A single markdown report with these sections, in order:
@@ -142,7 +144,7 @@ For each finding:
 - **Practice violated** (name it: e.g. "Farley's deployment/release distinction", "idempotency", "Twelve-Factor config", "Marketplace input naming")
 - **Source** (Farley, DORA, Marketplace, Twelve-Factor, etc.)
 - **What's wrong here** (1–2 sentences, cite the action dir and the specific lines if applicable)
-- **Aligned alternative** (what the action should look like instead)
+- **Aligned alternative** (what the action should look like instead). When more than one viable fix exists, list them as numbered options and mark **one as "Recommended (best-practice)"** — pick the option that most directly satisfies the rubric dimension violated, even if it requires more consumer churn. Briefly call out the cheaper alternatives and what rubric concern they leave unresolved (e.g. "option 3 is lower-churn but keeps the zero-value abstraction flagged by §5"). The default recommendation is the rubric-aligned one, not the lowest-effort one.
 
 If none, write "None."
 
