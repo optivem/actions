@@ -1,0 +1,53 @@
+name: 'Check SHA Is On Branch'
+description: 'Checks whether a given commit SHA is an ancestor of a branch (default: main). Outputs on-branch=true/false. Use to guard downstream steps against workflow_dispatch inputs pointing at commits not in the base branch.'
+author: 'Optivem'
+
+branding:
+  icon: 'git-branch'
+  color: 'green'
+
+inputs:
+  sha:
+    description: 'Git SHA to check. Defaults to github.sha.'
+    required: false
+    default: ${{ github.sha }}
+  base-branch:
+    description: 'Base branch to check ancestry against.'
+    required: false
+    default: 'main'
+
+outputs:
+  on-branch:
+    description: 'true if the SHA is an ancestor of the base branch, false otherwise'
+    value: ${{ steps.check.outputs.on-branch }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: check
+      shell: bash
+      env:
+        SHA: ${{ inputs.sha }}
+        BASE_BRANCH: ${{ inputs.base-branch }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$SHA" ]; then
+          echo "::error::Input 'sha' is required and was empty"
+          exit 1
+        fi
+
+        if [ -z "$BASE_BRANCH" ]; then
+          echo "::error::Input 'base-branch' is required and was empty"
+          exit 1
+        fi
+
+        git fetch origin "$BASE_BRANCH" --quiet
+
+        if git merge-base --is-ancestor "$SHA" "origin/$BASE_BRANCH"; then
+          echo "on-branch=true" >> "$GITHUB_OUTPUT"
+          echo "SHA $SHA is on origin/$BASE_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "on-branch=false" >> "$GITHUB_OUTPUT"
+          echo "SHA $SHA is NOT on origin/$BASE_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+        fi

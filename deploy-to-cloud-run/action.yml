@@ -18,7 +18,7 @@ inputs:
     required: false
     default: 'us-central1'
   service-name:
-    description: 'Cloud Run service name (e.g., shop-monolith-java)'
+    description: 'Full Cloud Run service name to deploy to (e.g., shop-monolith-java-production). Caller owns the naming convention; the action does not append the environment.'
     required: true
   port:
     description: 'Container port to expose'
@@ -74,7 +74,7 @@ runs:
         IMAGE_URL: ${{ inputs.image-url }}
         PROJECT_ID: ${{ inputs.project-id }}
         REGION: ${{ inputs.region }}
-        SERVICE_NAME_INPUT: ${{ inputs.service-name }}
+        SERVICE_NAME: ${{ inputs.service-name }}
         PORT: ${{ inputs.port }}
         ENV_VARS: ${{ inputs.env-vars }}
         SECRETS_INPUT: ${{ inputs.secrets }}
@@ -90,8 +90,6 @@ runs:
           echo "::error::image-url must include a tag (image:tag) or digest (image@sha256:...): '$IMAGE_URL'"
           exit 1
         fi
-
-        SERVICE_NAME="${SERVICE_NAME_INPUT}-${ENVIRONMENT}"
 
         echo "Deploying $VERSION to Cloud Run service $SERVICE_NAME in $REGION (environment: $ENVIRONMENT)"
         echo "Image: $IMAGE_URL"
