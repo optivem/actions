@@ -1,5 +1,5 @@
 name: 'Deploy to Cloud Run'
-description: 'Deploy a Docker image to Google Cloud Run and wait for the service to be ready'
+description: 'Deploy a Docker image to Google Cloud Run. Optionally waits for the service to be ready (controlled by `wait-for-ready`).'
 inputs:
   environment:
     description: 'Target deployment environment (e.g., acceptance, qa, production)'
@@ -50,6 +50,10 @@ inputs:
     default: '3'
   allow-unauthenticated:
     description: 'Allow unauthenticated access to the service'
+    required: false
+    default: 'true'
+  wait-for-ready:
+    description: 'Whether to poll the service URL after deploy and fail if it does not become ready. Set to false to publish without verifying readiness (e.g. canary deploys with custom health checks).'
     required: false
     default: 'true'
 
@@ -118,6 +122,7 @@ runs:
       shell: bash
 
     - name: Wait for Service to be Ready
+      if: inputs.wait-for-ready == 'true'
       uses: optivem/actions/wait-for-url@v1
       with:
         url: ${{ steps.deploy.outputs.service-url }}

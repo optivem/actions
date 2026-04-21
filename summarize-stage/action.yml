@@ -1,5 +1,5 @@
 name: 'Summarize Stage'
-description: 'Generate a comprehensive summary of any stage results with customizable success content'
+description: 'Internal primitive — rendering engine used by `summarize-commit-stage` and `summarize-system-stage`. Callable directly, but the stage-specific composites are the expected entry points.'
 author: 'Optivem'
 
 branding:
@@ -21,14 +21,6 @@ inputs:
     description: 'Custom content to display on success (supports markdown)'
     required: false
     default: ''
-  stage-failure-content:
-    description: 'Custom content to display on failure (supports markdown). Shown in place of the default "check the job logs" message.'
-    required: false
-    default: ''
-  stage-cancelled-content:
-    description: 'Custom content to display on cancelled (supports markdown). Shown in place of the default cancellation message.'
-    required: false
-    default: ''
   stage-skipped-content:
     description: 'Custom content to display on skipped (supports markdown). When provided, the stage is treated as a first-class skipped outcome rather than unknown.'
     required: false
@@ -44,8 +36,6 @@ runs:
         STAGE_NAME: ${{ inputs.stage-name }}
         STAGE_CONTENT: ${{ inputs.stage-content }}
         STAGE_SUCCESS_CONTENT: ${{ inputs.stage-success-content }}
-        STAGE_FAILURE_CONTENT: ${{ inputs.stage-failure-content }}
-        STAGE_CANCELLED_CONTENT: ${{ inputs.stage-cancelled-content }}
         STAGE_SKIPPED_CONTENT: ${{ inputs.stage-skipped-content }}
       run: |
         case "$STAGE_RESULT" in
@@ -98,10 +88,10 @@ runs:
               write_content "$STAGE_SUCCESS_CONTENT" "Stage completed successfully."
               ;;
             failure)
-              write_content "$STAGE_FAILURE_CONTENT" "The stage process encountered an error. Check the job logs for details."
+              echo "The stage process encountered an error. Check the job logs for details."
               ;;
             cancelled)
-              write_content "$STAGE_CANCELLED_CONTENT" "⏹️ **Stage process was cancelled**"
+              echo "⏹️ **Stage process was cancelled**"
               ;;
             skipped)
               write_content "$STAGE_SKIPPED_CONTENT" "Stage was skipped."

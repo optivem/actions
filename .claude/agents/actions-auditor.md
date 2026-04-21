@@ -152,7 +152,15 @@ After producing the report, also write an actionable plan file to:
 
 Use the current UTC timestamp. Get it with `date -u +%Y%m%d-%H%M%S`. Create the `.plans/` directory if it does not exist.
 
-The plan file contains **only the actionable items**, one checklist entry per change, ordered by priority (highest-impact first). Skip anything that was flagged as "None" or classified `[SKIPPED — breaking]` when `backwards_compatible = true`.
+The plan file contains **only actionable items that require a code change**, one checklist entry per change, ordered by priority (highest-impact first).
+
+**Exclude from the plan file:**
+- Items classified as "keep as-is", "retained as-is", "No action required", "KEEP all", or any finding where the conclusion is not to change the code.
+- Items that exist only to confirm an audit pass (e.g. "Listed only to confirm — not actionable").
+- Items whose work is already covered by another item (duplicates in the action queue).
+- Anything flagged as "None" or classified `[SKIPPED — breaking]` when `backwards_compatible = true`.
+
+The report can — and should — still document the "examined and rejected" findings for traceability, but the plan file is strictly the execution queue. If an item has no code change to execute, it does not belong in the plan file.
 
 Format:
 

@@ -1,0 +1,50 @@
+name: 'Start Docker Compose'
+description: 'Starts a Docker Compose stack in detached mode. Pair with `wait-for-urls` to verify readiness after start.'
+
+inputs:
+  environment:
+    description: 'Label used in logs to identify the target (e.g., acceptance, qa, production) — display only'
+    required: true
+  version:
+    description: 'Version label used in logs (e.g., v1.0.0-rc.1) — display only'
+    required: true
+  image-urls:
+    description: 'Docker image URLs being run (JSON array format) — surfaced in logs'
+    required: true
+  compose-file:
+    description: 'Docker Compose file to use (e.g., docker-compose.yml)'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory containing the Docker Compose file'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Start Docker Compose
+      run: |
+        echo "🚀 Starting system version ${{ inputs.version }} for ${{ inputs.environment }}..."
+        echo ""
+
+        if [[ -n "${{ inputs.image-urls }}" ]]; then
+          echo "📦 Images:"
+          echo '${{ inputs.image-urls }}' | jq -r '.[]' | while IFS= read -r image_url; do
+            if [[ -n "$image_url" ]]; then
+              echo "   🐳 $image_url"
+            fi
+          done
+          echo ""
+        fi
+
+        echo "🐳 Running docker compose up..."
+
+        COMPOSE_FILE="${{ inputs.compose-file }}"
+        if [[ -n "$COMPOSE_FILE" ]]; then
+          echo "📄 Using compose file: $COMPOSE_FILE"
+          docker compose -f "$COMPOSE_FILE" up -d
+        else
+          docker compose up -d
+        fi
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}

@@ -1,0 +1,89 @@
+name: 'Wait for URLs'
+description: 'Polls a list of HTTP URLs until each responds with success (curl -f) or max attempts are exhausted. On failure, optionally dumps Docker Compose logs and container status.'
+author: 'Optivem'
+branding:
+  icon: 'clock'
+  color: 'blue'
+
+inputs:
+  systems:
+    description: 'JSON array of systems to health check, each with name and url (e.g., [{"name": "API", "url": "http://localhost:8080/health"}])'
+    required: true
+  compose-file:
+    description: 'Docker Compose file for log dump on failure. If set, runs `docker compose -f <file> logs/ps` when any URL fails.'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for the Docker Compose log dump (used only when compose-file is set).'
+    required: false
+    default: '.'
+  max-attempts:
+    description: 'Maximum number of polling attempts per URL'
+    required: false
+    default: '30'
+  wait-seconds:
+    description: 'Seconds to wait between attempts'
+    required: false
+    default: '10'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Wait for URLs
+      run: |
+        SYSTEMS='${{ inputs.systems }}'
+        COMPOSE_FILE="${{ inputs.compose-file }}"
+        MAX_ATTEMPTS=${{ inputs.max-attempts }}
+        WAIT_SECONDS=${{ inputs.wait-seconds }}
+
+        COUNT=$(echo "$SYSTEMS" | jq 'length')
+
+        if [[ "$COUNT" -eq 0 ]]; then
+          echo "⚠️ No system URLs provided, skipping health checks"
+          exit 0
+        fi
+
+        echo "⏳ Waiting for $COUNT system(s) to be ready..."
+        echo ""
+
+        FAILED=0
+
+        for i in $(seq 0 $((COUNT - 1))); do
+          NAME=$(echo "$SYSTEMS" | jq -r ".[$i].name")
+          URL=$(echo "$SYSTEMS" | jq -r ".[$i].url")
+
+          echo "⏳ Waiting for $NAME at $URL..."
+
+          attempt=1
+
+          while [ $attempt -le $MAX_ATTEMPTS ]; do
+            if curl -f "$URL" > /dev/null 2>&1; then
+              echo "✅ $NAME is ready!"
+              break
+            fi
+            echo "🔄 Attempt $attempt/$MAX_ATTEMPTS: $NAME not ready yet, waiting $WAIT_SECONDS seconds..."
+            sleep $WAIT_SECONDS
+            attempt=$((attempt + 1))
+          done
+
+          if [ $attempt -gt $MAX_ATTEMPTS ]; then
+            echo "❌ $NAME failed to become ready after $MAX_ATTEMPTS attempts"
+            FAILED=1
+          fi
+
+          echo ""
+        done
+
+        if [ $FAILED -eq 1 ]; then
+          if [[ -n "$COMPOSE_FILE" ]]; then
+            echo "🔍 Checking Docker Compose container logs:"
+            docker compose -f "$COMPOSE_FILE" logs --timestamps
+            echo "🐳 Docker Compose container status:"
+            docker compose -f "$COMPOSE_FILE" ps
+          fi
+          exit 1
+        fi
+
+        echo "✅ All systems are ready!"
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
