@@ -1,5 +1,5 @@
-name: 'Summarize Stage'
-description: 'Internal primitive — rendering engine used by `summarize-commit-stage` and `summarize-system-stage`. Callable directly, but the stage-specific composites are the expected entry points.'
+name: 'Render Stage Summary'
+description: 'Internal primitive — rendering engine used by `compose-commit-stage-summary` and `compose-system-stage-summary`. Callable directly, but the stage-specific composites are the expected entry points.'
 author: 'Optivem'
 
 branding:

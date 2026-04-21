@@ -1,5 +1,5 @@
-name: 'Summarize Commit Stage'
-description: 'Generate a comprehensive summary of the commit stage results including build status and Docker image information'
+name: 'Compose Commit Stage Summary'
+description: 'Composes a comprehensive markdown summary of the commit stage (build status, Docker image info) and emits it to $GITHUB_STEP_SUMMARY.'
 author: 'Optivem'
 
 branding:
@@ -31,7 +31,7 @@ runs:
           exit 1
         fi
     - name: Generate Commit Stage Summary
-      uses: optivem/actions/summarize-stage@v1
+      uses: optivem/actions/render-stage-summary@v1
       with:
         stage-result: ${{ inputs.stage-result }}
         stage-name: '${{ inputs.stage-name }}'

@@ -1,5 +1,5 @@
-name: 'Summarize System Stage'
-description: 'Thin composite: validates inputs, formats success + latest artifact arrays via `format-artifact-list`, renders via `summarize-stage`, and emits a `::notice` annotation on skipped.'
+name: 'Compose System Stage Summary'
+description: 'Thin composite: validates inputs, formats success + latest artifact arrays via `format-artifact-list`, renders via `render-stage-summary`, and emits a `::notice` annotation on skipped.'
 author: 'Optivem'
 
 branding:
@@ -71,7 +71,7 @@ runs:
         artifacts: ${{ inputs.latest-artifact-ids }}
 
     - name: Generate System Stage Summary
-      uses: optivem/actions/summarize-stage@v1
+      uses: optivem/actions/render-stage-summary@v1
       with:
         stage-name: ${{ inputs.stage-name }}
         stage-result: ${{ inputs.stage-result }}
