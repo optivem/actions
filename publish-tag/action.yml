@@ -8,7 +8,7 @@ inputs:
   tag:
     description: 'Git tag name to create (e.g., v1.0.3-rc.1)'
     required: true
-  sha:
+  commit-sha:
     description: 'Commit SHA to tag. Empty = current HEAD.'
     required: false
     default: ''
@@ -23,7 +23,7 @@ runs:
       shell: bash
       env:
         TAG: ${{ inputs.tag }}
-        SHA: ${{ inputs.sha }}
+        SHA: ${{ inputs.commit-sha }}
         TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail

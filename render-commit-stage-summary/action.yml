@@ -1,5 +1,5 @@
-name: 'Compose Commit Stage Summary'
-description: 'Composes a comprehensive markdown summary of the commit stage (build status, Docker image info) and emits it to $GITHUB_STEP_SUMMARY.'
+name: 'Render Commit Stage Summary'
+description: 'Renders a comprehensive markdown summary of the commit stage (build status, Docker image info) and emits it to $GITHUB_STEP_SUMMARY.'
 author: 'Optivem'
 
 branding:
@@ -17,6 +17,7 @@ inputs:
   success-artifact-url:
     description: 'URL of the published artifact (e.g., Docker image, installer, package)'
     required: false
+    default: ''
 
 
 

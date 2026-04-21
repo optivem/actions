@@ -117,7 +117,7 @@ Three conceptual tiers. Only the third gets a prefix.
 
   *Tier 1 covers actions whose **concept** is universal. Some Tier 1 actions in this repo (e.g. `setup-node`, `setup-java-gradle`, `setup-dotnet`) are implemented via Marketplace setup actions (`actions/setup-*@v5`), which are GitHub-Actions-specific under the hood. The **name** is still Tier 1 because the concept ports (every CI has a language-runtime setup primitive), but a porting student must rewrite the implementation. Flag such cases as "Tier 1 name, platform-specific implementation" so the porting surface is visible.*
 
-- **Tier 2 — git-native** (any CI, any git host, but requires a git VCS). No prefix. Git is the assumed baseline — adding `git-` to names is redundant because the domain nouns (`tag`, `commit`, `sha`, `ref`, `branch`) already imply git. Examples: `ensure-tag-exists`, `resolve-tag-from-sha`, `create-and-push-tag`, `check-version-unreleased`, `bump-patch-versions`.
+- **Tier 2 — git-native** (any CI, any git host, but requires a git VCS). No prefix. Git is the assumed baseline — adding `git-` to names is redundant because the domain nouns (`tag`, `commit`, `sha`, `ref`, `branch`) already imply git. Examples: `ensure-tag-exists`, `resolve-tag-from-sha`, `publish-tag`, `check-version-unreleased`, `bump-patch-versions`.
 
   *Implementation sub-rule for Tier 2:* Tier 2 actions must not hardcode `github.com` in their implementation. Remote URLs should be parameterised — either accept a `git-host` input with default `github.com`, or derive the host from a `repo` input given in URL form. The pattern `https://x-access-token:${TOKEN}@github.com/...` breaks Tier 2's portability claim: a student porting to GitLab, Bitbucket, Gitea, or self-hosted would have to edit every Tier 2 action. Flag actions that hardcode the git host as a **portability violation** under **DevOps alignment findings** → "Tool-agnostic composition".
 
@@ -235,7 +235,7 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 | **Version source** | release | VERSION files / `package.json` / `pom.xml` / Cargo.toml / latest git tag | `read-target-version`, `compose-prerelease-version` |
 | **Artifact construction** | build | Docker images / npm packages / Maven JARs / NuGet / zip bundles | `build-docker-image` (build step only — NOT tag-with-release-version) |
 | **Artifact release tagging** | release | `docker tag :v{version}` / `npm publish --tag` / Maven release plugin | `tag-docker-images`, future: `tag-npm-package`, `publish-maven-artifact` |
-| **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `create-and-push-tag`, `ensure-tag-exists` |
+| **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `publish-tag`, `ensure-tag-exists` |
 | **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `create-github-release` |
 | **Commit of generated files** | release | `git push` / Contents API / merge-request PR | `commit-files` |
 | **Status / approval signalling** | release | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-commit-status` |
@@ -303,11 +303,11 @@ Actions that silently succeed on a genuine no-op are fine; actions that *fail* o
 ```
 actions/
   build-and-push-image/action.yml     # concern: artifact type & push
-  create-and-push-tag/action.yml      # concern: git tag creation
+  publish-tag/action.yml      # concern: git tag creation
   create-github-release/action.yml    # concern: release record
 ```
 
-Each primitive accepts only the inputs for its own concern (e.g. `create-and-push-tag` takes `tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
+Each primitive accepts only the inputs for its own concern (e.g. `publish-tag` takes `tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
 
 ```yaml
 jobs:
@@ -316,7 +316,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: optivem/actions/build-and-push-image@v1    # 1. cheapest to reverse
         with: { image: ghcr.io/acme/api, tag: ${{ inputs.version }} }
-      - uses: optivem/actions/create-and-push-tag@v1     # 2. movable
+      - uses: optivem/actions/publish-tag@v1     # 2. movable
         with: { tag: v${{ inputs.version }}, sha: ${{ github.sha }} }
       - uses: optivem/actions/create-github-release@v1   # 3. user-visible
         with: { tag: v${{ inputs.version }}, notes: ${{ inputs.notes }} }

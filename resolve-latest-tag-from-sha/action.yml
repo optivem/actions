@@ -6,16 +6,17 @@ branding:
   color: 'green'
 
 inputs:
-  repo:
+  repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
-    required: true
-  sha:
+    required: false
+    default: ${{ github.repository }}
+  commit-sha:
     description: 'Commit SHA to look up'
     required: true
   pattern:
     description: 'Tag glob pattern (e.g. monolith-typescript-v1.0.26-rc.*)'
     required: true
-  github-token:
+  token:
     description: 'Token for authenticating to the remote'
     required: false
     default: ${{ github.token }}
@@ -35,10 +36,10 @@ runs:
     - id: resolve
       shell: bash
       env:
-        REPO: ${{ inputs.repo }}
-        SHA: ${{ inputs.sha }}
+        REPO: ${{ inputs.repository }}
+        SHA: ${{ inputs.commit-sha }}
         PATTERN: ${{ inputs.pattern }}
-        TOKEN: ${{ inputs.github-token }}
+        TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
         # TODO(scale): git ls-remote --tags fetches the full tag list and filters client-side.

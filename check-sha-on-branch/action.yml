@@ -7,7 +7,7 @@ branding:
   color: 'green'
 
 inputs:
-  sha:
+  commit-sha:
     description: 'Git SHA to check. Defaults to github.sha.'
     required: false
     default: ${{ github.sha }}
@@ -27,13 +27,13 @@ runs:
     - id: check
       shell: bash
       env:
-        SHA: ${{ inputs.sha }}
+        SHA: ${{ inputs.commit-sha }}
         BASE_BRANCH: ${{ inputs.base-branch }}
       run: |
         set -euo pipefail
 
         if [ -z "$SHA" ]; then
-          echo "::error::Input 'sha' is required and was empty"
+          echo "::error::Input 'commit-sha' is required and was empty"
           exit 1
         fi
 

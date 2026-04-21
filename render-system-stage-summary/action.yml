@@ -1,4 +1,4 @@
-name: 'Compose System Stage Summary'
+name: 'Render System Stage Summary'
 description: 'Thin composite: validates inputs, formats success + latest artifact arrays via `format-artifact-list`, renders via `render-stage-summary`, and emits a `::notice` annotation on skipped.'
 author: 'Optivem'
 
@@ -19,21 +19,27 @@ inputs:
   success-version:
     description: 'The version created on success (e.g., prerelease version)'
     required: false
+    default: ''
   success-artifact-ids:
     description: 'The artifact IDs created on success as JSON array. Single artifacts must also be in array format: ["artifact"]. Multiple artifacts: ["artifact1", "artifact2"]'
     required: false
+    default: ''
   skipped-reason:
     description: 'Human-readable reason the stage was skipped (e.g., "No new artifacts since last successful run"). Only used when stage-result is "skipped".'
     required: false
+    default: ''
   latest-artifact-ids:
     description: 'The latest known artifact IDs as JSON array (even though the stage did not run against them). Displayed on skipped. Same format as success-artifact-ids.'
     required: false
+    default: ''
   latest-updated-at:
     description: 'ISO 8601 timestamp of when the latest artifacts were last updated. Displayed on skipped.'
     required: false
+    default: ''
   last-run-at:
     description: 'ISO 8601 timestamp of the last successful run of this workflow. Displayed on skipped.'
     required: false
+    default: ''
 
 
 runs:

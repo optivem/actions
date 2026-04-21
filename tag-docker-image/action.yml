@@ -18,7 +18,7 @@ inputs:
     required: false
     default: '${{ github.repository }}'
   image-name:
-    description: 'Image name embedded in the tagged URL'
+    description: 'Image-name segment embedded in the registry-qualified URL, between the namespace and the tag. Composed into {registry}/{namespace}/{image-name}:{tag}. No registry prefix — e.g. `backend`, not `ghcr.io/org/repo/backend`.'
     required: true
   tags:
     description: 'Tag values to apply, one per line. Each becomes {registry}/{namespace}/{image-name}:{tag}.'

@@ -98,7 +98,7 @@ Fetches the base branch from origin and runs `git merge-base --is-ancestor <sha>
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `sha` | no | `${{ github.sha }}` | Git SHA to check |
+| `commit-sha` | no | `${{ github.sha }}` | Git SHA to check |
 | `base-branch` | no | `main` | Base branch to check ancestry against |
 
 **Outputs**
@@ -233,7 +233,7 @@ For each `{path, content, message}` entry, reads the current file SHA from the G
 | `commits` | JSON array of `{path, commit-sha, content-sha, html-url}` for each file that was committed |
 | `committed` | `true` if at least one file was committed |
 
-### compose-commit-stage-summary
+### render-commit-stage-summary
 
 Thin composite: validates inputs (requires `success-artifact-url` when `stage-result == success`) and delegates to `render-stage-summary` to emit a markdown summary to `$GITHUB_STEP_SUMMARY` with the artifact URL rendered on success.
 
@@ -243,7 +243,7 @@ Thin composite: validates inputs (requires `success-artifact-url` when `stage-re
 |---|---|---|---|
 | `stage-name` | no | `Commit Stage` | Name of the stage being summarized |
 | `stage-result` | yes | — | Result of the stage job (`success`, `failure`, `cancelled`, etc.) |
-| `success-artifact-url` | no | — | URL of the published artifact (e.g., Docker image, installer, package). Required when `stage-result == success`. |
+| `success-artifact-url` | no | `''` | URL of the published artifact (e.g., Docker image, installer, package). Required when `stage-result == success`. |
 
 ### compose-docker-image-urls
 
@@ -336,7 +336,7 @@ Pure string transform. Strips a prerelease suffix (`-rc.N`, `-alpha.N`, `-beta.N
 |---|---|
 | `version` | Release version with prerelease suffix removed (e.g., `v1.0.0`) |
 
-### compose-system-stage-summary
+### render-system-stage-summary
 
 Thin composite that validates inputs, calls `format-artifact-list` twice (for success and latest artifact arrays), delegates to `render-stage-summary` for the markdown body, and emits a `::notice` annotation on `skipped`.
 
@@ -347,23 +347,12 @@ Thin composite that validates inputs, calls `format-artifact-list` twice (for su
 | `stage-name` | yes | — | The name of the stage (e.g., Acceptance, QA, Production) |
 | `stage-result` | yes | — | Overall result of the stage (`success`/`failure`/`skipped`) |
 | `environment` | yes | — | The environment name for this stage |
-| `success-version` | no | — | The version created on success (e.g., prerelease version). Required when `stage-result == success`. |
-| `success-artifact-ids` | no | — | The artifact IDs created on success as JSON array. Single artifacts must also be in array format: `["artifact"]`. Multiple artifacts: `["artifact1", "artifact2"]` |
-| `skipped-reason` | no | — | Human-readable reason the stage was skipped (e.g., "No new artifacts since last successful run"). Only used when `stage-result` is `skipped`. |
-| `latest-artifact-ids` | no | — | The latest known artifact IDs as JSON array (even though the stage did not run against them). Displayed on skipped. |
-| `latest-updated-at` | no | — | ISO 8601 timestamp of when the latest artifacts were last updated. Displayed on skipped. |
-| `last-run-at` | no | — | ISO 8601 timestamp of the last successful run of this workflow. Displayed on skipped. |
-
-### create-and-push-tag
-
-Configures the `github-actions[bot]` git identity, creates a git tag at a given SHA (or HEAD) and pushes it to `origin`. Idempotent: no-ops if the remote tag already points at the same SHA, tolerates concurrent creation, fails only if the remote tag points at a different commit.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `tag` | yes | — | Git tag name to create (e.g., `v1.0.3-rc.1`) |
-| `sha` | no | `` | Commit SHA to tag. Empty = current HEAD. |
+| `success-version` | no | `''` | The version created on success (e.g., prerelease version). Required when `stage-result == success`. |
+| `success-artifact-ids` | no | `''` | The artifact IDs created on success as JSON array. Single artifacts must also be in array format: `["artifact"]`. Multiple artifacts: `["artifact1", "artifact2"]` |
+| `skipped-reason` | no | `''` | Human-readable reason the stage was skipped (e.g., "No new artifacts since last successful run"). Only used when `stage-result` is `skipped`. |
+| `latest-artifact-ids` | no | `''` | The latest known artifact IDs as JSON array (even though the stage did not run against them). Displayed on skipped. |
+| `latest-updated-at` | no | `''` | ISO 8601 timestamp of when the latest artifacts were last updated. Displayed on skipped. |
+| `last-run-at` | no | `''` | ISO 8601 timestamp of the last successful run of this workflow. Displayed on skipped. |
 
 ### create-commit-status
 
@@ -373,7 +362,7 @@ Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit sta
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `sha` | no | `` | Commit SHA to attach the status to. Empty = current commit (`github.sha`). |
+| `commit-sha` | no | `` | Commit SHA to attach the status to. Empty = current commit (`github.sha`). |
 | `context` | yes | — | Status context (label shown on the commit) |
 | `state` | no | `success` | Status state: `success`, `failure`, `pending`, or `error` |
 | `description` | no | `` | Short human-readable description (often the subject identifier, e.g. the verified upstream SHA) |
@@ -516,7 +505,7 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `sha` | yes | — | Commit SHA to read the status from |
+| `commit-sha` | yes | — | Commit SHA to read the status from |
 | `context` | yes | — | Status context to look up |
 | `state` | no | `success` | Required state filter (`success`, `failure`, `pending`, `error`). Empty = any state. |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
@@ -529,24 +518,6 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 | `description` | The description field of the matched status |
 | `state` | The state of the matched status |
 | `target-url` | The `target_url` of the matched status |
-
-### get-github-workflow-run-number
-
-Calls `gh api /repos/{repo}/actions/runs/{run-id}` (via `gh_retry`) with `--jq '.run_number'` to return the sequential run counter (the `#N` shown in the UI) for a given workflow run database ID.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `run-id` | yes | — | The database ID of the workflow run (as returned by `gh run list --json databaseId`) |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
-| `token` | no | `${{ github.token }}` | Token used to authenticate the GitHub API call |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `run-number` | The `run_number` of the workflow run |
 
 ### map-signoff-to-stage-result
 
@@ -584,7 +555,7 @@ Promotes a JSON array of Docker images by pulling each source image, applying a 
 |---|---|
 | `image-urls` | JSON array of Docker image URLs with new tags applied |
 
-### push-docker-images
+### push-docker-image
 
 Logs in to a Docker registry, then runs `docker push` on the SHA-tagged image (with retry: up to 3 attempts, 10s backoff), followed by the latest-tagged URL and optionally a version-tagged URL. Parses the `sha256:` digest from the first push output and composes `image-digest-url` as `{base-image}@{digest}`.
 
@@ -592,10 +563,10 @@ Logs in to a Docker registry, then runs `docker push` on the SHA-tagged image (w
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `image-sha-tag` | yes | — | Full image reference tagged with commit SHA (output from `build-docker-image`) |
-| `image-latest-url` | yes | — | Full image reference tagged with `latest` tag (output from `build-docker-image`) |
+| `image-sha-tag` | yes | — | Fully-qualified image URL tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def` (output from `build-docker-image`) |
+| `image-latest-tag` | yes | — | Fully-qualified image URL tagged with the latest tag, e.g. `ghcr.io/org/repo/svc:latest` (output from `build-docker-image`) |
 | `registry` | no | `ghcr.io` | Container registry URL (e.g., `ghcr.io`, `docker.io`, `gcr.io`) |
-| `image-version-tag` | no | `` | Full image reference tagged with component version (output from `build-docker-image`). Optional. |
+| `image-version-tag` | no | `` | Fully-qualified image URL tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3` (output from `build-docker-image`). Optional. |
 | `registry-username` | no | `${{ github.actor }}` | Username for registry authentication |
 | `token` | no | `${{ github.token }}` | Token for registry authentication. Defaults to `github.token` for GHCR pushes. |
 
@@ -623,7 +594,7 @@ Reads the first line of a VERSION file (stripping whitespace) and exposes it as 
 
 ### render-stage-summary
 
-Internal rendering primitive. Validates `stage-result` is one of `success`/`failure`/`cancelled`/`skipped`, then writes a markdown stage summary (with icons and per-result content blocks) to `$GITHUB_STEP_SUMMARY`. Callable directly, but the stage-specific composites (`compose-commit-stage-summary`, `compose-system-stage-summary`) are the expected entry points.
+Internal rendering primitive. Validates `stage-result` is one of `success`/`failure`/`cancelled`/`skipped`, then writes a markdown stage summary (with icons and per-result content blocks) to `$GITHUB_STEP_SUMMARY`. Callable directly, but the stage-specific composites (`render-commit-stage-summary`, `render-system-stage-summary`) are the expected entry points.
 
 **Inputs**
 
@@ -670,7 +641,7 @@ Delegates to `resolve-docker-image-digests.sh`. For each input image URL, querie
 | Name | Description |
 |---|---|
 | `image-digest-urls` | JSON array of digest URLs in the same order as input |
-| `latest-image-timestamp` | Timestamp of the most recently created image among all processed images |
+| `latest-updated-at` | ISO 8601 timestamp of the most recently created image among all processed images |
 
 ### resolve-latest-tag-from-sha
 
@@ -680,10 +651,10 @@ Calls `git ls-remote --tags` against the remote URL, filters by the given glob p
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `repo` | yes | — | Repository in `owner/name` form (e.g. `optivem/shop`) |
-| `sha` | yes | — | Commit SHA to look up |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form (e.g. `optivem/shop`) |
+| `commit-sha` | yes | — | Commit SHA to look up |
 | `pattern` | yes | — | Tag glob pattern (e.g. `monolith-typescript-v1.0.26-rc.*`) |
-| `github-token` | no | `${{ github.token }}` | Token for authenticating to the remote |
+| `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
 | `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
 
 **Outputs**
@@ -722,7 +693,7 @@ Calls `git ls-remote --tags` against the remote URL and returns the first tag (l
 | Name | Required | Default | Description |
 |---|---|---|---|
 | `repository` | yes | — | Repository in `owner/name` form (e.g. `optivem/shop`) |
-| `sha` | yes | — | Commit SHA to look up |
+| `commit-sha` | yes | — | Commit SHA to look up |
 | `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
 | `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
 
@@ -768,7 +739,7 @@ Wraps `actions/setup-node@v5` with npm caching keyed on `{working-directory}/pac
 
 ### tag-docker-image
 
-Pure-local `docker tag` wrapper. For each input tag, runs `docker tag <source> {registry}/{namespace}/{image-name}:{tag}` and returns the full tagged URLs as a JSON array. No network, no auth, no push — use `push-docker-images` or `promote-docker-images` to publish.
+Pure-local `docker tag` wrapper. For each input tag, runs `docker tag <source> {registry}/{namespace}/{image-name}:{tag}` and returns the full tagged URLs as a JSON array. No network, no auth, no push — use `push-docker-image` or `promote-docker-images` to publish.
 
 **Inputs**
 

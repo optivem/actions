@@ -1,22 +1,22 @@
-name: 'Push Docker Images'
-description: 'Pushes a pre-built Docker image to a container registry'
+name: 'Push Docker Image'
+description: 'Pushes a pre-built Docker image to a container registry, tagging it with the commit SHA, a latest tag, and optionally a version tag.'
 author: 'Optivem'
 branding:
   icon: 'upload-cloud'
   color: 'blue'
 inputs:
   image-sha-tag:
-    description: 'Full image reference tagged with commit SHA (output from build-docker-image)'
+    description: 'Fully-qualified image URL tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def`. Output from build-docker-image.'
     required: true
-  image-latest-url:
-    description: 'Full image reference tagged with latest tag (output from build-docker-image)'
+  image-latest-tag:
+    description: 'Fully-qualified image URL tagged with the latest tag, e.g. `ghcr.io/org/repo/svc:latest`. Output from build-docker-image.'
     required: true
   registry:
     description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io)'
     required: false
     default: 'ghcr.io'
   image-version-tag:
-    description: 'Full image reference tagged with component version (output from build-docker-image). Optional.'
+    description: 'Fully-qualified image URL tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3`. Output from build-docker-image. Optional.'
     required: false
     default: ''
   registry-username:
@@ -38,7 +38,7 @@ runs:
       run: |
         echo "📤 Starting Docker push action"
         echo "🏷️ SHA Tag: $IMAGE_SHA_TAG"
-        echo "🏷️ Latest URL: $IMAGE_LATEST_URL"
+        echo "🏷️ Latest Tag: $IMAGE_LATEST_TAG"
         if [ -n "$IMAGE_VERSION_TAG" ]; then
           echo "🏷️ Version Tag: $IMAGE_VERSION_TAG"
         fi
@@ -47,7 +47,7 @@ runs:
       shell: bash
       env:
         IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
-        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_LATEST_TAG: ${{ inputs.image-latest-tag }}
         IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
         REGISTRY: ${{ inputs.registry }}
         REGISTRY_USERNAME: ${{ inputs.registry-username }}
@@ -98,8 +98,8 @@ runs:
         echo "✅ Pushed SHA tagged image: $IMAGE_SHA_TAG"
         echo "📝 Image digest: $DIGEST"
 
-        push_with_retry "$IMAGE_LATEST_URL"
-        echo "✅ Pushed tagged image: $IMAGE_LATEST_URL"
+        push_with_retry "$IMAGE_LATEST_TAG"
+        echo "✅ Pushed tagged image: $IMAGE_LATEST_TAG"
 
         if [ -n "$IMAGE_VERSION_TAG" ]; then
           push_with_retry "$IMAGE_VERSION_TAG"
@@ -114,7 +114,7 @@ runs:
       shell: bash
       env:
         IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
-        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_LATEST_TAG: ${{ inputs.image-latest-tag }}
         IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
         REGISTRY: ${{ inputs.registry }}
 
@@ -123,7 +123,7 @@ runs:
         echo "📋 Push Outputs Summary:"
         echo "========================="
         echo "🔗 SHA Tag: $IMAGE_SHA_TAG"
-        echo "🔗 Latest URL: $IMAGE_LATEST_URL"
+        echo "🔗 Latest Tag: $IMAGE_LATEST_TAG"
         if [ -n "$IMAGE_VERSION_TAG" ]; then
           echo "🔗 Version Tag: $IMAGE_VERSION_TAG"
         fi
@@ -132,6 +132,6 @@ runs:
       shell: bash
       env:
         IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
-        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_LATEST_TAG: ${{ inputs.image-latest-tag }}
         IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
         IMAGE_DIGEST_URL: ${{ steps.push.outputs.image-digest-url }}

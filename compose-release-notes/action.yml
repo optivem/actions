@@ -28,7 +28,7 @@ outputs:
     description: 'Composed release title (e.g., "🚀 v1.0.0-rc.1-qa-deployed QA")'
     value: ${{ steps.compose.outputs.title }}
   notes-file:
-    description: 'Path to a tempfile containing the composed markdown release notes'
+    description: 'Absolute path to a temp file on the runner filesystem, valid only for the duration of the current job. Contents: plain markdown (UTF-8).'
     value: ${{ steps.compose.outputs.notes-file }}
 
 runs:

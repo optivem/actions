@@ -123,7 +123,7 @@ timestamps_json="$(printf '%s\n' "${created_timestamps[@]}" | jq -R . | jq -sc .
 echo "created-timestamps=$timestamps_json" >> "$GITHUB_OUTPUT"
 
 latest_ts="$(printf '%s\n' "${created_timestamps[@]}" | sort | tail -n1)"
-echo "latest-timestamp=$latest_ts" >> "$GITHUB_OUTPUT"
+echo "latest-updated-at=$latest_ts" >> "$GITHUB_OUTPUT"
 
 echo "JSON results, inspect data, created timestamps, and latest timestamp written to GitHub output"
 

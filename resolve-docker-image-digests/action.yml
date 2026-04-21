@@ -12,9 +12,9 @@ outputs:
   image-digest-urls:
     description: 'JSON array of digest URLs in the same order as input'
     value: ${{ steps.get-digests.outputs.digests }}
-  latest-image-timestamp:
-    description: 'Timestamp of the most recently created image among all processed images'
-    value: ${{ steps.get-digests.outputs.latest-timestamp }}
+  latest-updated-at:
+    description: 'ISO 8601 timestamp of the most recently created image among all processed images'
+    value: ${{ steps.get-digests.outputs.latest-updated-at }}
 runs:
   using: 'composite'
   steps:

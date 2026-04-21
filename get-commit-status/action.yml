@@ -5,7 +5,7 @@ branding:
   icon: 'search'
   color: 'green'
 inputs:
-  sha:
+  commit-sha:
     description: 'Commit SHA to read the status from'
     required: true
   context:
@@ -41,7 +41,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
         REPO: ${{ inputs.repository }}
-        SHA: ${{ inputs.sha }}
+        SHA: ${{ inputs.commit-sha }}
         CONTEXT: ${{ inputs.context }}
         STATE_FILTER: ${{ inputs.state }}
       run: |

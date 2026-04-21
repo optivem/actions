@@ -9,7 +9,7 @@ inputs:
   repository:
     description: 'Repository in "owner/name" form (e.g. optivem/shop)'
     required: true
-  sha:
+  commit-sha:
     description: 'Commit SHA to look up'
     required: true
   token:
@@ -33,7 +33,7 @@ runs:
       shell: bash
       env:
         REPO: ${{ inputs.repository }}
-        SHA: ${{ inputs.sha }}
+        SHA: ${{ inputs.commit-sha }}
         TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |

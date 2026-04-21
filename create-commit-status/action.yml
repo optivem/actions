@@ -5,7 +5,7 @@ branding:
   icon: 'check-circle'
   color: 'green'
 inputs:
-  sha:
+  commit-sha:
     description: 'Commit SHA to attach the status to. Empty = current commit (github.sha).'
     required: false
     default: ''
@@ -34,7 +34,7 @@ runs:
     - shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
-        INPUT_SHA: ${{ inputs.sha }}
+        INPUT_SHA: ${{ inputs.commit-sha }}
         CONTEXT: ${{ inputs.context }}
         STATE: ${{ inputs.state }}
         DESCRIPTION: ${{ inputs.description }}
