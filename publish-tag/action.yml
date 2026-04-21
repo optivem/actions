@@ -35,6 +35,7 @@ runs:
 
         if [ -n "$TOKEN" ]; then
           push_target="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config --local --unset-all "http.https://github.com/.extraheader" 2>/dev/null || true
         else
           push_target="origin"
         fi
