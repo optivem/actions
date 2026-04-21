@@ -1,5 +1,5 @@
-name: 'Create and Push Tag'
-description: 'Creates a git tag at a given commit SHA (or the current HEAD) and pushes it to origin, using the github-actions[bot] identity. Idempotent — no-ops if the tag already exists at the same commit, tolerates concurrent creation, fails hard only if the remote tag points at a different commit.'
+name: 'Publish Tag'
+description: 'Publishes a git tag to origin at a given commit SHA (or current HEAD), using the github-actions[bot] identity. Idempotent — no-ops if the tag already exists at the same commit, tolerates concurrent creation, fails hard only if the remote tag points at a different commit.'
 author: 'Optivem'
 branding:
   icon: 'tag'
@@ -12,6 +12,10 @@ inputs:
     description: 'Commit SHA to tag. Empty = current HEAD.'
     required: false
     default: ''
+  token:
+    description: 'Token used to push the tag. Defaults to the ambient GITHUB_TOKEN. Pass a PAT or GitHub App token with workflows:write when the tagged commit contains workflow file changes that differ from the default branch — GITHUB_TOKEN cannot push such refs.'
+    required: false
+    default: ''
 runs:
   using: 'composite'
   steps:
@@ -20,6 +24,7 @@ runs:
       env:
         TAG: ${{ inputs.tag }}
         SHA: ${{ inputs.sha }}
+        TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
 
@@ -27,6 +32,12 @@ runs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
         target_sha="${SHA:-$(git rev-parse HEAD)}"
+
+        if [ -n "$TOKEN" ]; then
+          push_target="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        else
+          push_target="origin"
+        fi
 
         existing=$(git ls-remote --tags origin "refs/tags/$TAG" | cut -f1)
         if [ -n "$existing" ]; then
@@ -45,7 +56,7 @@ runs:
           git tag "$TAG"
         fi
 
-        if git push origin "$TAG"; then
+        if git push "$push_target" "$TAG"; then
           echo "Created and pushed tag $TAG at $target_sha" >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi

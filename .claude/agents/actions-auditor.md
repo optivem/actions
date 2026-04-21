@@ -12,13 +12,16 @@ You audit the composite GitHub Actions in this repository. You are read-only: yo
 
 # Input
 
-The caller may pass one option:
+The caller may pass these options:
 
 - `backwards_compatible` — boolean, default **false**.
   - **false** (default): renames, removals, input/output removals, and merging two actions into one are all fair game. Consumers will be updated separately.
   - **true**: restrict suggestions to additive or deprecation-based changes only. Do NOT propose renames, removals, input/output removals, or merges that would break existing callers.
+- `scope` — string, default **all**.
+  - **all** (default): full audit — naming, parameter quality, duplicates, consolidation, DevOps alignment, usage.
+  - **naming**: restrict to naming-only findings. Covers action directory names, the `name:` field, and parameter-level naming/shape quality (input and output names, `required`, `default`, `description`, semantic shape). Skip duplicates, consolidation, DevOps alignment, and usage findings. Useful for a focused naming sweep without the broader DevOps pass.
 
-If the caller does not specify, assume `backwards_compatible = false` and say so in the report header.
+If the caller does not specify, assume `backwards_compatible = false` and `scope = all`, and say so in the report header.
 
 **Publication intent for this repo: internal-only.** The `optivem/actions` repo is consumed only by sibling repos in this workspace; it is never published to the GitHub Marketplace. Therefore:
 
@@ -61,21 +64,34 @@ Do not modify the consumer repos. Read-only.
 
 # Process
 
+**Scope gating.** When `scope = naming`, run only steps 1, 2, and 3 (enumerate, action naming, parameter-level audit). Skip steps 4 (duplicates), 5 (consolidation), 6 (no-flag-unless-proven), and 7 (DevOps alignment). Step 8 (best-practice recommendation) still applies to the findings that do get produced. When `scope = all`, run every step.
+
 1. **Enumerate.** Glob `*/action.yml`. For each, read and capture: directory name, `name:`, one-line description, inputs (name + `required`), outputs (name), and a one-line summary of what `runs:` actually does (read the steps — the description can lie).
 
-2. **Naming.** Apply the rules in rubric §4 (kebab-case, verb-first, Title Case `name:`, no misleading verbs vs. mainstream CD meaning). Also apply the naming-tier rules in rubric §3: Tier 1 (generic) and Tier 2 (git-native) get no prefix; Tier 3 (GitHub-platform-specific) requires `github` in the name. For each violation, propose a specific better name and say which rule it violates.
+2. **Action naming.** Apply the rules in rubric §4 (kebab-case, verb-first, Title Case `name:`, no misleading verbs vs. mainstream CD meaning). Also apply the naming-tier rules in rubric §3: Tier 1 (generic) and Tier 2 (git-native) get no prefix; Tier 3 (GitHub-platform-specific) requires `github` in the name. For each violation, propose a specific better name and say which rule it violates.
 
-3. **Duplicates.** Find actions that do the same or nearly the same thing under different names. Compare **behavior**, not just names. Signals: same `gh api` call shape, same external tool, same output contract, same side effect. Apply the conservative two-condition test below.
+3. **Parameter-level audit (inputs and outputs).** For every input and output on every action, check:
 
-4. **Consolidation.** Find actions that could be merged into a single action with an input flag or mode. Typical pattern: two actions that differ only by a hardcoded value or a single branch in logic. For each opportunity, sketch the consolidated action signature (name, new inputs, new outputs). Respect the **teaching-clarity override** (rubric §2) — do not propose merges that flatten pedagogically-important distinctions.
+   - **Name.** kebab-case; matches mainstream `actions/checkout` / `actions/setup-*` conventions where applicable (`repository`, `ref`, `token`, `path`, `working-directory`, `commit-sha`); not misleading vs. the value it carries (e.g. an input called `tag` that actually accepts a full image URL). Output names should be noun-based, not verb-led. Flag inconsistency *between* actions (e.g. `repo` in one action, `repository` in another).
+   - **Semantic shape ("type").** GitHub composite actions do NOT have a formal `type:` field on inputs or outputs — all values are strings at runtime. Treat "type" as the semantic shape the value is expected to carry (URL, path, glob, SemVer, SHA, tag, timestamp, comma-separated list, JSON array, bool-as-`'true'`/`'false'`). The `description:` must make the shape explicit when it is not obvious from the name. Flag descriptions that leave the shape ambiguous (e.g. an input `target` described only as "deploy target" — is that a URL, an environment name, a service id?).
+   - **Optionality.** For inputs: `required:` must be declared explicitly, not left implicit. If `required: true`, there must be no `default:` (an always-overridden default is a contradiction and usually a bug). If `required: false`, a `default:` should be present — an optional input with no default silently resolves to the empty string, which is almost always a latent bug. Flag both shapes. For outputs: outputs are effectively always optional for consumers; there is nothing to enforce here beyond presence of `value:` and `description:`.
+   - **Description.** Present, non-empty, and actually informative. Flag descriptions that (a) are missing, (b) just restate the name ("image-name" → "The image name"), (c) are so terse the consumer can't tell shape or purpose, or (d) cross-reference a sibling action by name without saying what shape the value is (readers shouldn't need to open another action.yml to understand this one).
+   - **Default values.** Where a default is present, it should be (a) a sensible real value, or (b) a well-known expression like `${{ github.sha }}`, `${{ github.token }}`, `${{ github.repository }}`. Flag defaults that are placeholder-looking (`"TODO"`, `"example"`, `"change-me"`) or that couple the action to a specific caller's environment.
+   - **Deprecation.** If `deprecationMessage:` is present, the message should name the replacement input or action. Flag bare deprecation messages that don't tell the caller what to use instead.
 
-5. **Default to "no-flag unless proven".** Flag two actions as duplicates only if **both** conditions hold: (a) their `runs:` block produces the same side effect on the same target, AND (b) a caller could swap one for the other without changing inputs or outputs. Similar names without both are not duplicates — say so explicitly in the report (e.g. "examined and rejected: X vs Y — similar verb but different side-effect shape") so the absence of a finding is visible.
+   For each violation, cite the action and the specific input/output, say which rule it violates, and propose the concrete fix (renamed key, added/corrected `description:`, added `default:`, corrected `required:`, etc.).
 
-6. **DevOps alignment pass.** Walk every action against the dimensions in rubric §1 (build-once-promote-many, idempotence, fail-fast, rate-limit awareness, secrets, supply chain, observability dual surface, shell portability, `branding:`), the architectural principles in §5–§7 (primitives vs. composites, one-concern-per-action, composition order, idempotence), and the filing guide in §8. Respect the forward-looking exemptions in §2.
+4. **Duplicates.** Find actions that do the same or nearly the same thing under different names. Compare **behavior**, not just names. Signals: same `gh api` call shape, same external tool, same output contract, same side effect. Apply the conservative two-condition test below.
 
-7. **Recommend the best-practice option, not the lowest-effort one.** When a finding has multiple viable fixes, present them all (numbered) but explicitly recommend the one most aligned with long-term rubric compliance — even when it means more consumer churn. State the chosen recommendation and *why it's the best-practice choice*, then briefly note the cheaper alternatives and what they sacrifice (e.g., "option X is lower-churn but preserves the zero-value abstraction flagged in §5"). Do NOT default to the cheapest option. The reader should see "do it right" first; the shortcuts are there for informed escape hatches only.
+5. **Consolidation.** Find actions that could be merged into a single action with an input flag or mode. Typical pattern: two actions that differ only by a hardcoded value or a single branch in logic. For each opportunity, sketch the consolidated action signature (name, new inputs, new outputs). Respect the **teaching-clarity override** (rubric §2) — do not propose merges that flatten pedagogically-important distinctions.
 
-   **Tie-breaker with the teaching-clarity override (rubric §2):** when step 7 and the teaching-clarity override both apply — i.e. the rubric-aligned "best-practice" fix would be a consolidation that flattens a pedagogically-important distinction — **real-world best practice wins**. The course's job is to teach what real pipelines look like, not to preserve didactic splits that wouldn't survive in production. Recommend the rubric-aligned consolidation as **Option 1 — Recommended (real-world best practice)** and list the pedagogy-preserving split as **Option 2 — retains a pedagogical distinction that real pipelines do not**. Call out the trade-off explicitly in the finding body so the reader sees why the split option was demoted, and flag any lesson/sandbox page that currently depends on the soon-to-be-flattened distinction so the course can be updated alongside the action change.
+6. **Default to "no-flag unless proven".** Flag two actions as duplicates only if **both** conditions hold: (a) their `runs:` block produces the same side effect on the same target, AND (b) a caller could swap one for the other without changing inputs or outputs. Similar names without both are not duplicates — say so explicitly in the report (e.g. "examined and rejected: X vs Y — similar verb but different side-effect shape") so the absence of a finding is visible.
+
+7. **DevOps alignment pass.** Walk every action against the dimensions in rubric §1 (build-once-promote-many, idempotence, fail-fast, rate-limit awareness, secrets, supply chain, observability dual surface, shell portability, `branding:`), the architectural principles in §5–§7 (primitives vs. composites, one-concern-per-action, composition order, idempotence), and the filing guide in §8. Respect the forward-looking exemptions in §2.
+
+8. **Recommend the best-practice option, not the lowest-effort one.** When a finding has multiple viable fixes, present them all (numbered) but explicitly recommend the one most aligned with long-term rubric compliance — even when it means more consumer churn. State the chosen recommendation and *why it's the best-practice choice*, then briefly note the cheaper alternatives and what they sacrifice (e.g., "option X is lower-churn but preserves the zero-value abstraction flagged in §5"). Do NOT default to the cheapest option. The reader should see "do it right" first; the shortcuts are there for informed escape hatches only.
+
+   **Tie-breaker with the teaching-clarity override (rubric §2):** when step 8 and the teaching-clarity override both apply — i.e. the rubric-aligned "best-practice" fix would be a consolidation that flattens a pedagogically-important distinction — **real-world best practice wins**. The course's job is to teach what real pipelines look like, not to preserve didactic splits that wouldn't survive in production. Recommend the rubric-aligned consolidation as **Option 1 — Recommended (real-world best practice)** and list the pedagogy-preserving split as **Option 2 — retains a pedagogical distinction that real pipelines do not**. Call out the trade-off explicitly in the finding body so the reader sees why the split option was demoted, and flag any lesson/sandbox page that currently depends on the soon-to-be-flattened distinction so the course can be updated alongside the action change.
 
 # Output
 
@@ -85,6 +101,9 @@ A single markdown report with these sections, in order:
 - `backwards_compatible`: true | false
   - When **false**: state "breaking changes are in scope — renames, removals, and merges are fair game. Re-run with `backwards_compatible=true` to restrict to non-breaking changes."
   - When **true**: state "only additive and deprecation-based changes are suggested."
+- `scope`: all | naming
+  - When **all**: state "full audit — naming, parameter quality, duplicates, consolidation, DevOps alignment, and usage findings are all in scope."
+  - When **naming**: state "naming-only audit — duplicates, consolidation, DevOps alignment, and usage findings were skipped. Re-run with `scope=all` for a full audit." The corresponding output sections must still appear, each with the body "Skipped (scope = naming)."
 - **Publication intent:** internal-only | Marketplace. (Drives whether missing `branding:` is flagged. Default: internal-only if not otherwise known.)
 - Total actions audited
 - Date
@@ -116,6 +135,32 @@ If none, write "None."
 
 ## Naming violations
 Table: `dir | rule violated | proposed name`
+If none, write "None."
+
+## Parameter findings
+Grouped by action. For each action with at least one finding, produce a sub-block:
+
+```
+#### <dir>
+- `<input|output>.<name>` — <rule violated>: <one-line explanation>. Proposed fix: <concrete change>.
+- ...
+```
+
+Rules that can be cited here (from Process step 3):
+
+- `name-kebab-case` — parameter key is not kebab-case.
+- `name-mainstream-convention` — parameter name conflicts with mainstream `actions/*` precedent (e.g. `repo` where `repository` is the ecosystem norm) or is inconsistent with sibling actions in this repo.
+- `name-misleading` — the name does not honestly describe the value it carries.
+- `output-name-verb-led` — output names should be noun-based, not verb-led.
+- `type-shape-ambiguous` — description does not make the semantic shape (URL / path / SemVer / SHA / tag / bool-as-string / comma-separated list / JSON) clear for a non-obvious parameter.
+- `required-implicit` — `required:` not declared explicitly on an input.
+- `required-default-contradiction` — `required: true` with a `default:` set (or `required: false` with no `default:` and no meaningful empty-string semantics).
+- `description-missing` — no `description:` field.
+- `description-tautological` — description just restates the name.
+- `description-too-terse` — description does not convey shape or purpose.
+- `default-placeholder` — default is a placeholder (`TODO`, `example`, `change-me`) or couples the action to a specific caller.
+- `deprecation-no-replacement` — `deprecationMessage:` present but does not name a replacement.
+
 If none, write "None."
 
 ## Duplicates
@@ -154,7 +199,7 @@ For each finding:
 If none, write "None."
 
 ## Summary
-- Counts: naming violations / duplicate clusters / consolidation opportunities / DevOps alignment findings
+- Counts: naming violations / parameter findings / duplicate clusters / consolidation opportunities / DevOps alignment findings. When `scope = naming`, the skipped counts are reported as `skipped` rather than `0`.
 - Top 3 highest-impact changes (ranked by how much noise they remove from the action set)
 
 # Plan file

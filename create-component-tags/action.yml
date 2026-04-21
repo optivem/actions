@@ -9,6 +9,10 @@ inputs:
   components:
     description: 'Newline-separated list of "component-name:version-file-path" entries (e.g., monolith-system-java:system/monolith/java/VERSION)'
     required: true
+  token:
+    description: 'Token used to push tags. Defaults to the ambient GITHUB_TOKEN. Pass a PAT or GitHub App token with workflows:write when the tagged commit contains workflow file changes that differ from the default branch — GITHUB_TOKEN cannot push such refs.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -17,9 +21,16 @@ runs:
       shell: bash
       env:
         COMPONENTS: ${{ inputs.components }}
+        TOKEN: ${{ inputs.token }}
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        if [ -n "$TOKEN" ]; then
+          push_target="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        else
+          push_target="origin"
+        fi
 
         while IFS= read -r line; do
           [[ -z "$line" ]] && continue
@@ -40,12 +51,11 @@ runs:
           fi
 
           git tag "$component_tag"
-          if git push origin "$component_tag" 2>/dev/null; then
+          if git push "$push_target" "$component_tag" 2>/dev/null; then
             echo "Created component tag: $component_tag"
             continue
           fi
 
-          # Push failed — check whether it was a concurrent writer on the same commit
           remote_sha=$(git ls-remote --tags origin "refs/tags/$component_tag" | cut -f1)
           local_sha=$(git rev-parse "$component_tag")
           if [[ -n "$remote_sha" && "$remote_sha" == "$local_sha" ]]; then
