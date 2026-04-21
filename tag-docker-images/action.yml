@@ -33,9 +33,8 @@ runs:
 
     - name: Tag Docker Images
       id: tag-images
-      run: |
-        $scriptPath = Join-Path ${{ github.action_path }} "Tag-DockerImages.ps1"
-        & $scriptPath `
-          -ImageUrls '${{ inputs.image-urls }}' `
-          -TargetTag "${{ inputs.tag }}"
-      shell: pwsh
+      shell: bash
+      env:
+        IMAGE_URLS: ${{ inputs.image-urls }}
+        TARGET_TAG: ${{ inputs.tag }}
+      run: bash "${{ github.action_path }}/tag-docker-images.sh"
