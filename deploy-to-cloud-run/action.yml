@@ -49,9 +49,9 @@ inputs:
     required: false
     default: '3'
   allow-unauthenticated:
-    description: 'Allow unauthenticated access to the service'
+    description: 'Allow unauthenticated (public-internet) access to the service. Secure-by-default: defaults to false. Callers that need a public endpoint (e.g. a frontend or a system that is tested via public URL from another runner) must opt in with "true".'
     required: false
-    default: 'true'
+    default: 'false'
   wait-for-ready:
     description: 'Whether to poll the service URL after deploy and fail if it does not become ready. Set to false to publish without verifying readiness (e.g. canary deploys with custom health checks).'
     required: false

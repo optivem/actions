@@ -23,13 +23,18 @@ runs:
   using: 'composite'
   steps:
     - name: Start Docker Compose
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        VERSION: ${{ inputs.version }}
+        IMAGE_URLS: ${{ inputs.image-urls }}
+        COMPOSE_FILE: ${{ inputs.compose-file }}
       run: |
-        echo "🚀 Starting system version ${{ inputs.version }} for ${{ inputs.environment }}..."
+        echo "🚀 Starting system version $VERSION for $ENVIRONMENT..."
         echo ""
 
-        if [[ -n "${{ inputs.image-urls }}" ]]; then
+        if [[ -n "$IMAGE_URLS" ]]; then
           echo "📦 Images:"
-          echo '${{ inputs.image-urls }}' | jq -r '.[]' | while IFS= read -r image_url; do
+          echo "$IMAGE_URLS" | jq -r '.[]' | while IFS= read -r image_url; do
             if [[ -n "$image_url" ]]; then
               echo "   🐳 $image_url"
             fi
@@ -39,7 +44,6 @@ runs:
 
         echo "🐳 Running docker compose up..."
 
-        COMPOSE_FILE="${{ inputs.compose-file }}"
         if [[ -n "$COMPOSE_FILE" ]]; then
           echo "📄 Using compose file: $COMPOSE_FILE"
           docker compose -f "$COMPOSE_FILE" up -d

@@ -71,7 +71,8 @@ runs:
         push_with_retry() {
           local image="$1"
           local max_attempts=3
-          local attempt rc
+          local base_delay=5
+          local attempt rc backoff jitter sleep_secs
           local output=""
           for attempt in $(seq 1 $max_attempts); do
             set +e
@@ -83,8 +84,11 @@ runs:
               return 0
             fi
             if [ $attempt -lt $max_attempts ]; then
-              echo "⚠️ Push failed (attempt $attempt/$max_attempts), retrying in 10s..." >&2
-              sleep 10
+              backoff=$((base_delay * (2 ** (attempt - 1))))
+              jitter=$((RANDOM % 3))
+              sleep_secs=$((backoff + jitter))
+              echo "⚠️ Push failed (attempt $attempt/$max_attempts), retrying in ${sleep_secs}s (backoff=${backoff}, jitter=${jitter})..." >&2
+              sleep "$sleep_secs"
             fi
           done
           printf '%s\n' "$output" >&2

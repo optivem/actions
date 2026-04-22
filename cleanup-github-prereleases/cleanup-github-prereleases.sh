@@ -137,6 +137,7 @@ get_tag_creation_date_epoch() {
 }
 
 deleted_count=0
+dry_run_count=0
 
 remove_git_tag() {
   local tag="$1"
@@ -151,6 +152,7 @@ remove_git_tag() {
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] Would delete git tag: $tag"
+    dry_run_count=$((dry_run_count + 1))
     return
   fi
 
@@ -160,6 +162,7 @@ remove_git_tag() {
   git tag -d "$tag" 2>/dev/null || true
 
   echo "  Deleted git tag: $tag"
+  deleted_count=$((deleted_count + 1))
   sleep "$DELETE_DELAY_SECONDS"
 }
 
@@ -179,12 +182,14 @@ remove_github_release() {
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] Would delete GitHub release: $tag"
+    dry_run_count=$((dry_run_count + 1))
     return
   fi
 
   wait_for_rate_limit_budget
   if gh_retry release delete "$tag" --repo "$REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1; then
     echo "  Deleted GitHub release: $tag"
+    deleted_count=$((deleted_count + 1))
   else
     echo "  Warning: Could not delete release $tag"
   fi
@@ -219,12 +224,14 @@ remove_docker_image_tag() {
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] Would delete Docker image tag: $package:$tag"
+    dry_run_count=$((dry_run_count + 1))
     return
   fi
 
   wait_for_rate_limit_budget
   if gh_retry api --method DELETE "/orgs/$owner/packages/container/$package/versions/$version_id" >/dev/null 2>&1; then
     echo "  Deleted Docker image tag: $package:$tag"
+    deleted_count=$((deleted_count + 1))
   else
     echo "  Warning: Could not delete Docker image version $version_id"
   fi
@@ -313,7 +320,6 @@ for version in "${sorted_released_versions[@]}"; do
   for tag in $rc_tags_str $st_tags_str; do
     remove_github_release "$tag"
     remove_git_tag "$tag"
-    deleted_count=$((deleted_count + 1))
   done
 
   # Delete Docker image tags only after retention period.
@@ -410,7 +416,6 @@ for version in "${sorted_prerelease_versions[@]}"; do
 
       remove_github_release "$rc_tag"
       remove_git_tag "$rc_tag"
-      deleted_count=$((deleted_count + 1))
 
       # Delete associated status tags (those that start with "<rc>-").
       st_tags_str="${status_tags_map[$version]:-}"
@@ -418,7 +423,6 @@ for version in "${sorted_prerelease_versions[@]}"; do
         if [[ "$st_tag" == "$rc_tag-"* ]]; then
           remove_github_release "$st_tag"
           remove_git_tag "$st_tag"
-          deleted_count=$((deleted_count + 1))
         fi
       done
 
@@ -466,6 +470,7 @@ for tag_name in "${release_tag_names[@]}"; do
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] Would delete release: $tag_name (id $rel_id)"
+    dry_run_count=$((dry_run_count + 1))
     continue
   fi
 
@@ -484,10 +489,17 @@ done
 echo
 echo "========================================"
 if [[ "$DRY_RUN" == "true" ]]; then
-  echo "  Dry run complete. $deleted_count item(s) would be deleted."
+  echo "  Dry run complete. $dry_run_count item(s) would be deleted."
 else
   echo "  Cleanup complete. $deleted_count item(s) deleted."
 fi
 echo "========================================"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "deleted-count=$deleted_count"
+    echo "dry-run-count=$dry_run_count"
+  } >>"$GITHUB_OUTPUT"
+fi
 
 exit 0

@@ -99,4 +99,7 @@ runs:
     - name: Annotate Skipped Reason
       if: inputs.stage-result == 'skipped' && inputs.skipped-reason != ''
       shell: bash
-      run: echo "::notice title=${{ inputs.stage-name }} skipped::${{ inputs.skipped-reason }}"
+      env:
+        STAGE_NAME: ${{ inputs.stage-name }}
+        SKIPPED_REASON: ${{ inputs.skipped-reason }}
+      run: echo "::notice title=${STAGE_NAME} skipped::${SKIPPED_REASON}"

@@ -188,6 +188,7 @@ remove_deployment() {
 
   if [[ "$DRY_RUN" == "true" ]]; then
     echo "  [DRY RUN] Would delete deployment ${id} (env=${env}, sha=${short_sha}) — ${reason}"
+    dry_run_count=$((dry_run_count + 1))
     return
   fi
 
@@ -210,6 +211,7 @@ remove_deployment() {
 }
 
 deleted_count=0
+dry_run_count=0
 
 # ── Step 4: Scenario 1 — released-RC deployments ────────────────────
 echo "--- Scenario 1: Released-RC Deployments ---"
@@ -272,8 +274,15 @@ done
 echo
 echo "========================================"
 if [[ "$DRY_RUN" == "true" ]]; then
-  echo "  Dry run complete. $deleted_count deployment(s) would be deleted."
+  echo "  Dry run complete. $dry_run_count deployment(s) would be deleted."
 else
   echo "  Cleanup complete. $deleted_count deployment(s) deleted."
 fi
 echo "========================================"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "deleted-count=$deleted_count"
+    echo "dry-run-count=$dry_run_count"
+  } >>"$GITHUB_OUTPUT"
+fi

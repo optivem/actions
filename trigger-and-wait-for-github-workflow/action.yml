@@ -40,14 +40,18 @@ runs:
       id: trigger
       env:
         GH_TOKEN: ${{ inputs.token }}
+        WORKFLOW: ${{ inputs.workflow }}
+        REPOSITORY: ${{ inputs.repository }}
+        REF: ${{ inputs.ref }}
+        INPUTS_JSON: ${{ inputs.inputs }}
+        RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
         # --- Rate limit check (skip retry wrapper — local probe) ---
         remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
-        threshold=${{ inputs.rate-limit-threshold }}
-        if [ "$remaining" -lt "$threshold" ]; then
+        if [ "$remaining" -lt "$RATE_LIMIT_THRESHOLD" ]; then
           reset=$(gh api rate_limit --jq ".resources.core.reset" 2>/dev/null || echo "0")
           wait=$(( reset - $(date +%s) + 5 ))
           if [ "$wait" -gt 0 ]; then
@@ -58,37 +62,38 @@ runs:
 
         # --- Build input flags ---
         input_flags=""
-        inputs_json='${{ inputs.inputs }}'
-        if [ "$inputs_json" != "{}" ] && [ -n "$inputs_json" ]; then
-          input_flags=$(echo "$inputs_json" | jq -r 'to_entries[] | "-f \(.key)=\(.value)"' | tr '\n' ' ')
+        if [ "$INPUTS_JSON" != "{}" ] && [ -n "$INPUTS_JSON" ]; then
+          input_flags=$(echo "$INPUTS_JSON" | jq -r 'to_entries[] | "-f \(.key)=\(.value)"' | tr '\n' ' ')
         fi
 
         # --- Trigger workflow ---
-        gh_retry workflow run "${{ inputs.workflow }}" \
-          --repo "${{ inputs.repository }}" \
-          --ref "${{ inputs.ref }}" \
+        gh_retry workflow run "$WORKFLOW" \
+          --repo "$REPOSITORY" \
+          --ref "$REF" \
           $input_flags
 
-        echo "Triggered ${{ inputs.workflow }}"
+        echo "Triggered $WORKFLOW"
         sleep 10
 
         # --- Capture run ID ---
         run_id=$(gh_retry run list \
-          --workflow="${{ inputs.workflow }}" \
-          --repo "${{ inputs.repository }}" \
-          --branch "${{ inputs.ref }}" \
+          --workflow="$WORKFLOW" \
+          --repo "$REPOSITORY" \
+          --branch "$REF" \
           --limit 1 --json databaseId --jq '.[0].databaseId')
         echo "run_id=$run_id" >> $GITHUB_OUTPUT
 
     - name: Wait for ${{ inputs.workflow }}
       env:
         GH_TOKEN: ${{ inputs.token }}
+        REPOSITORY: ${{ inputs.repository }}
+        POLL_INTERVAL: ${{ inputs.poll-interval }}
+        RUN_ID: ${{ steps.trigger.outputs.run_id }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-        run_id="${{ steps.trigger.outputs.run_id }}"
-        echo "Waiting for run $run_id..."
-        gh_retry run watch "$run_id" \
-          --repo "${{ inputs.repository }}" \
+        echo "Waiting for run $RUN_ID..."
+        gh_retry run watch "$RUN_ID" \
+          --repo "$REPOSITORY" \
           --exit-status \
-          --interval ${{ inputs.poll-interval }}
+          --interval "$POLL_INTERVAL"

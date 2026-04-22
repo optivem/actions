@@ -31,6 +31,14 @@ inputs:
     required: false
     default: ${{ github.token }}
 
+outputs:
+  deleted-count:
+    description: 'Number of items (git tags, GitHub releases, Docker image tags) actually deleted (real mode only; 0 in dry-run).'
+    value: ${{ steps.cleanup.outputs.deleted-count }}
+  dry-run-count:
+    description: 'Number of items that would be deleted (dry-run mode only; 0 in real mode).'
+    value: ${{ steps.cleanup.outputs.dry-run-count }}
+
 runs:
   using: 'composite'
   steps:
@@ -39,6 +47,7 @@ runs:
       run: git fetch --tags --force
 
     - name: Cleanup Prereleases
+      id: cleanup
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}

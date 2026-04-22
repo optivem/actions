@@ -12,10 +12,18 @@ inputs:
     description: 'Commit SHA to tag. Empty = current HEAD.'
     required: false
     default: ''
-  token:
-    description: 'Token used to push the tag. Defaults to the ambient GITHUB_TOKEN. Pass a PAT or GitHub App token with workflows:write when the tagged commit contains workflow file changes that differ from the default branch — GITHUB_TOKEN cannot push such refs.'
+  repository:
+    description: 'Repository in owner/repo format. Defaults to the current repository.'
     required: false
-    default: ''
+    default: ${{ github.repository }}
+  git-host:
+    description: 'Git host to push to (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
+  token:
+    description: 'Token used to push the tag. Defaults to the workflow-scoped GITHUB_TOKEN. Pass a PAT or GitHub App token with workflows:write when the tagged commit contains workflow file changes that differ from the default branch — GITHUB_TOKEN cannot push such refs.'
+    required: false
+    default: ${{ github.token }}
 runs:
   using: 'composite'
   steps:
@@ -24,6 +32,8 @@ runs:
       env:
         TAG: ${{ inputs.tag }}
         SHA: ${{ inputs.commit-sha }}
+        REPO: ${{ inputs.repository }}
+        GIT_HOST: ${{ inputs.git-host }}
         TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
@@ -34,8 +44,8 @@ runs:
         target_sha="${SHA:-$(git rev-parse HEAD)}"
 
         if [ -n "$TOKEN" ]; then
-          push_target="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git config --local --unset-all "http.https://github.com/.extraheader" 2>/dev/null || true
+          push_target="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+          git config --local --unset-all "http.https://${GIT_HOST}/.extraheader" 2>/dev/null || true
         else
           push_target="origin"
         fi

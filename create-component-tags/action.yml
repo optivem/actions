@@ -9,10 +9,18 @@ inputs:
   components:
     description: 'Newline-separated list of "component-name:version-file-path" entries (e.g., monolith-system-java:system/monolith/java/VERSION)'
     required: true
-  token:
-    description: 'Token used to push tags. Defaults to the ambient GITHUB_TOKEN. Pass a PAT or GitHub App token with workflows:write when the tagged commit contains workflow file changes that differ from the default branch — GITHUB_TOKEN cannot push such refs.'
+  repository:
+    description: 'Repository in owner/repo format. Defaults to the current repository.'
     required: false
-    default: ''
+    default: ${{ github.repository }}
+  git-host:
+    description: 'Git host to push to (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
+  token:
+    description: 'Token used to push tags. Defaults to the workflow-scoped GITHUB_TOKEN. Pass a PAT or GitHub App token with workflows:write when the tagged commit contains workflow file changes that differ from the default branch — GITHUB_TOKEN cannot push such refs.'
+    required: false
+    default: ${{ github.token }}
 
 runs:
   using: 'composite'
@@ -21,13 +29,15 @@ runs:
       shell: bash
       env:
         COMPONENTS: ${{ inputs.components }}
+        REPO: ${{ inputs.repository }}
+        GIT_HOST: ${{ inputs.git-host }}
         TOKEN: ${{ inputs.token }}
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
         if [ -n "$TOKEN" ]; then
-          push_target="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          push_target="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
         else
           push_target="origin"
         fi

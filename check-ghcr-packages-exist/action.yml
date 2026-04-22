@@ -6,6 +6,10 @@ branding:
   color: 'blue'
 
 inputs:
+  repository:
+    description: 'Repository in owner/repo format to check. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
   token:
     description: 'GitHub token used for API calls. Defaults to github.token.'
     required: false
@@ -22,15 +26,16 @@ runs:
     - name: Check for container packages
       id: check
       shell: bash
-      run: |
-        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-        count=$(gh_retry api "repos/${GITHUB_REPOSITORY}/packages?package_type=container" --jq 'length' 2>/dev/null || echo "0")
-        if [ "$count" = "0" ] || [ -z "$count" ]; then
-          echo "::notice::No container packages found. Commit stage has not produced artifacts yet — skipping."
-          echo "exist=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "Found $count container package(s)."
-          echo "exist=true" >> "$GITHUB_OUTPUT"
-        fi
       env:
         GH_TOKEN: ${{ inputs.token }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+        count=$(gh_retry api "repos/${REPOSITORY}/packages?package_type=container" --jq 'length' 2>/dev/null || echo "0")
+        if [ "$count" = "0" ] || [ -z "$count" ]; then
+          echo "::notice::No container packages found for $REPOSITORY. Commit stage has not produced artifacts yet — skipping."
+          echo "exist=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "Found $count container package(s) for $REPOSITORY."
+          echo "exist=true" >> "$GITHUB_OUTPUT"
+        fi

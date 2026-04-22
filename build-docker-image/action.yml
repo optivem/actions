@@ -42,6 +42,7 @@ runs:
         echo "🔨 Building $LOCAL_REF from $DOCKERFILE..."
 
         max_attempts=3
+        base_delay=5
         for attempt in $(seq 1 $max_attempts); do
           if docker build . --file "$DOCKERFILE" --tag "$LOCAL_REF"; then
             echo "✅ Docker image built successfully (attempt $attempt)"
@@ -49,8 +50,11 @@ runs:
             exit 0
           fi
           if [ "$attempt" -lt "$max_attempts" ]; then
-            echo "::warning::Docker build failed on attempt $attempt/$max_attempts. Retrying in 15s..."
-            sleep 15
+            backoff=$((base_delay * (2 ** (attempt - 1))))
+            jitter=$((RANDOM % 3))
+            sleep_secs=$((backoff + jitter))
+            echo "::warning::Docker build failed on attempt $attempt/$max_attempts. Retrying in ${sleep_secs}s (backoff=${backoff}, jitter=${jitter})..."
+            sleep "$sleep_secs"
           fi
         done
         echo "::error::Docker build failed after $max_attempts attempts"

@@ -18,6 +18,7 @@ runs:
       env:
         TAG: ${{ inputs.version }}
       run: |
+        git fetch --tags --force origin >/dev/null 2>&1 || true
         if git tag -l "$TAG" | grep -q -F -x "$TAG"; then
           echo "::error::Version $TAG is already released. Cannot re-release. Bump the VERSION file and create a new RC."
           exit 1

@@ -1,5 +1,5 @@
 name: 'Render Stage Summary'
-description: 'Internal primitive — rendering engine used by `render-commit-stage-summary` and `render-system-stage-summary`. Callable directly, but the stage-specific composites are the expected entry points.'
+description: 'Rendering engine for stage summaries — emits markdown to $GITHUB_STEP_SUMMARY tailored to stage-result (success/failure/skipped/etc.). Used directly by commit-stage workflows and composed by `render-system-stage-summary` for richer system-stage rendering.'
 author: 'Optivem'
 
 branding:

@@ -30,12 +30,12 @@ runs:
   using: 'composite'
   steps:
     - name: Wait for URLs
+      env:
+        SYSTEMS: ${{ inputs.systems }}
+        COMPOSE_FILE: ${{ inputs.compose-file }}
+        MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+        WAIT_SECONDS: ${{ inputs.wait-seconds }}
       run: |
-        SYSTEMS='${{ inputs.systems }}'
-        COMPOSE_FILE="${{ inputs.compose-file }}"
-        MAX_ATTEMPTS=${{ inputs.max-attempts }}
-        WAIT_SECONDS=${{ inputs.wait-seconds }}
-
         COUNT=$(echo "$SYSTEMS" | jq 'length')
 
         if [[ "$COUNT" -eq 0 ]]; then
@@ -46,6 +46,8 @@ runs:
         echo "⏳ Waiting for $COUNT system(s) to be ready..."
         echo ""
 
+        # Cap exponential growth so a long-running pipeline doesn't wait 8+ minutes between probes.
+        MAX_BACKOFF=$((WAIT_SECONDS * 16))
         FAILED=0
 
         for i in $(seq 0 $((COUNT - 1))); do
@@ -56,17 +58,21 @@ runs:
 
           attempt=1
 
-          while [ $attempt -le $MAX_ATTEMPTS ]; do
+          while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
             if curl -f "$URL" > /dev/null 2>&1; then
               echo "✅ $NAME is ready!"
               break
             fi
-            echo "🔄 Attempt $attempt/$MAX_ATTEMPTS: $NAME not ready yet, waiting $WAIT_SECONDS seconds..."
-            sleep $WAIT_SECONDS
+            backoff=$((WAIT_SECONDS * (2 ** (attempt - 1))))
+            if [ "$backoff" -gt "$MAX_BACKOFF" ]; then backoff=$MAX_BACKOFF; fi
+            jitter=$((RANDOM % 3))
+            sleep_secs=$((backoff + jitter))
+            echo "🔄 Attempt $attempt/$MAX_ATTEMPTS: $NAME not ready yet, waiting ${sleep_secs}s (backoff=${backoff}, jitter=${jitter})..."
+            sleep "$sleep_secs"
             attempt=$((attempt + 1))
           done
 
-          if [ $attempt -gt $MAX_ATTEMPTS ]; then
+          if [ "$attempt" -gt "$MAX_ATTEMPTS" ]; then
             echo "❌ $NAME failed to become ready after $MAX_ATTEMPTS attempts"
             FAILED=1
           fi
