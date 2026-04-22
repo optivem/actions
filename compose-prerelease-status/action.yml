@@ -13,13 +13,13 @@ inputs:
     description: 'Environment name (e.g., qa, staging, prod)'
     required: true
   status:
-    description: 'Status marker (e.g., deployed, passed, failed, approved)'
+    description: 'Status marker. Must be one of: deployed, passed, failed, approved, rejected. These align with the status icon mapping in compose-release-notes.'
     required: true
 
 outputs:
-  tag:
-    description: 'Composed status-marker tag string (e.g., v1.0.0-rc.1-qa-deployed)'
-    value: ${{ steps.build.outputs.tag }}
+  status-tag:
+    description: 'Composed status-marker tag string (e.g., v1.0.0-rc.1-qa-deployed). Not a SemVer version — a git tag marker for pipeline gates.'
+    value: ${{ steps.build.outputs.status-tag }}
 
 runs:
   using: 'composite'
@@ -58,6 +58,14 @@ runs:
           exit 1
         fi
 
+        case "$st" in
+          deployed|passed|failed|approved|rejected) ;;
+          *)
+            echo "::error::status must be one of: deployed, passed, failed, approved, rejected (got '$st')"
+            exit 1
+            ;;
+        esac
+
         status_tag="${pv}-${env}-${st}"
 
         echo "=== Compose Prerelease Status Action ==="
@@ -67,4 +75,4 @@ runs:
         echo "Composed tag: $status_tag"
         echo "========================================"
 
-        echo "tag=$status_tag" >> "$GITHUB_OUTPUT"
+        echo "status-tag=$status_tag" >> "$GITHUB_OUTPUT"

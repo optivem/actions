@@ -34,13 +34,11 @@ runs:
   using: 'composite'
   steps:
     - name: Log in to Container Registry
-      run: |
-        echo "$REGISTRY_TOKEN" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
-      shell: bash
-      env:
-        REGISTRY: ${{ inputs.registry }}
-        REGISTRY_USERNAME: ${{ inputs.registry-username }}
-        REGISTRY_TOKEN: ${{ inputs.token }}
+      uses: docker/login-action@v4
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.token }}
 
     - name: Promote Docker Images
       id: tag-images

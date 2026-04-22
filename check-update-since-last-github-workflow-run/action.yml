@@ -76,11 +76,20 @@ runs:
 
         echo "Last successful run: $last_run_at"
 
-        # ISO 8601 lexicographic comparison is correct when both timestamps are in UTC
-        # with the same format (both include 'Z'). GitHub API returns UTC Z-suffixed;
-        # typical subject timestamps (docker push times, git commit times) are likewise
-        # UTC Z-suffixed.
-        if [[ "$LAST_UPDATED_AT" > "$last_run_at" ]]; then
+        # Normalise both timestamps to epoch seconds before comparing. Bash string
+        # comparison only works when both values share exactly the same format; any
+        # drift (timezone offset instead of 'Z', fractional-second precision, etc.)
+        # silently mis-orders the comparison. `date -d` handles any valid ISO 8601.
+        subject_epoch=$(date -u -d "$LAST_UPDATED_AT" +%s 2>/dev/null) || {
+          echo "::error::last-updated-at is not a valid ISO 8601 timestamp: $LAST_UPDATED_AT"
+          exit 1
+        }
+        last_run_epoch=$(date -u -d "$last_run_at" +%s 2>/dev/null) || {
+          echo "::error::last-run createdAt from gh api is not a valid ISO 8601 timestamp: $last_run_at"
+          exit 1
+        }
+
+        if (( subject_epoch > last_run_epoch )); then
           echo "Subject is newer than last successful run — changed=true"
           changed=true
         else

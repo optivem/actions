@@ -48,7 +48,7 @@ runs:
           REF="main"
         fi
 
-        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+        remote_url="https://${GIT_HOST}/${REPO}.git"
 
         # Shallow-fetch just the target ref into a throwaway repo. Works for branches,
         # tags, and SHAs (GitHub has uploadpack.allowReachableSHA1InWant enabled).
@@ -57,7 +57,7 @@ runs:
         cd "$workdir"
 
         git init --quiet
-        if ! git fetch --quiet --depth=1 "$remote_url" "$REF"; then
+        if ! git -c "http.extraheader=Authorization: Bearer $TOKEN" fetch --quiet --depth=1 "$remote_url" "$REF"; then
           echo "::error::Failed to resolve $REPO ref '$REF' — ref not found or fetch failed"
           exit 1
         fi
