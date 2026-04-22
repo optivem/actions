@@ -5,18 +5,18 @@ branding:
   icon: 'upload-cloud'
   color: 'blue'
 inputs:
-  image-sha-tag:
-    description: 'Fully-qualified image URL tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def`. Output from build-docker-image.'
+  image-sha-url:
+    description: 'Fully-qualified image reference tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def`. Output from tag-docker-image.'
     required: true
-  image-latest-tag:
-    description: 'Fully-qualified image URL tagged with the latest tag, e.g. `ghcr.io/org/repo/svc:latest`. Output from build-docker-image.'
+  image-latest-url:
+    description: 'Fully-qualified image reference tagged with `latest`, e.g. `ghcr.io/org/repo/svc:latest`. Output from tag-docker-image.'
     required: true
   registry:
-    description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io)'
+    description: 'Container registry host (e.g., ghcr.io, docker.io, gcr.io)'
     required: false
     default: 'ghcr.io'
-  image-version-tag:
-    description: 'Fully-qualified image URL tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3`. Output from build-docker-image. Optional.'
+  image-version-url:
+    description: 'Fully-qualified image reference tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3`. Output from tag-docker-image. Optional.'
     required: false
     default: ''
   registry-username:
@@ -37,18 +37,18 @@ runs:
     - name: Echo Information
       run: |
         echo "📤 Starting Docker push action"
-        echo "🏷️ SHA Tag: $IMAGE_SHA_TAG"
-        echo "🏷️ Latest Tag: $IMAGE_LATEST_TAG"
-        if [ -n "$IMAGE_VERSION_TAG" ]; then
-          echo "🏷️ Version Tag: $IMAGE_VERSION_TAG"
+        echo "🏷️ SHA URL: $IMAGE_SHA_URL"
+        echo "🏷️ Latest URL: $IMAGE_LATEST_URL"
+        if [ -n "$IMAGE_VERSION_URL" ]; then
+          echo "🏷️ Version URL: $IMAGE_VERSION_URL"
         fi
         echo "🌐 Registry: $REGISTRY"
         echo "👤 Username: $REGISTRY_USERNAME"
       shell: bash
       env:
-        IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
-        IMAGE_LATEST_TAG: ${{ inputs.image-latest-tag }}
-        IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
+        IMAGE_SHA_URL: ${{ inputs.image-sha-url }}
+        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_VERSION_URL: ${{ inputs.image-version-url }}
         REGISTRY: ${{ inputs.registry }}
         REGISTRY_USERNAME: ${{ inputs.registry-username }}
 
@@ -96,46 +96,46 @@ runs:
           return 1
         }
 
-        sha_push_output=$(push_with_retry "$IMAGE_SHA_TAG")
+        sha_push_output=$(push_with_retry "$IMAGE_SHA_URL")
         echo "$sha_push_output"
         DIGEST=$(printf '%s' "$sha_push_output" | grep -oP 'sha256:[a-f0-9]{64}' | head -n1)
-        echo "✅ Pushed SHA tagged image: $IMAGE_SHA_TAG"
+        echo "✅ Pushed SHA tagged image: $IMAGE_SHA_URL"
         echo "📝 Image digest: $DIGEST"
 
-        push_with_retry "$IMAGE_LATEST_TAG"
-        echo "✅ Pushed tagged image: $IMAGE_LATEST_TAG"
+        push_with_retry "$IMAGE_LATEST_URL"
+        echo "✅ Pushed tagged image: $IMAGE_LATEST_URL"
 
-        if [ -n "$IMAGE_VERSION_TAG" ]; then
-          push_with_retry "$IMAGE_VERSION_TAG"
-          echo "✅ Pushed version tagged image: $IMAGE_VERSION_TAG"
+        if [ -n "$IMAGE_VERSION_URL" ]; then
+          push_with_retry "$IMAGE_VERSION_URL"
+          echo "✅ Pushed version tagged image: $IMAGE_VERSION_URL"
         fi
 
-        BASE_IMAGE=$(echo "$IMAGE_SHA_TAG" | sed 's/:[^:]*$//')
+        BASE_IMAGE=$(echo "$IMAGE_SHA_URL" | sed 's/:[^:]*$//')
         IMAGE_DIGEST_URL="${BASE_IMAGE}@${DIGEST}"
         echo "image-digest-url=$IMAGE_DIGEST_URL" >> "$GITHUB_OUTPUT"
 
         echo "🎉 Successfully pushed all Docker images to $REGISTRY"
       shell: bash
       env:
-        IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
-        IMAGE_LATEST_TAG: ${{ inputs.image-latest-tag }}
-        IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
+        IMAGE_SHA_URL: ${{ inputs.image-sha-url }}
+        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_VERSION_URL: ${{ inputs.image-version-url }}
         REGISTRY: ${{ inputs.registry }}
 
     - name: Output Summary
       run: |
         echo "📋 Push Outputs Summary:"
         echo "========================="
-        echo "🔗 SHA Tag: $IMAGE_SHA_TAG"
-        echo "🔗 Latest Tag: $IMAGE_LATEST_TAG"
-        if [ -n "$IMAGE_VERSION_TAG" ]; then
-          echo "🔗 Version Tag: $IMAGE_VERSION_TAG"
+        echo "🔗 SHA URL: $IMAGE_SHA_URL"
+        echo "🔗 Latest URL: $IMAGE_LATEST_URL"
+        if [ -n "$IMAGE_VERSION_URL" ]; then
+          echo "🔗 Version URL: $IMAGE_VERSION_URL"
         fi
         echo "🔗 Digest URL: $IMAGE_DIGEST_URL"
         echo "========================="
       shell: bash
       env:
-        IMAGE_SHA_TAG: ${{ inputs.image-sha-tag }}
-        IMAGE_LATEST_TAG: ${{ inputs.image-latest-tag }}
-        IMAGE_VERSION_TAG: ${{ inputs.image-version-tag }}
+        IMAGE_SHA_URL: ${{ inputs.image-sha-url }}
+        IMAGE_LATEST_URL: ${{ inputs.image-latest-url }}
+        IMAGE_VERSION_URL: ${{ inputs.image-version-url }}
         IMAGE_DIGEST_URL: ${{ steps.push.outputs.image-digest-url }}
