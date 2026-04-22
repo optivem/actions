@@ -13,6 +13,7 @@ Items that require consumer workflows to be updated OR change runtime behaviour 
   - Consumers to update (87 call sites across shop, spread across a large set of stage workflows — callers that are currently happy with the effective unbounded ceiling will see no behaviour change under the 15-min default; any caller that intentionally runs a probe longer than 15 min must add `timeout-seconds: <N>` explicitly):
     - `shop/.github/workflows/` — every workflow that calls `optivem/actions/wait-for-endpoints@v1` (grep `optivem/actions/wait-for-endpoints` for the full list; the action is called from 87 sites spanning monolith/multitier × dotnet/java/typescript × acceptance/prod stage × cloud/legacy variants).
   - Category: devops-alignment
+APPROVED
 
 - [ ] **Rename `tag-docker-images` output `image-urls` → `tagged-image-urls`** — resolves the input/output name shadow on a 24-call-site action whose output is actively read by every consumer. Update `action.yml` output key + internal `$GITHUB_OUTPUT` line in the helper script.
   - Affects: `tag-docker-images`
@@ -42,6 +43,7 @@ Items that require consumer workflows to be updated OR change runtime behaviour 
     - `shop/.github/workflows/multitier-typescript-prod-stage-cloud.yml`
     - (the final multitier-typescript-prod-stage.yml if present — grep `optivem/actions/tag-docker-images` in `shop/.github/workflows/` for the authoritative list at execution time)
   - Category: parameter-naming
+APPROVED
 
 - [ ] **Rename `check-ghcr-packages-exist` output `exist` → `exists`** — grammatical consistency with sibling `check-*-exists` actions (all others return `exists`). Update `action.yml` output key + internal `$GITHUB_OUTPUT` line.
   - Affects: `check-ghcr-packages-exist`
@@ -65,9 +67,12 @@ Items that require consumer workflows to be updated OR change runtime behaviour 
     - `shop/.github/workflows/multitier-typescript-acceptance-stage-cloud.yml`
     - `shop/.github/workflows/multitier-typescript-acceptance-stage-legacy.yml`
   - Category: parameter-naming
+REJECT, record as exception due to english grammar
+
 
 - [ ] **Rename `check-commit-status-exists` input `sha` → `commit-sha`** — aligns the flat-namespace SHA input with the mainstream convention codified in rubric §1 (v4/v5). Update `action.yml` input key + internal env bridge + description, and the single consumer call site.
   - Affects: `check-commit-status-exists`
   - Consumers to update (1 in gh-optivem):
     - `gh-optivem/.github/workflows/gh-acceptance-stage.yml`
   - Category: parameter-naming
+APPROVED
