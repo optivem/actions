@@ -1,0 +1,85 @@
+name: 'Generate Release Notes'
+description: 'Generates a production-release title and a markdown notes file for the release being cut. Writes the notes file to a `mktemp` path on the runner filesystem; the path is returned as an output for the caller to pass to `softprops/action-gh-release` or equivalent. Production-deployment releases only — this action hardcodes the `🚀`/`PROD` title shape because every caller to date emits prod-deployed release notes. If a QA / signoff / acceptance variant is ever needed, write a sibling action.'
+author: 'Optivem'
+branding:
+  icon: 'file-text'
+  color: 'blue'
+
+inputs:
+  prerelease-version:
+    description: 'The prerelease RC tag being promoted (e.g., v1.0.0-rc.1). Shown in the notes body as the version this release was promoted from.'
+    required: true
+  release-version:
+    description: 'The final SemVer release being cut (e.g., v1.0.0). Used as the release title version.'
+    required: true
+  artifact-urls:
+    description: 'JSON array of artifact URLs to include under an Artifacts section of the notes. Empty array or empty string skips the section.'
+    required: false
+    default: '[]'
+
+outputs:
+  title:
+    description: 'Composed release title (e.g., "🚀 v1.0.0 PROD")'
+    value: ${{ steps.compose.outputs.title }}
+  notes-file:
+    description: 'Absolute path to a temp file on the runner filesystem, valid only for the duration of the current job. Contents: plain markdown (UTF-8).'
+    value: ${{ steps.compose.outputs.notes-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: compose
+      shell: bash
+      env:
+        PRERELEASE_VERSION: ${{ inputs.prerelease-version }}
+        RELEASE_VERSION: ${{ inputs.release-version }}
+        ARTIFACT_URLS: ${{ inputs.artifact-urls }}
+        REPOSITORY: ${{ github.repository }}
+        SERVER_URL: ${{ github.server_url }}
+        RUN_ID: ${{ github.run_id }}
+        COMMIT_SHA: ${{ github.sha }}
+        ACTOR: ${{ github.actor }}
+      run: |
+        set -euo pipefail
+
+        release_title="🚀 $RELEASE_VERSION PROD"
+        short_sha="${COMMIT_SHA:0:7}"
+        timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+        notes_file=$(mktemp)
+        {
+          echo "# $release_title"
+          echo
+          echo "**Release Version:** $RELEASE_VERSION  "
+          echo "**Promoted From:** $PRERELEASE_VERSION  "
+          echo "**Workflow:** [$RUN_ID]($SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID)  "
+          echo "**Commit:** [$short_sha]($SERVER_URL/$REPOSITORY/commit/$COMMIT_SHA)  "
+          echo "**Actor:** $ACTOR  "
+          echo
+        } > "$notes_file"
+
+        if [[ -n "$ARTIFACT_URLS" && "$ARTIFACT_URLS" != "[]" ]]; then
+          if artifact_count=$(jq 'length' <<<"$ARTIFACT_URLS" 2>/dev/null); then
+            if (( artifact_count > 0 )); then
+              {
+                echo "## 📦 Artifacts"
+                echo
+                jq -r '.[] | "- \(.)"' <<<"$ARTIFACT_URLS"
+                echo
+              } >> "$notes_file"
+            fi
+          else
+            echo "⚠️ Could not parse artifact URLs; skipping artifacts section" >&2
+          fi
+        fi
+
+        {
+          echo "---"
+          echo "*Created: $timestamp*"
+        } >> "$notes_file"
+
+        echo "title=$release_title" >> "$GITHUB_OUTPUT"
+        echo "notes-file=$notes_file" >> "$GITHUB_OUTPUT"
+
+        echo "📝 Generated release title: $release_title"
+        echo "📄 Notes file: $notes_file"

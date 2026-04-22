@@ -13,7 +13,7 @@ inputs:
     description: 'Environment name (e.g., qa, staging, prod)'
     required: true
   status:
-    description: 'Status marker. Must be one of: deployed, passed, failed, approved, rejected. These align with the status icon mapping in compose-release-notes.'
+    description: 'Status marker. Must be one of: deployed, passed, failed, approved, rejected.'
     required: true
 
 outputs:

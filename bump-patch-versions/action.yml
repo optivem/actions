@@ -5,10 +5,18 @@ inputs:
   version-files:
     description: 'Newline-separated list of "path:tag-prefix1,tag-prefix2,..." entries. Each VERSION file is bumped if ANY tag "{prefix}{current-version}" exists on the remote. Example: "VERSION:meta-v,monolith-java-v"'
     required: true
-  remote:
-    description: 'Git remote to check for tags (default: origin)'
+  repository:
+    description: 'Repository in owner/repo format. Defaults to the current repository.'
     required: false
-    default: 'origin'
+    default: ${{ github.repository }}
+  git-host:
+    description: 'Git host to query (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
+    required: false
+    default: 'github.com'
+  token:
+    description: 'Token for authenticating to the remote. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   bumps:
@@ -29,9 +37,17 @@ runs:
       shell: bash
       env:
         VERSION_FILES: ${{ inputs.version-files }}
-        REMOTE: ${{ inputs.remote }}
+        REPO: ${{ inputs.repository }}
+        GIT_HOST: ${{ inputs.git-host }}
+        TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
+
+        if [ -n "$TOKEN" ]; then
+          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+        else
+          remote_url="https://${GIT_HOST}/${REPO}.git"
+        fi
 
         bumps='[]'
         bumped=false
@@ -61,7 +77,7 @@ runs:
           matched_tag=""
           for prefix in "${tag_prefixes[@]}"; do
             candidate="${prefix}${current_version}"
-            if git ls-remote --tags --exit-code "$REMOTE" "refs/tags/${candidate}" >/dev/null 2>&1; then
+            if git ls-remote --tags --exit-code "$remote_url" "refs/tags/${candidate}" >/dev/null 2>&1; then
               matched_tag="$candidate"
               break
             fi

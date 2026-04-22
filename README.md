@@ -278,26 +278,24 @@ Pure string transform. Validates `base-version` matches `X.Y.Z` and composes `v{
 |---|---|
 | `version` | The composed prerelease version string |
 
-### compose-release-notes
+### generate-release-notes
 
-Pure string-transform. Composes a GitHub release title (with status/environment icons) and writes a markdown notes body to a tempfile, covering version, environment, status, workflow link, commit link, actor, and optional artifact list. No platform API calls.
+Generates a production-release title and a markdown notes file (written to a `mktemp` path) for the release being cut. Returns both the title and the notes-file path so the caller can pass them to `softprops/action-gh-release` or equivalent. Production-deployment releases only — the title shape `🚀 <release-version> PROD` is hardcoded because every caller to date emits prod-deployed release notes. If a QA / signoff / acceptance variant is ever needed, write a sibling action.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `base-version` | yes | — | Original version that triggered the workflow (e.g., `v1.0.0-rc.1`) |
-| `release-version` | yes | — | Release version tag (e.g., `v1.0.0-rc.1-qa-deployed`). For signoff statuses (`approved`/`rejected`) the title falls back to `base-version`. |
-| `environment` | yes | — | Environment name (e.g., `qa`, `staging`, `prod`). Mapped to a short uppercase label in the title. |
-| `status` | yes | — | Status (e.g., `deployed`, `passed`, `failed`, `approved`, `rejected`). Selects icon and title-suffix mapping. |
-| `artifact-urls` | no | `[]` | JSON array of artifact URLs to include in the notes. Empty array or empty string skips the artifacts section. |
+| `prerelease-version` | yes | — | The prerelease RC tag being promoted (e.g., `v1.0.0-rc.1`). Shown in the notes body as the version this release was promoted from. |
+| `release-version` | yes | — | The final SemVer release being cut (e.g., `v1.0.0`). Used as the release title version. |
+| `artifact-urls` | no | `[]` | JSON array of artifact URLs to include under an Artifacts section of the notes. Empty array or empty string skips the section. |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `title` | Composed release title (e.g., `"🚀 v1.0.0-rc.1-qa-deployed QA"`) |
-| `notes-file` | Path to a tempfile containing the composed markdown release notes |
+| `title` | Composed release title (e.g., `"🚀 v1.0.0 PROD"`) |
+| `notes-file` | Path to a tempfile on the runner filesystem containing the composed markdown release notes (UTF-8) |
 
 ### compose-release-version
 

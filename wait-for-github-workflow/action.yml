@@ -2,7 +2,7 @@ name: 'Wait for GitHub Workflow'
 description: 'Waits for a GitHub Actions workflow run triggered by a specific commit SHA to complete. Polls by head-sha to find the run, then uses `gh run watch --exit-status` to block until finished. Includes GitHub API rate-limit protection and a hard timeout ceiling on the combined discovery + watch phases. Sibling of `trigger-and-wait-for-github-workflow` — use that when you need to dispatch the workflow yourself.'
 inputs:
   workflow:
-    description: 'Workflow filename to wait for (e.g., java-commit-stage.yml)'
+    description: 'Workflow filename (e.g. monolith-java-commit-stage.yml) — matches `gh workflow run --workflow`'
     required: true
   commit-sha:
     description: 'The commit SHA to match against'
