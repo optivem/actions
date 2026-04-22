@@ -1,11 +1,63 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${IMAGE_URLS:?IMAGE_URLS is required (JSON array or newline-separated list)}"
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
+
+IMAGE_URLS="${IMAGE_URLS:-}"
+BASE_IMAGE_URLS="${BASE_IMAGE_URLS:-}"
+COMMIT_SHA="${COMMIT_SHA:-}"
 
 echo "Starting batch Docker image digest resolution..."
 echo ""
+
+if [[ -n "$IMAGE_URLS" && -n "$BASE_IMAGE_URLS" ]]; then
+  echo "::error::Specify exactly one of image-urls or base-image-urls, not both"
+  exit 1
+fi
+
+if [[ -z "$IMAGE_URLS" && -z "$BASE_IMAGE_URLS" ]]; then
+  echo "::error::Either image-urls or base-image-urls must be provided"
+  exit 1
+fi
+
+# When base-image-urls is used, compose fully-qualified URLs with the computed tag.
+# Tag convention matches docker/metadata-action type=sha,format=long: sha-<commit-sha>.
+if [[ -n "$BASE_IMAGE_URLS" ]]; then
+  if [[ -n "$COMMIT_SHA" ]]; then
+    tag="sha-${COMMIT_SHA}"
+  else
+    tag="latest"
+  fi
+  echo "Composing image URLs from base-image-urls with tag: $tag"
+
+  base_trimmed="$(printf '%s' "$BASE_IMAGE_URLS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  base_list=()
+  if [[ "$base_trimmed" == \[* && "$base_trimmed" == *\] ]]; then
+    if ! parsed="$(jq -r '.[]' <<<"$base_trimmed" 2>/dev/null)"; then
+      echo "::error::Invalid JSON format in base-image-urls input"
+      exit 1
+    fi
+    while IFS= read -r line; do
+      line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      [[ -z "$line" ]] && continue
+      base_list+=("$line")
+    done <<<"$parsed"
+  else
+    while IFS= read -r line; do
+      line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      [[ -z "$line" ]] && continue
+      [[ "$line" == \#* ]] && continue
+      base_list+=("$line")
+    done <<<"$BASE_IMAGE_URLS"
+  fi
+
+  composed=()
+  for base in "${base_list[@]}"; do
+    composed+=("${base}:${tag}")
+  done
+  IMAGE_URLS="$(printf '%s\n' "${composed[@]}")"
+fi
+
 echo "ImageUrls: $IMAGE_URLS"
 echo ""
 
