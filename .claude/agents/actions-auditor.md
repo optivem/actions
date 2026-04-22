@@ -48,7 +48,13 @@ To ground recommendations in real usage, also inspect how each action is called 
 - `../gh-optivem/` — gh workflow suite
 - `../optivem-testing/` — one-click release & cross-pipeline orchestration
 
-**Critical:** grep ALL consumer repos. Missing a repo produces false "dead code" findings. When in doubt, also glob for sibling dirs of the actions repo that have a `.github/workflows/` folder — they may be consumers too.
+**Exclude archived repos** from consumer scans. These directories exist in the workspace but are no longer actively used; stale references in them must NOT count as call sites, block renames, or contribute to "dead code" findings:
+
+- `../eshop/`, `../eshop-tests/`, `../eshop-tests-dotnet/`, `../eshop-tests-java/`, `../eshop-tests-typescript/`
+
+If the user adds new archived repos in the future, extend this list rather than scanning them.
+
+**Critical:** grep ALL active consumer repos (those above, minus the archived list). Missing an active repo produces false "dead code" findings. When in doubt, glob for sibling dirs of the actions repo that have a `.github/workflows/` folder — if they're not in the archived list, they may be active consumers.
 
 For each action, grep the consumer repos for `optivem/actions/<dir-name>@` references (typically inside `.github/workflows/*.yml`, but ALSO inside other `action.yml` composites). Record:
 

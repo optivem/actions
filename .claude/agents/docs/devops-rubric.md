@@ -102,7 +102,7 @@ Default recommendation for an output "unread today" is **keep**. An output's cos
 
 Any action that **composes**, **parses**, **validates**, **compares**, or **emits** a version string must align with [Semantic Versioning 2.0.0](https://semver.org) — the mainstream version-naming standard across the Node, Rust, Go, .NET, and container-image ecosystems this repo's consumers live in. The rubric does not invent a parallel version vocabulary.
 
-Applies to (non-exhaustive): `compose-prerelease-version`, `compose-release-version`, `read-base-version`, `ensure-version-unreleased`, `bump-patch-versions`, `resolve-latest-prerelease-tag`, `resolve-latest-tag-from-sha`, `create-component-tags`, and any future action that treats "a version" as a first-class value.
+Applies to (non-exhaustive): `compose-prerelease-version`, `compose-release-version`, `read-base-version`, `validate-version-unreleased`, `bump-patch-versions`, `resolve-latest-prerelease-tag`, `resolve-latest-tag-from-sha`, `create-component-tags`, and any future action that treats "a version" as a first-class value.
 
 **Input names — use SemVer vocabulary.** When an action accepts a version or its parts, name inputs after the SemVer spec's own terms:
 
@@ -270,7 +270,7 @@ Three conceptual tiers. Only the third gets a prefix.
 
   *Tier 1 covers actions whose **concept** is universal. The language-runtime setup primitives (`setup-node`, `setup-java-gradle`, `setup-dotnet`) historically lived in this repo as thin wrappers around `actions/setup-*@v5`, but per §1.8 those wrappers are being deleted — callers now invoke `actions/setup-*` directly. The Tier 1 concept still applies at the workflow level: every CI has a language-runtime setup primitive, and a porting student replaces `actions/setup-*` with the equivalent on their target CI. When auditing a remaining Tier 1 action in this repo that is implemented via a platform-specific mainstream action, flag it as "Tier 1 name, platform-specific implementation" so the porting surface is visible — and apply the §1.8 thin-wrapper test to decide whether the wrapper itself should be deleted.*
 
-- **Tier 2 — git-native** (any CI, any git host, but requires a git VCS). No prefix. Git is the assumed baseline — adding `git-` to names is redundant because the domain nouns (`tag`, `commit`, `sha`, `ref`, `branch`) already imply git. Examples: `ensure-tag-exists`, `resolve-latest-tag-from-sha`, `publish-tag`, `ensure-version-unreleased`, `bump-patch-versions`.
+- **Tier 2 — git-native** (any CI, any git host, but requires a git VCS). No prefix. Git is the assumed baseline — adding `git-` to names is redundant because the domain nouns (`tag`, `commit`, `sha`, `ref`, `branch`) already imply git. Examples: `validate-tag-exists`, `resolve-latest-tag-from-sha`, `publish-tag`, `validate-version-unreleased`, `bump-patch-versions`.
 
   *Implementation sub-rule for Tier 2:* Tier 2 actions must not hardcode `github.com` in their implementation. Remote URLs should be parameterised — either accept a `git-host` input with default `github.com`, or derive the host from a `repo` input given in URL form. The pattern `https://x-access-token:${TOKEN}@github.com/...` breaks Tier 2's portability claim: a student porting to GitLab, Bitbucket, Gitea, or self-hosted would have to edit every Tier 2 action. Flag actions that hardcode the git host as a **portability violation** under **DevOps alignment findings** → "Tool-agnostic composition".
 
@@ -423,7 +423,7 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 | **Version source** | release | VERSION files / `package.json` / `pom.xml` / Cargo.toml / latest git tag | `read-base-version`, `compose-prerelease-version` |
 | **Artifact construction** | build | Docker images / npm packages / Maven JARs / NuGet / zip bundles | For Docker: `docker/build-push-action@v6` (see §1.6 — build/tag/push collapse into one Marketplace step). For npm/Maven: dedicated primitives per ecosystem. |
 | **Artifact release tagging** | release | `docker tag :v{version}` / `npm publish --tag` / Maven release plugin | For Docker: `docker/metadata-action@v5` feeding `docker/build-push-action@v6` (§1.6). For other ecosystems: future `tag-npm-package`, `publish-maven-artifact`. |
-| **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `publish-tag`, `ensure-tag-exists` |
+| **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `publish-tag`, `validate-tag-exists` |
 | **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `softprops/action-gh-release@v2` (GitHub) — per §1.8 the repo no longer ships a local `create-github-release`. |
 | **Commit of generated files** | release | `git push` / Contents API / merge-request PR | `commit-files` |
 | **Status / approval signalling** | release | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-commit-status` |

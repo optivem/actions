@@ -372,7 +372,7 @@ Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working
 | `compose-file` | no | `` | Docker Compose file to use (e.g., `docker-compose.yml`). Empty = default compose file resolution. |
 | `working-directory` | yes | — | Working directory containing the Docker Compose file |
 
-### ensure-env-vars-defined
+### validate-env-vars-defined
 
 Iterates the newline-separated `names` list and uses `printenv` to confirm each name has a non-empty value in the step's environment. Fails the step with a `::error::Missing required config:` message listing all missing names.
 
@@ -384,9 +384,9 @@ Iterates the newline-separated `names` list and uses `printenv` to confirm each 
 
 **Notes:** List the names in `names` and pass the values via `env:` at the caller's step — the action reads them from the process environment.
 
-### ensure-tag-exists
+### validate-tag-exists
 
-Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<tag>"`. Fails the step if missing. Inverse of `ensure-version-unreleased`.
+Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<tag>"`. Fails the step if missing. Inverse of `validate-version-unreleased`.
 
 **Inputs**
 
@@ -397,7 +397,7 @@ Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<
 | `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
 | `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
 
-### ensure-version-unreleased
+### validate-version-unreleased
 
 Asserts that a fully-composed version tag does NOT yet exist locally via `git tag -l`. Fails the step if it does. Caller is responsible for composing the full tag (prefix + version). Works against the local workspace only.
 
