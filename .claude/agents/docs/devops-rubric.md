@@ -447,6 +447,20 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 
 When you find a concern-mixing action: identify which concerns it spans (from the table above), recommend splitting it into one primitive per concern, and if a thin composite is still desirable for the common-case caller, recommend rebuilding it **on top of** the primitives — never as a replacement. Flag it in **DevOps alignment findings** → "Separation of concerns".
 
+## 6.3 Performance exception: don't split when both outputs derive from the same atomic query
+
+The one-concern-per-action rule serves **swappability** — the ability to swap one concern's implementation without touching the others. It is not an end in itself. When two logical outputs come from the same underlying atomic operation (a single API call, a single registry query, a single `git ls-remote`, a single file read), splitting the action into two typically **doubles the cost of that operation without delivering any swappability gain** — both halves would still have to run the same query, and neither is independently replaceable because both depend on the same upstream source of truth.
+
+**Rule:** before proposing a split under §6, apply this test:
+
+> "If I split this, will the two new actions each run the same underlying query/read/call? If yes, the 'two concerns' are actually one atomic operation with two projections — **keep them merged** and flag it as 'merged projections of a single atomic source' rather than as a concern-mixing violation."
+
+**Concrete example (rejected split):** `resolve-docker-image-digests` emits both `image-digest-urls` and `latest-updated-at`. On the surface these look like two concerns (digest resolution vs. newest-timestamp aggregation). But both values are projections of the same `docker manifest inspect`-equivalent registry query. Splitting into `resolve-docker-image-digests` + `get-latest-image-timestamp` would force every caller that reads both outputs (all 18 consumers in shop) to run the query twice. No caller gains swappability — the registry-query implementation is the same atomic thing either way. **Keep merged.**
+
+**When a split IS still correct despite shared data:** if the two projections are consumed by *different* callers (e.g. caller A reads only the digest, caller B reads only the timestamp), splitting may be worthwhile because each caller pays for only what it uses. But that's a caller-profile argument, not a §6 orthogonal-concerns argument — make it explicit when you propose the split.
+
+**Where to apply this test:** any §6-motivated split proposal where the underlying implementation is a single query/read/call. If you cannot point at two *independently reimplementable* backends, you do not have two concerns — you have one concern with two output projections.
+
 ---
 
 # 7. Architecture: composition order and idempotence
