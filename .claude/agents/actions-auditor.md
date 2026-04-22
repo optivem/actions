@@ -160,6 +160,19 @@ When `mode = external` or `mode = internal`, write only the files for that mode.
 
 **Tie-breaker for ambiguous items.** If you are unsure whether an item is External or Internal — e.g. adding an input with a new default that MIGHT change behaviour for some callers — classify as **External** and note the condition in the item body. It is safer to over-report breaking changes than to bury one in the Internal file.
 
+## Breaking vs non-breaking classification (external file only)
+
+Every item in the external report and external plan is additionally tagged **breaking** or **non-breaking**. The internal file does not use this split — internal items are non-breaking by definition.
+
+The split exists to help the author prioritize: breaking items require co-ordinated consumer updates and usually want to land as a single atomic change across the action + all call sites; non-breaking items (even though consumer-visible) can land independently and consumers adopt at their own pace.
+
+- **Breaking** — a consumer that does not update synchronously with the action change will fail, error, or produce a functionally different outcome. Examples: action directory rename, input/output rename, input/output removal, flipping `required: false` → `required: true` without a preservative default, output polarity flip, splitting an action into two, removing a previously-valid input value, adding a new cap whose default is lower than the observed runtime of today''s callers, changes to an existing default that shift behaviour.
+- **Non-breaking** — existing consumers keep working unchanged after the change ships, even though the action''s public surface has changed visibly. Examples: adding a new cap whose default is higher than any observed runtime, adding a new output that consumers may optionally read, relaxing `required: true` → `required: false`, adding a `deprecationMessage:` that names a replacement while the old input still works, adding an optional input that is surfaced in the action.yml but whose default preserves today''s behaviour (classified as External per the scope tie-breaker, then as non-breaking here).
+
+**Tie-breaker.** If you are unsure whether an external item is breaking — e.g. a new cap where the observed-vs-default relationship is genuinely uncertain, or a default change where you cannot prove no caller depends on the old value — classify as **breaking**. It is safer to over-report.
+
+**Always-breaking categories.** Naming violations (directory or parameter rename), duplicates (merge/remove), and consolidation opportunities (split/merge) are always breaking when they appear in the external file; their non-breaking counterparts (e.g. `name:` field edits, internal script merges) live in the internal file. Parameter findings and DevOps alignment findings can be either.
+
 ## External file structure
 
 The external scope produces **two files per run**:
@@ -218,11 +231,15 @@ One sub-block per action, after the summary table:
 
 If none, write `None.`
 
-## Naming violations — External
-Table: `dir | rule violated | proposed name`. Only rename findings that require consumer updates. If none, write `None.`
+## Breaking changes
 
-## Parameter findings — External
-Grouped by action. Only parameter changes that require consumer updates (renames, removals, required-becoming-true). For each action with at least one finding, produce a sub-block:
+Items here force consumers to update synchronously with the action change. Complete these first, co-ordinated with consumer updates across `shop`, `gh-optivem`, and `optivem-testing`.
+
+### Naming violations — External
+Table: `dir | rule violated | proposed name`. Naming renames are always breaking when they appear in the external file (their internal counterparts — e.g. `name:` field edits — live in the internal file). If none, write `None.`
+
+### Parameter findings — External (breaking)
+Grouped by action. Breaking parameter changes only — renames, removals, `required: false` → `required: true` without a preservative default, default changes that shift behaviour, output polarity flips. For each action with at least one finding, produce a sub-block:
 
 ```
 #### <dir>
@@ -231,22 +248,38 @@ Grouped by action. Only parameter changes that require consumer updates (renames
 
 If none, write `None.`
 
-## Duplicates — External
-Duplicate clusters whose resolution merges/removes actions (consumer-breaking). If none, write `None.`
+### Duplicates — External
+Duplicate clusters whose resolution merges/removes actions (always breaking when external). If none, write `None.`
 
-## Consolidation opportunities — External
-Consolidations that split or merge actions in a consumer-breaking way. Sketch the consolidated signatures. If none, write `None.`
+### Consolidation opportunities — External
+Consolidations that split or merge actions in a way that forces consumer updates. Sketch the consolidated signatures. If none, write `None.`
 
-## DevOps alignment findings — External
-DevOps/CD findings whose fix changes consumer-visible behaviour (input removals, new capped defaults, required fields). Organise under the standard subsections (only those with findings, plus **Other**): Tool-agnostic composition, Separation of concerns, Composite opacity, Prefer VCS over platform API, Composition ordering, Idempotence, Secrets / auth, Other.
+### DevOps alignment findings — External (breaking)
+DevOps/CD findings whose fix forces a consumer update (input removals, caps whose default is lower than observed runtime, required fields, behaviour-shifting default changes). Organise under the standard subsections (only those with findings, plus **Other**): Tool-agnostic composition, Separation of concerns, Composite opacity, Prefer VCS over platform API, Composition ordering, Idempotence, Secrets / auth, Other.
 
 For each finding: **Practice violated** / **Source** / **What's wrong here** / **Aligned alternative**. When multiple viable fixes exist, number them and mark **one as "Recommended (best-practice)"** — pick the option that most directly satisfies the rubric dimension violated, even if it requires more consumer churn. Briefly call out the cheaper alternatives and what rubric concern they leave unresolved.
 
 If none, write `None.`
 
+## Non-breaking changes
+
+Items here change the action's public surface visibly (new inputs, new outputs, safe caps, relaxed required flags, deprecation messages) but existing consumers keep working unchanged. Safe to land independently of consumer updates — consumers adopt at their own pace. Naming violations, duplicates, and consolidation opportunities cannot appear in this section (they are always breaking); parameter findings and DevOps alignment findings can.
+
+### Parameter findings — External (non-breaking)
+Grouped by action. Additive or relaxing parameter changes that are surface-visible but preservative — new optional outputs, `required: true` → `required: false`, `deprecationMessage:` additions that name a replacement while the old parameter still works, new optional inputs whose absence preserves today's behaviour. Same sub-block shape as the breaking counterpart.
+
+If none, write `None.`
+
+### DevOps alignment findings — External (non-breaking)
+DevOps/CD findings whose fix is surface-visible but preservative — e.g. a `timeout-seconds` cap whose default is higher than any observed runtime, a new observability output, a new optional input with a behaviour-preserving default. Same subsection structure as the breaking counterpart.
+
+If none, write `None.`
+
 ## Summary — External
-- Counts: naming violations / parameter findings / duplicate clusters / consolidation opportunities / DevOps alignment findings (External only). When `scope = naming`, skipped counts are reported as `skipped` rather than `0`.
-- Top 3 highest-impact external changes (ranked by how much consumer churn they force).
+- Counts — **breaking**: naming violations / parameter findings / duplicate clusters / consolidation opportunities / DevOps alignment findings.
+- Counts — **non-breaking**: parameter findings / DevOps alignment findings.
+- When `scope = naming`, skipped counts are reported as `skipped` rather than `0`.
+- Top 3 highest-impact external changes (ranked by how much consumer churn they force; breaking items rank above non-breaking at the same call-site count). Tag each with `[breaking]` or `[non-breaking]`.
 ```
 
 ### External plan — `.plans/<ts>-audit-actions-external.md`
