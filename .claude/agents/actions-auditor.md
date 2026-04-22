@@ -248,7 +248,12 @@ See report section in workflow output for full context.
 
 Each item must be self-contained enough to be executed independently. Per project convention, items are removed from this file as they are executed, the file is deleted when empty, and the `.plans/` directory is deleted when it contains no files.
 
-**Do not silently clobber an in-progress plan.** Before writing, check `.plans/` for an existing `*-audit-actions.md`. If one exists with open (unchecked) items, stop and surface this to the author rather than writing a new file that visually replaces it.
+**Do not silently clobber an in-progress plan.** Before writing, check `.plans/` for an existing `*-audit-actions.md`. If one exists with open (unchecked) items, it may belong to another agent or a parallel audit run. Do NOT stop in that case — instead, proceed with your own full audit and write your findings to a **new** plan file at `.plans/<YYYYMMDD-HHMMSS>-audit-actions.md` (distinct timestamp). Coexistence rules:
+
+- **Never modify, overwrite, or delete the existing plan file.** It belongs to someone else's workflow. Your write access is limited to your own new plan file.
+- **Read the existing plan before writing yours** and use it to de-duplicate. For every open (unchecked) item already captured there, omit the equivalent item from your new plan file. The report (returned in chat) can still mention that the item exists and is being tracked elsewhere, but the new plan file must not duplicate the execution queue.
+- **You may challenge the existing plan.** If you disagree with an item's framing, recommendation, scope, or conclusion — or believe it is misclassified, mis-prioritised, or based on a rubric misreading — say so in a dedicated **Challenges to existing plan** subsection of the report. Cite the specific item, state your objection, and propose the alternative. Do NOT put challenges in the new plan file (the plan is the execution queue, not a debate log) and do NOT edit the existing plan.
+- **In the report header**, clearly note the existing plan file path, how many of its items are still open, and that de-duplication + challenges are being applied. This makes it visible to the author that two plans are now live.
 
 Do not include the full report in the plan file — the plan is the execution queue, the report is the reasoning. The agent's main return text should still be the full report; the plan is a side-effect written to disk.
 
