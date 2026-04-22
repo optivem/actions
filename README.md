@@ -479,7 +479,7 @@ Pure string mapping. Emits `stage-result=success` if `result == approved`, other
 |---|---|
 | `stage-result` | `success` if `result` is `approved`, `failure` otherwise |
 
-### promote-docker-images
+### tag-docker-images
 
 Promotes a JSON array of Docker images by issuing a server-side manifest retag (`docker buildx imagetools create --tag <new> <source>`) for each entry. Used for moving an already-built artifact through pipeline stages (Farley-style promotion: `build-once`, promote-many). No image data crosses the runner; multi-arch manifest lists are preserved. Handles login, per-image failure isolation, and emits the new URLs as a JSON array.
 

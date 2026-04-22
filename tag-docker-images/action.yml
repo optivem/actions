@@ -1,5 +1,5 @@
-name: 'Promote Docker Images'
-description: 'Promotes Docker images by issuing a server-side manifest retag via `docker buildx imagetools create` for each source image. Preserves multi-arch manifest lists, zero image data crosses the runner. Used for moving an already-built artifact through pipeline stages (Farley promotion).'
+name: 'Tag Docker Images'
+description: 'Applies a new tag to existing Docker images via server-side manifest operation (`docker buildx imagetools create`) for each source image. Preserves multi-arch manifest lists; zero image data crosses the runner. Same registry throughout — only a tag is added, no image content moves. Useful for pipeline-stage promotions that are expressed purely as a tag change.'
 author: 'Optivem'
 branding:
   icon: 'tag'
@@ -40,10 +40,10 @@ runs:
         username: ${{ inputs.registry-username }}
         password: ${{ inputs.token }}
 
-    - name: Promote Docker Images
+    - name: Tag Docker Images
       id: tag-images
       shell: bash
       env:
         IMAGE_URLS: ${{ inputs.image-urls }}
         TARGET_TAG: ${{ inputs.tag }}
-      run: bash "${{ github.action_path }}/promote-docker-images.sh"
+      run: bash "${{ github.action_path }}/tag-docker-images.sh"
