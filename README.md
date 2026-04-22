@@ -64,7 +64,7 @@ Two lint checks enforce the conventions:
 | [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
 | [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
 | [validate-version-unreleased](#validate-version-unreleased) | • `version` | — |
-| [wait-for-endpoints](#wait-for-endpoints) | • `endpoints`<br>• `compose-file`<br>• `working-directory`<br>• `max-attempts`<br>• `wait-seconds` | — |
+| [wait-for-endpoints](#wait-for-endpoints) | • `endpoints`<br>• `compose-file`<br>• `working-directory`<br>• `max-attempts`<br>• `wait-seconds`<br>• `timeout-seconds` | — |
 | [wait-for-github-workflow](#wait-for-github-workflow) | • `workflow`<br>• `commit-sha`<br>• `repository`<br>• `poll-interval`<br>• `watch-interval`<br>• `max-discovery-attempts`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 
 ### bump-patch-versions
@@ -723,7 +723,7 @@ Asserts that a fully-composed version tag does NOT yet exist locally via `git ta
 
 ### wait-for-endpoints
 
-For each `{name, url}` in the input array, polls the URL with `curl -f` up to `max-attempts` times with exponential backoff between attempts. Fails the step if any URL never succeeds. On failure, if `compose-file` is set, dumps `docker compose logs --timestamps` and `docker compose ps` for debugging.
+For each `{name, url}` in the input array, polls the URL with `curl -f` up to `max-attempts` times with exponential backoff between attempts, subject to a hard total-time ceiling from `timeout-seconds`. Fails the step with exit code 124 if the ceiling is hit, or exit code 1 if any URL exhausts `max-attempts` first. On failure, if `compose-file` is set, dumps `docker compose logs --timestamps` and `docker compose ps` for debugging.
 
 **Inputs**
 
@@ -734,6 +734,7 @@ For each `{name, url}` in the input array, polls the URL with `curl -f` up to `m
 | `working-directory` | no | `.` | Working directory for the Docker Compose log dump (used only when `compose-file` is set) |
 | `max-attempts` | no | `30` | Maximum number of polling attempts per URL |
 | `wait-seconds` | no | `10` | Base seconds to wait between attempts (doubled each attempt, capped at `wait-seconds * 16`, plus small jitter) |
+| `timeout-seconds` | no | `900` | Hard timeout on the total polling time across all endpoints. Action fails with exit code 124 if not all endpoints become ready within this ceiling. Default is 15 min — aligned with fast-feedback sizing. |
 
 ### wait-for-github-workflow
 

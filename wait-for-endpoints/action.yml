@@ -1,5 +1,5 @@
 name: 'Wait for Endpoints'
-description: 'Polls a list of HTTP endpoints until each responds with success (curl -f) or max attempts are exhausted. On failure, optionally dumps Docker Compose logs and container status.'
+description: 'Polls a list of HTTP endpoints until each responds with success (curl -f), max attempts are exhausted, or the hard `timeout-seconds` ceiling is reached. On failure, optionally dumps Docker Compose logs and container status.'
 
 inputs:
   endpoints:
@@ -21,6 +21,10 @@ inputs:
     description: 'Seconds to wait between attempts'
     required: false
     default: '10'
+  timeout-seconds:
+    description: 'Hard timeout on the total polling time across all endpoints. The action fails with exit code 124 if not all endpoints have become ready within this many seconds. Default: 900 (15 minutes) — aligned with fast-feedback sizing. Callers running probes that legitimately exceed 15 minutes must override upward.'
+    required: false
+    default: '900'
 
 runs:
   using: 'composite'
@@ -31,6 +35,7 @@ runs:
         COMPOSE_FILE: ${{ inputs.compose-file }}
         MAX_ATTEMPTS: ${{ inputs.max-attempts }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
       run: |
         COUNT=$(echo "$ENDPOINTS" | jq 'length')
 
@@ -39,12 +44,15 @@ runs:
           exit 0
         fi
 
-        echo "⏳ Waiting for $COUNT endpoint(s) to be ready..."
+        echo "⏳ Waiting for $COUNT endpoint(s) to be ready (timeout: ${TIMEOUT_SECONDS}s)..."
         echo ""
+
+        DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))
 
         # Cap exponential growth so a long-running pipeline doesn't wait 8+ minutes between probes.
         MAX_BACKOFF=$((WAIT_SECONDS * 16))
         FAILED=0
+        TIMED_OUT=0
 
         for i in $(seq 0 $((COUNT - 1))); do
           NAME=$(echo "$ENDPOINTS" | jq -r ".[$i].name")
@@ -55,6 +63,14 @@ runs:
           attempt=1
 
           while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+            now=$(date +%s)
+            if [ "$now" -ge "$DEADLINE" ]; then
+              echo "❌ Timed out after ${TIMEOUT_SECONDS}s waiting for $NAME (hard timeout reached)"
+              TIMED_OUT=1
+              FAILED=1
+              break
+            fi
+
             if curl -f "$URL" > /dev/null 2>&1; then
               echo "✅ $NAME is ready!"
               break
@@ -63,10 +79,25 @@ runs:
             if [ "$backoff" -gt "$MAX_BACKOFF" ]; then backoff=$MAX_BACKOFF; fi
             jitter=$((RANDOM % 3))
             sleep_secs=$((backoff + jitter))
+
+            # Clamp sleep to the remaining deadline so we exit promptly on timeout.
+            remaining=$(( DEADLINE - $(date +%s) ))
+            if [ "$remaining" -le 0 ]; then
+              echo "❌ Timed out after ${TIMEOUT_SECONDS}s waiting for $NAME (hard timeout reached)"
+              TIMED_OUT=1
+              FAILED=1
+              break
+            fi
+            if [ "$sleep_secs" -gt "$remaining" ]; then sleep_secs=$remaining; fi
+
             echo "🔄 Attempt $attempt/$MAX_ATTEMPTS: $NAME not ready yet, waiting ${sleep_secs}s (backoff=${backoff}, jitter=${jitter})..."
             sleep "$sleep_secs"
             attempt=$((attempt + 1))
           done
+
+          if [ "$TIMED_OUT" -eq 1 ]; then
+            break
+          fi
 
           if [ "$attempt" -gt "$MAX_ATTEMPTS" ]; then
             echo "❌ $NAME failed to become ready after $MAX_ATTEMPTS attempts"
@@ -82,6 +113,9 @@ runs:
             docker compose -f "$COMPOSE_FILE" logs --timestamps
             echo "🐳 Docker Compose container status:"
             docker compose -f "$COMPOSE_FILE" ps
+          fi
+          if [ "$TIMED_OUT" -eq 1 ]; then
+            exit 124
           fi
           exit 1
         fi
