@@ -53,7 +53,11 @@ runs:
           exit 1
         fi
 
-        remote_url="https://${GIT_HOST}/${REPO}.git"
+        if [ -n "$TOKEN" ]; then
+          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+        else
+          remote_url="https://${GIT_HOST}/${REPO}.git"
+        fi
 
         if [ -n "$SUFFIX" ]; then
           pattern="refs/tags/${PREFIX}*${SUFFIX}"
@@ -63,7 +67,7 @@ runs:
           label="${PREFIX}*"
         fi
 
-        TAG=$(git -c "http.extraheader=Authorization: Bearer $TOKEN" ls-remote --tags "$remote_url" "$pattern" 2>/dev/null \
+        TAG=$(git ls-remote --tags "$remote_url" "$pattern" 2>/dev/null \
           | awk '{print $2}' \
           | sed 's#refs/tags/##' \
           | grep -v '\^{}$' \

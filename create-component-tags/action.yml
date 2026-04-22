@@ -45,10 +45,8 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
-        push_args=()
         if [ -n "$TOKEN" ]; then
-          push_target="https://${GIT_HOST}/${REPO}.git"
-          push_args=(-c "http.extraheader=Authorization: Bearer $TOKEN")
+          push_target="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
           git config --local --unset-all "http.https://${GIT_HOST}/.extraheader" 2>/dev/null || true
         else
           push_target="origin"
@@ -77,7 +75,7 @@ runs:
           fi
 
           git tag "$component_tag"
-          if git "${push_args[@]}" push "$push_target" "$component_tag" 2>/dev/null; then
+          if git push "$push_target" "$component_tag" 2>/dev/null; then
             echo "Created component tag: $component_tag"
             created_tags+=("$component_tag")
             continue

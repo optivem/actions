@@ -46,7 +46,11 @@ runs:
         # TODO(scale): git ls-remote --tags fetches the full tag list and filters client-side.
         # For repos with thousands of tags this is slower than a paginated `gh api /repos/.../tags`.
         # At this repo's scale (dozens of tags) it is fine. Revisit when tag counts grow.
-        remote_url="https://${GIT_HOST}/${REPO}.git"
+        if [ -n "$TOKEN" ]; then
+          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+        else
+          remote_url="https://${GIT_HOST}/${REPO}.git"
+        fi
 
         # git ls-remote --tags prints: "<sha>\t<ref>".
         # Annotated tags appear twice: once for the tag-object SHA (refs/tags/X) and once
@@ -55,7 +59,7 @@ runs:
         # prefix and any "^{}" suffix to recover the tag name. Then filter by the caller's
         # glob pattern and pick the highest by version sort.
         TAG=$(
-          git -c "http.extraheader=Authorization: Bearer $TOKEN" ls-remote --tags "$remote_url" | awk -v sha="$SHA" '
+          git ls-remote --tags "$remote_url" | awk -v sha="$SHA" '
             $1 == sha {
               ref = $2
               sub(/^refs\/tags\//, "", ref)
