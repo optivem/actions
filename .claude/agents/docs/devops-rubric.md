@@ -1,6 +1,6 @@
 # DevOps rubric for auditing GitHub Actions
 
-**Rubric version: 7** (updated 2026-04-22 — **posture shift: this repo is production infra, not a teaching vehicle.** Rewrote §2 "Forward-looking context" to drop the teaching-vehicle framing and the "teaching-clarity override" (real-world best practice is now the default, not a tie-breaker). Added §1.6 "Container image build/tag/push — use mainstream composite actions" requiring `docker/build-push-action` + `docker/metadata-action` over hand-rolled build/tag/push splits, with supply-chain flags (SLSA provenance, SBOM, digest-pinned deploys). Renumbered DORA linkage to §1.7. Previously: v6 2026-04-22 — added §1.5 "Version-handling actions — follow SemVer": any action that composes, parses, or validates a version string must use SemVer 2.0.0 vocabulary and shape, with concrete input-name guidance (`base-version`, `suffix`, `build-number`) and explicit guidance against using SemVer build metadata for CI counters. v5 2026-04-22 — extended the `commit-sha` rule in §1 to cover outputs: qualification now preferred for action outputs / job outputs when the producer is generic or produces multiple SHAs; bare `sha` stays acceptable when a resolver-style action's name already disambiguates. v4 2026-04-22 — strengthened the `commit-sha` vs. `sha` rule for inputs. v3 2026-04-22 — added ambiguity test for Tier 3 `github` prefix; decoupled "Tier 3" from "name carries `github`". v2 2026-04-21 — added Mainstream-first principle, bounded-retry rule, VCS-vs-platform-API renaming, promote/publish/ship verb rules. When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
+**Rubric version: 8** (updated 2026-04-22 — added §1.8 "Thin wrappers around mainstream actions — delete in favour of direct use", generalising §1.6 to cover setup/release/deploy wrappers with a concrete replacement table (`setup-dotnet`/`setup-java-gradle`/`setup-node` → official `actions/setup-*`; `create-github-release` → `softprops/action-gh-release`; `deploy-to-cloud-run` → `google-github-actions/deploy-cloudrun`). Refreshed §3.1 Tier 1 examples to cross-reference §1.8. Previously: v7 2026-04-22 — **posture shift: this repo is production infra, not a teaching vehicle.** Rewrote §2 "Forward-looking context" to drop the teaching-vehicle framing and the "teaching-clarity override" (real-world best practice is now the default, not a tie-breaker). Added §1.6 "Container image build/tag/push — use mainstream composite actions" requiring `docker/build-push-action` + `docker/metadata-action` over hand-rolled build/tag/push splits, with supply-chain flags (SLSA provenance, SBOM, digest-pinned deploys). Renumbered DORA linkage to §1.7. Previously: v6 2026-04-22 — added §1.5 "Version-handling actions — follow SemVer": any action that composes, parses, or validates a version string must use SemVer 2.0.0 vocabulary and shape, with concrete input-name guidance (`base-version`, `suffix`, `build-number`) and explicit guidance against using SemVer build metadata for CI counters. v5 2026-04-22 — extended the `commit-sha` rule in §1 to cover outputs: qualification now preferred for action outputs / job outputs when the producer is generic or produces multiple SHAs; bare `sha` stays acceptable when a resolver-style action's name already disambiguates. v4 2026-04-22 — strengthened the `commit-sha` vs. `sha` rule for inputs. v3 2026-04-22 — added ambiguity test for Tier 3 `github` prefix; decoupled "Tier 3" from "name carries `github`". v2 2026-04-21 — added Mainstream-first principle, bounded-retry rule, VCS-vs-platform-API renaming, promote/publish/ship verb rules. When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
 
 This is the reference rubric used by the `actions-auditor` agent (and any sibling agent that wants DevOps-aligned reviews). It defines "what correct looks like" so the agent file can stay focused on process and output schema.
 
@@ -170,6 +170,54 @@ Applies whenever a workflow or composite action produces a container image that 
 
 Where useful, link a finding to the DORA metric it moves: composite opacity → MTTR; missing idempotence → change-failure rate; missing primitive-level reusability → lead time; rebuilding downstream of commit stage → change-failure rate and lead time. Source: *Accelerate* (Forsgren, Humble, Kim); DORA State of DevOps reports.
 
+## 1.8 Thin wrappers around mainstream actions — delete in favour of direct use
+
+A custom composite that exists only to forward inputs to one or two mainstream actions (no retry, no cross-host handling, no org-specific composition, no material shared logic) is a private dialect and must be replaced by calling the mainstream action directly from the workflow. Generalises §1.6 — what the docker trio rule is for build/tag/push, this rule is for setup, release, and deploy.
+
+**Detection — a wrapper is "thin" when its `runs.steps:` reduces to one of these shapes:**
+
+- A single `uses:` step that forwards inputs 1:1 to a mainstream action (pure pass-through).
+- Two `uses:` steps that compose a mainstream pair (e.g. `actions/setup-java` + `gradle/actions/setup-gradle`) with no added customisation beyond forwarding the caller's `*-version` input.
+- A `uses:` step plus a trivial follow-on `run:` block (e.g. `setup-node` + `npm ci`) where the follow-on is a project build concern that belongs in the caller, not in a "setup" wrapper.
+
+**Material logic that justifies a custom wrapper — NOT thin:**
+
+- Retry / rate-limit handling (`gh_retry`, bounded backoff) that the mainstream action does not provide.
+- Cross-host or cross-tool composition (e.g. an action that drives multiple registries, multiple CI platforms, or multiple package managers from one input).
+- Org-specific composition of outputs (e.g. non-SemVer tag shape, component-tag prefix, idempotent no-op on matching SHA).
+- Race-safe writes (e.g. Contents API with SHA preconditions, optimistic-concurrency retry).
+- Org-specific retention / cleanup policy that expresses a repo-level decision (e.g. prerelease cleanup window).
+- Post-hoc verification tightly coupled to the mainstream step (e.g. digest pinning, attestation extraction) that is not expressible through the mainstream action's inputs.
+
+If a wrapper fails the "thin" test and passes the "material logic" test, keep it. If it fails "thin" AND fails "material logic", delete it — but add an `Additional findings` note naming which material-logic category was missing, in case the author meant to add it.
+
+**Concrete replacement table — setup, release, and cloud deploy.**
+
+| Thin wrapper pattern | Mainstream replacement | Version pin | Migration notes |
+|---|---|---|---|
+| `setup-dotnet` (1:1 pass-through) | `actions/setup-dotnet` | `@v5` | Direct call; single `dotnet-version` input maps identically. |
+| `setup-java-gradle` (two-step composite, hardcoded distribution) | `actions/setup-java` + `gradle/actions/setup-gradle` | `@v5` + `@v5` | Inline both steps in the workflow; `distribution: temurin` becomes a caller-visible choice. |
+| `setup-node` (setup + `npm ci` conflated) | `actions/setup-node` + `npm ci` | `@v5` | Keep `cache: 'npm'` + `cache-dependency-path` on `setup-node`; move `npm ci` to a separate caller step. Separates "setup" from "build". |
+| `create-github-release` (thin `gh release create/edit`) | `softprops/action-gh-release` | `@v2` | Idempotent by default when `tag_name` exists; preserves existing assets unless `files:` is set. Input mapping: `tag`→`tag_name`, `title`→`name`, `notes-file`→`body_path`, `is-prerelease`→`prerelease`. Output: consume `steps.<id>.outputs.url`. |
+| `deploy-to-cloud-run` (thin `gcloud run deploy`) | `google-github-actions/deploy-cloudrun` | `@v2` | Google's official action covers all current inputs 1:1 (`service`, `image`, `region`, `project_id`, `env_vars`, `secrets`, sizing flags, `--allow-unauthenticated` via `flags`). Lift the embedded readiness poll (`wait-for-urls`) into a separate caller step. |
+
+When auditing, apply this lens to any custom wrapper: does it forward inputs to a mainstream action without adding material logic? If yes, delete. Extend the table above when new mainstream actions subsume further custom wrappers in this repo.
+
+**Don't mistake orchestration for a wrapper.** A composite that chains `docker/login-action` + `docker/metadata-action` + `docker/build-push-action` + a post-push verify step (e.g. digest extraction, attestation assertion) may look like "four `uses:` steps" but passes the material-logic test because the post-push verify is not expressible through any single mainstream action. §1.6 governs that case; do not flag it under §1.8.
+
+**Flag as DevOps alignment finding → "Separation of concerns" or "Other":**
+
+- Any custom action whose `runs.steps:` match a "thin" shape and has a mainstream replacement. Cite this section, the specific replacement action, and the version pin.
+- Any new wrapper being proposed in a PR that would re-introduce a thin shape (pre-emptive flag — don't wait for it to land).
+
+**Does NOT apply to:**
+
+- Concerns with no maintained mainstream action (e.g. `wait-for-urls`, `commit-files` via Contents API with SHA preconditions, org-specific prerelease-retention actions). Pass the "material logic" test → keep.
+- Wrappers that exist for a documented, time-bounded reason (migration bridge, deprecation shim). Flag these with an expected removal date and revisit on each audit.
+- Unmaintained "alternatives" (last release >18 months old, open security advisories, single-maintainer with no backup). `convictional/trigger-workflow-and-wait` is the canonical example — do not recommend migration to unmaintained actions (see the "no deprecated tools" rule in repo policy).
+
+**Source:** §1.6 precedent; Mainstream-first principle at top of file; `actions/setup-*` README examples; [`softprops/action-gh-release` README](https://github.com/softprops/action-gh-release); [`google-github-actions/deploy-cloudrun` README](https://github.com/google-github-actions/deploy-cloudrun).
+
 ---
 
 # 2. Forward-looking context (repo-specific exemptions)
@@ -194,7 +242,7 @@ Three conceptual tiers. Only the third gets a prefix.
 
 - **Tier 1 — fully generic** (any CI, any VCS, any host). No prefix. Examples: `build-image`, `push-image`, `wait-for-approval`, `bump-version`, `run-tests`, `deploy-service`, `validate-config`.
 
-  *Tier 1 covers actions whose **concept** is universal. Some Tier 1 actions in this repo (e.g. `setup-node`, `setup-java-gradle`, `setup-dotnet`) are implemented via Marketplace setup actions (`actions/setup-*@v5`), which are GitHub-Actions-specific under the hood. The **name** is still Tier 1 because the concept ports (every CI has a language-runtime setup primitive), but a porting student must rewrite the implementation. Flag such cases as "Tier 1 name, platform-specific implementation" so the porting surface is visible.*
+  *Tier 1 covers actions whose **concept** is universal. The language-runtime setup primitives (`setup-node`, `setup-java-gradle`, `setup-dotnet`) historically lived in this repo as thin wrappers around `actions/setup-*@v5`, but per §1.8 those wrappers are being deleted — callers now invoke `actions/setup-*` directly. The Tier 1 concept still applies at the workflow level: every CI has a language-runtime setup primitive, and a porting student replaces `actions/setup-*` with the equivalent on their target CI. When auditing a remaining Tier 1 action in this repo that is implemented via a platform-specific mainstream action, flag it as "Tier 1 name, platform-specific implementation" so the porting surface is visible — and apply the §1.8 thin-wrapper test to decide whether the wrapper itself should be deleted.*
 
 - **Tier 2 — git-native** (any CI, any git host, but requires a git VCS). No prefix. Git is the assumed baseline — adding `git-` to names is redundant because the domain nouns (`tag`, `commit`, `sha`, `ref`, `branch`) already imply git. Examples: `ensure-tag-exists`, `resolve-latest-tag-from-sha`, `publish-tag`, `ensure-version-unreleased`, `bump-patch-versions`.
 
