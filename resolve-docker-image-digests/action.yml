@@ -1,13 +1,22 @@
 name: 'Resolve Docker Image Digests'
-description: 'Finds Docker images and resolves their digests from any container registry'
+description: 'Finds Docker images and resolves their digests from any container registry. Accepts either fully-qualified URLs (image-urls) or base URLs plus an optional commit-sha (base-image-urls + commit-sha). With base-image-urls, an empty commit-sha resolves to the :latest tag; a set commit-sha resolves to the :sha-<commit-sha> tag — matching docker/metadata-action''s type=sha,format=long convention used by the commit stage.'
 author: 'Optivem'
 branding:
   icon: 'search'
   color: 'blue'
 inputs:
   image-urls:
-    description: 'Image URLs to resolve digests for. Supports both newline-separated list or JSON array format'
-    required: true
+    description: 'Fully-qualified image URLs (with :tag or @digest). Mutually exclusive with base-image-urls. Supports newline-separated list or JSON array format.'
+    required: false
+    default: ''
+  base-image-urls:
+    description: 'Base image URLs (no :tag). Combined with commit-sha to produce the image tag. Mutually exclusive with image-urls. Supports newline-separated list or JSON array format.'
+    required: false
+    default: ''
+  commit-sha:
+    description: 'Git commit SHA. When set with base-image-urls, tag is :sha-<commit-sha>; when empty, tag is :latest. Ignored when image-urls is used.'
+    required: false
+    default: ''
 outputs:
   image-digest-urls:
     description: 'JSON array of digest URLs in the same order as input'
@@ -23,4 +32,6 @@ runs:
       shell: bash
       env:
         IMAGE_URLS: ${{ inputs.image-urls }}
+        BASE_IMAGE_URLS: ${{ inputs.base-image-urls }}
+        COMMIT_SHA: ${{ inputs.commit-sha }}
       run: bash "${{ github.action_path }}/resolve-docker-image-digests.sh"
