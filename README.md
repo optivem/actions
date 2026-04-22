@@ -631,9 +631,10 @@ Probes the GitHub rate limit (and sleeps until reset if below threshold), dispat
 | `workflow` | yes | — | Workflow filename to trigger (e.g., `monolith-java-commit-stage.yml`) |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
 | `ref` | no | `main` | Git ref to trigger the workflow on |
-| `inputs` | no | `{}` | JSON object of workflow inputs (e.g., `{"version": "v1.0.0-rc.1"}`) |
+| `workflow-inputs` | no | `{}` | JSON object of workflow inputs (e.g., `{"version": "v1.0.0-rc.1"}`). Named `workflow-inputs` rather than `inputs` to avoid shadowing the `inputs` context expression at the caller site. |
 | `poll-interval` | no | `120` | Seconds between status polls |
 | `rate-limit-threshold` | no | `50` | Pause when remaining API requests fall below this number |
+| `timeout-seconds` | no | `1800` | Hard timeout on the watch phase. Action fails with exit code 124 if the triggered run has not terminated within this many seconds. Default is 30 minutes (fast-feedback sizing); callers that trigger longer-running workflows must override upward. |
 | `token` | no | `${{ github.token }}` | GitHub token used to dispatch and watch the workflow run. Callers may pass a higher-scoped token (e.g. a PAT) when cross-repo `workflow_dispatch` is required. |
 
 **Outputs**
@@ -657,7 +658,9 @@ Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `h
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
 | `poll-interval` | no | `30` | Seconds between discovery polls |
 | `watch-interval` | no | `120` | Seconds between `gh run watch` polls |
+| `max-discovery-attempts` | no | `120` | Maximum number of discovery polls before the action fails with "run never appeared" |
 | `rate-limit-threshold` | no | `50` | Pause when remaining API requests fall below this number |
+| `timeout-seconds` | no | `1800` | Hard timeout on the combined discovery + watch phases. Action fails with exit code 124 if a matching run has not been discovered AND watched to completion within this many seconds. Default is 30 minutes (fast-feedback sizing); callers waiting for longer-running workflows must override upward. |
 | `token` | no | `${{ github.token }}` | GitHub token used for API calls |
 
 **Outputs**
