@@ -29,43 +29,43 @@ Two lint checks enforce the conventions:
 
 | Action | Inputs | Outputs |
 |---|---|---|
-| [bump-patch-versions](#bump-patch-versions) | `version-files`, `repository`, `git-host`, `token` | `bumps`, `bumped`, `summary` |
-| [check-changes-since-tag](#check-changes-since-tag) | `tag-patterns`, `paths` | `changed`, `baseline-tag`, `baseline-sha`, `changed-files` |
-| [check-commit-status-exists](#check-commit-status-exists) | `sha`, `status-context`, `head-sha`, `repository`, `token` | `exists`, `created-at` |
-| [check-ghcr-packages-exist](#check-ghcr-packages-exist) | `repository`, `token` | `exist` |
-| [check-sha-on-branch](#check-sha-on-branch) | `commit-sha`, `base-branch` | `on-branch` |
-| [check-tag-pattern-exists](#check-tag-pattern-exists) | `tag-pattern`, `repository`, `token`, `git-host` | `exists` |
-| [check-timestamp-newer](#check-timestamp-newer) | `subject`, `baseline` | `newer` |
-| [cleanup-github-deployments](#cleanup-github-deployments) | `keep-count`, `retention-days`, `protected-environments`, `delete-delay-seconds`, `rate-limit-threshold`, `dry-run`, `token` | `deleted-count`, `dry-run-count` |
-| [cleanup-github-prereleases](#cleanup-github-prereleases) | `retention-days`, `container-packages`, `delete-delay-seconds`, `rate-limit-threshold`, `dry-run`, `token` | `deleted-count`, `dry-run-count` |
-| [commit-files](#commit-files) | `files`, `branch`, `max-retries`, `token` | `commits`, `committed` |
-| [compose-docker-image-urls](#compose-docker-image-urls) | `tag`, `base-image-urls` | `image-urls` |
-| [compose-prerelease-status](#compose-prerelease-status) | `prerelease-version`, `environment`, `status` | `status-tag` |
-| [compose-prerelease-version](#compose-prerelease-version) | `base-version`, `suffix`, `build-number`, `prefix` | `version` |
-| [compose-release-version](#compose-release-version) | `prerelease-version` | `version` |
-| [create-commit-status](#create-commit-status) | `commit-sha`, `context`, `state`, `description`, `target-url`, `token` | — |
-| [create-component-tags](#create-component-tags) | `components`, `repository`, `git-host`, `token` | `created-tags`, `skipped-tags` |
-| [deploy-docker-compose](#deploy-docker-compose) | `environment`, `version`, `image-urls`, `compose-file`, `working-directory` | `service-urls` |
-| [format-artifact-list](#format-artifact-list) | `artifacts` | `formatted` |
-| [generate-release-notes](#generate-release-notes) | `prerelease-version`, `release-version`, `artifact-urls` | `title`, `notes-file` |
-| [get-commit-status](#get-commit-status) | `commit-sha`, `context`, `state`, `repository`, `token` | `description`, `state`, `target-url` |
-| [get-last-successful-github-workflow-run-timestamp](#get-last-successful-github-workflow-run-timestamp) | `workflow-name`, `repository`, `token` | `timestamp` |
-| [map-signoff-to-stage-result](#map-signoff-to-stage-result) | `result` | `stage-result` |
-| [publish-tag](#publish-tag) | `tag`, `commit-sha`, `repository`, `git-host`, `token` | — |
-| [read-base-version](#read-base-version) | `file` | `base-version` |
-| [render-stage-summary](#render-stage-summary) | `stage-name`, `stage-result`, `stage-content`, `stage-success-content`, `stage-skipped-content` | — |
-| [render-system-stage-summary](#render-system-stage-summary) | `stage-name`, `stage-result`, `environment`, `success-version`, `success-artifact-ids`, `skipped-reason`, `latest-artifact-ids`, `latest-updated-at`, `last-run-at` | — |
-| [resolve-commit](#resolve-commit) | `repository`, `ref`, `token`, `git-host` | `sha`, `timestamp` |
-| [resolve-docker-image-digests](#resolve-docker-image-digests) | `image-urls`, `base-image-urls`, `commit-sha` | `image-digest-urls`, `latest-updated-at` |
-| [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | `tag-prefix`, `tag-suffix`, `repository`, `token`, `git-host` | `tag`, `base-tag` |
-| [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | `repository`, `commit-sha`, `pattern`, `token`, `git-host` | `tag` |
-| [tag-docker-images](#tag-docker-images) | `image-urls`, `tag`, `registry`, `registry-username`, `token` | `image-urls` |
-| [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | `workflow`, `repository`, `ref`, `workflow-inputs`, `poll-interval`, `rate-limit-threshold`, `timeout-seconds`, `token` | `run-id` |
-| [validate-env-vars-defined](#validate-env-vars-defined) | `names` | — |
-| [validate-tag-exists](#validate-tag-exists) | `tag`, `repository`, `token`, `git-host` | — |
-| [validate-version-unreleased](#validate-version-unreleased) | `version` | — |
-| [wait-for-endpoints](#wait-for-endpoints) | `endpoints`, `compose-file`, `working-directory`, `max-attempts`, `wait-seconds` | — |
-| [wait-for-github-workflow](#wait-for-github-workflow) | `workflow`, `commit-sha`, `repository`, `poll-interval`, `watch-interval`, `max-discovery-attempts`, `rate-limit-threshold`, `timeout-seconds`, `token` | `run-id` |
+| [bump-patch-versions](#bump-patch-versions) | • `version-files`<br>• `repository`<br>• `git-host`<br>• `token` | • `bumps`<br>• `bumped`<br>• `summary` |
+| [check-changes-since-tag](#check-changes-since-tag) | • `tag-patterns`<br>• `paths` | • `changed`<br>• `baseline-tag`<br>• `baseline-sha`<br>• `changed-files` |
+| [check-commit-status-exists](#check-commit-status-exists) | • `sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
+| [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `repository`<br>• `token` | • `exist` |
+| [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
+| [check-tag-pattern-exists](#check-tag-pattern-exists) | • `tag-pattern`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
+| [check-timestamp-newer](#check-timestamp-newer) | • `subject`<br>• `baseline` | • `newer` |
+| [cleanup-github-deployments](#cleanup-github-deployments) | • `keep-count`<br>• `retention-days`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-github-prereleases](#cleanup-github-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
+| [compose-docker-image-urls](#compose-docker-image-urls) | • `tag`<br>• `base-image-urls` | • `image-urls` |
+| [compose-prerelease-status](#compose-prerelease-status) | • `prerelease-version`<br>• `environment`<br>• `status` | • `status-tag` |
+| [compose-prerelease-version](#compose-prerelease-version) | • `base-version`<br>• `suffix`<br>• `build-number`<br>• `prefix` | • `version` |
+| [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
+| [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
+| [create-component-tags](#create-component-tags) | • `components`<br>• `repository`<br>• `git-host`<br>• `token` | • `created-tags`<br>• `skipped-tags` |
+| [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | • `service-urls` |
+| [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
+| [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
+| [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
+| [get-last-successful-github-workflow-run-timestamp](#get-last-successful-github-workflow-run-timestamp) | • `workflow-name`<br>• `repository`<br>• `token` | • `timestamp` |
+| [map-signoff-to-stage-result](#map-signoff-to-stage-result) | • `result` | • `stage-result` |
+| [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
+| [read-base-version](#read-base-version) | • `file` | • `base-version` |
+| [render-stage-summary](#render-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `stage-content`<br>• `stage-success-content`<br>• `stage-skipped-content` | — |
+| [render-system-stage-summary](#render-system-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `environment`<br>• `success-version`<br>• `success-artifact-ids`<br>• `skipped-reason`<br>• `latest-artifact-ids`<br>• `latest-updated-at`<br>• `last-run-at` | — |
+| [resolve-commit](#resolve-commit) | • `repository`<br>• `ref`<br>• `token`<br>• `git-host` | • `sha`<br>• `timestamp` |
+| [resolve-docker-image-digests](#resolve-docker-image-digests) | • `image-urls`<br>• `base-image-urls`<br>• `commit-sha` | • `image-digest-urls`<br>• `latest-updated-at` |
+| [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
+| [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
+| [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `registry`<br>• `registry-username`<br>• `token` | • `image-urls` |
+| [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
+| [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
+| [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
+| [validate-version-unreleased](#validate-version-unreleased) | • `version` | — |
+| [wait-for-endpoints](#wait-for-endpoints) | • `endpoints`<br>• `compose-file`<br>• `working-directory`<br>• `max-attempts`<br>• `wait-seconds` | — |
+| [wait-for-github-workflow](#wait-for-github-workflow) | • `workflow`<br>• `commit-sha`<br>• `repository`<br>• `poll-interval`<br>• `watch-interval`<br>• `max-discovery-attempts`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 
 ### bump-patch-versions
 
