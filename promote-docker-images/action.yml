@@ -1,5 +1,5 @@
 name: 'Promote Docker Images'
-description: 'Promotes Docker images by pulling each source image, applying a new tag, and pushing the retagged image to the registry. Used for moving an already-built artifact through pipeline stages (Farley promotion).'
+description: 'Promotes Docker images by issuing a server-side manifest retag via `docker buildx imagetools create` for each source image. Preserves multi-arch manifest lists, zero image data crosses the runner. Used for moving an already-built artifact through pipeline stages (Farley promotion).'
 author: 'Optivem'
 branding:
   icon: 'tag'
