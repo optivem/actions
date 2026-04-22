@@ -153,30 +153,6 @@ None.
 
 Items that require consumer workflows to be updated OR change runtime behaviour visibly. Complete these first — they touch sibling repos (`shop`, `gh-optivem`, `optivem-testing`) and should be co-ordinated with consumer updates.
 
-- [ ] **Split `resolve-docker-image-digests` into two concerns** — Current action returns `image-digest-urls` AND `latest-updated-at` (the most recent `created_at` timestamp across all images). Per rubric §6 one-concern-per-action. Recommended: keep `resolve-docker-image-digests` pure (image URLs → digest URLs); extract a new `get-latest-image-timestamp` that reads the `created_at` from the same registry query.
-  - Affects: `resolve-docker-image-digests`, (new) `get-latest-image-timestamp`
-  - Consumers to update (18 files in shop, 0 in gh-optivem, 0 in optivem-testing):
-    - `shop/.github/workflows/monolith-dotnet-acceptance-stage-cloud.yml`
-    - `shop/.github/workflows/monolith-dotnet-acceptance-stage-legacy.yml`
-    - `shop/.github/workflows/monolith-dotnet-acceptance-stage.yml`
-    - `shop/.github/workflows/monolith-java-acceptance-stage-cloud.yml`
-    - `shop/.github/workflows/monolith-java-acceptance-stage-legacy.yml`
-    - `shop/.github/workflows/monolith-java-acceptance-stage.yml`
-    - `shop/.github/workflows/monolith-typescript-acceptance-stage-cloud.yml`
-    - `shop/.github/workflows/monolith-typescript-acceptance-stage-legacy.yml`
-    - `shop/.github/workflows/monolith-typescript-acceptance-stage.yml`
-    - `shop/.github/workflows/multitier-dotnet-acceptance-stage-cloud.yml`
-    - `shop/.github/workflows/multitier-dotnet-acceptance-stage-legacy.yml`
-    - `shop/.github/workflows/multitier-dotnet-acceptance-stage.yml`
-    - `shop/.github/workflows/multitier-java-acceptance-stage-cloud.yml`
-    - `shop/.github/workflows/multitier-java-acceptance-stage-legacy.yml`
-    - `shop/.github/workflows/multitier-java-acceptance-stage.yml`
-    - `shop/.github/workflows/multitier-typescript-acceptance-stage-cloud.yml`
-    - `shop/.github/workflows/multitier-typescript-acceptance-stage-legacy.yml`
-    - `shop/.github/workflows/multitier-typescript-acceptance-stage.yml`
-  - Category: consolidation
-  - VJ: how about performance?
-
 - [ ] **Rename `compose-release-notes` → `generate-release-notes`** — Action writes a markdown notes file to a `mktemp` path (local filesystem side effect) and returns the path. Per rubric §4 canonical verb table, `compose-*` is "no I/O beyond reading inputs"; `generate-*` is "produce a fresh artifact from inputs (file, token, config). May write locally."
   - Affects: `compose-release-notes`
   - Consumers to update (12 files in shop, 0 in gh-optivem, 0 in optivem-testing):
