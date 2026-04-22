@@ -233,18 +233,6 @@ For each `{path, content, message}` entry, reads the current file SHA from the G
 | `commits` | JSON array of `{path, commit-sha, content-sha, html-url}` for each file that was committed |
 | `committed` | `true` if at least one file was committed |
 
-### render-commit-stage-summary
-
-Thin composite: validates inputs (requires `success-artifact-url` when `stage-result == success`) and delegates to `render-stage-summary` to emit a markdown summary to `$GITHUB_STEP_SUMMARY` with the artifact URL rendered on success.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `stage-name` | no | `Commit Stage` | Name of the stage being summarized |
-| `stage-result` | yes | — | Result of the stage job (`success`, `failure`, `cancelled`, etc.) |
-| `success-artifact-url` | no | `''` | URL of the published artifact (e.g., Docker image, installer, package). Required when `stage-result == success`. |
-
 ### compose-docker-image-urls
 
 Pure string helper. Takes a list of base image URLs (JSON array or newline-separated) and a tag, and returns a JSON array of `{base}:{tag}` URLs. No registry lookup. Delegates to `compose-docker-image-urls.sh`.
@@ -557,16 +545,16 @@ Promotes a JSON array of Docker images by pulling each source image, applying a 
 
 ### push-docker-image
 
-Logs in to a Docker registry, then runs `docker push` on the SHA-tagged image (with retry: up to 3 attempts, 10s backoff), followed by the latest-tagged URL and optionally a version-tagged URL. Parses the `sha256:` digest from the first push output and composes `image-digest-url` as `{base-image}@{digest}`.
+Logs in to a Docker registry, then runs `docker push` on the SHA-tagged image (with retry: up to 3 attempts, exponential backoff with jitter), followed by the latest-tagged URL and optionally a version-tagged URL. Parses the `sha256:` digest from the first push output and composes `image-digest-url` as `{base-image}@{digest}`.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `image-sha-tag` | yes | — | Fully-qualified image URL tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def` (output from `build-docker-image`) |
-| `image-latest-tag` | yes | — | Fully-qualified image URL tagged with the latest tag, e.g. `ghcr.io/org/repo/svc:latest` (output from `build-docker-image`) |
-| `registry` | no | `ghcr.io` | Container registry URL (e.g., `ghcr.io`, `docker.io`, `gcr.io`) |
-| `image-version-tag` | no | `` | Fully-qualified image URL tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3` (output from `build-docker-image`). Optional. |
+| `image-sha-url` | yes | — | Fully-qualified image reference tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def` (output from `tag-docker-image`) |
+| `image-latest-url` | yes | — | Fully-qualified image reference tagged with `latest`, e.g. `ghcr.io/org/repo/svc:latest` (output from `tag-docker-image`) |
+| `registry` | no | `ghcr.io` | Container registry host (e.g., `ghcr.io`, `docker.io`, `gcr.io`) |
+| `image-version-url` | no | `` | Fully-qualified image reference tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3` (output from `tag-docker-image`). Optional. |
 | `registry-username` | no | `${{ github.actor }}` | Username for registry authentication |
 | `token` | no | `${{ github.token }}` | Token for registry authentication. Defaults to `github.token` for GHCR pushes. |
 
@@ -594,7 +582,7 @@ Reads the first line of a VERSION file (stripping whitespace) and exposes it as 
 
 ### render-stage-summary
 
-Internal rendering primitive. Validates `stage-result` is one of `success`/`failure`/`cancelled`/`skipped`, then writes a markdown stage summary (with icons and per-result content blocks) to `$GITHUB_STEP_SUMMARY`. Callable directly, but the stage-specific composites (`render-commit-stage-summary`, `render-system-stage-summary`) are the expected entry points.
+Validates `stage-result` is one of `success`/`failure`/`cancelled`/`skipped`, then writes a markdown stage summary (with icons and per-result content blocks) to `$GITHUB_STEP_SUMMARY`. Used directly by commit-stage workflows and composed by `render-system-stage-summary` for richer system-stage rendering.
 
 **Inputs**
 
@@ -645,7 +633,7 @@ Delegates to `resolve-docker-image-digests.sh`. For each input image URL, querie
 
 ### resolve-latest-tag-from-sha
 
-Calls `git ls-remote --tags` against the remote URL, filters by the given glob pattern, matches tags (lightweight or annotated, peeled) against the target SHA, and picks the highest by `sort -V` (version sort). Returns empty if no matching tag points at the SHA.
+Calls `git ls-remote --tags` against the remote URL, filters by the given glob pattern (default `*` matches any tag), matches tags (lightweight or annotated, peeled) against the target SHA, and picks the highest by `sort -V` (version sort). Returns empty if no matching tag points at the SHA.
 
 **Inputs**
 
@@ -653,7 +641,7 @@ Calls `git ls-remote --tags` against the remote URL, filters by the given glob p
 |---|---|---|---|
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form (e.g. `optivem/shop`) |
 | `commit-sha` | yes | — | Commit SHA to look up |
-| `pattern` | yes | — | Tag glob pattern (e.g. `monolith-typescript-v1.0.26-rc.*`) |
+| `pattern` | no | `*` | Tag glob pattern to filter by (e.g. `monolith-typescript-v1.0.26-rc.*`). Default `*` matches any tag. |
 | `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
 | `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
 
@@ -683,27 +671,6 @@ Calls `gh api` (via `gh_retry`) to look up published GitHub releases. If `input-
 | Name | Description |
 |---|---|
 | `tag` | The validated tag |
-
-### resolve-tag-from-sha
-
-Calls `git ls-remote --tags` against the remote URL and returns the first tag (lightweight or annotated, peeled) that points at the target SHA. Returns empty if none found.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `repository` | yes | — | Repository in `owner/name` form (e.g. `optivem/shop`) |
-| `commit-sha` | yes | — | Commit SHA to look up |
-| `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
-| `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `tag` | The first tag pointing at the SHA, or empty string if none found |
-
-**Notes:** `git ls-remote --tags` fetches the full tag list and filters client-side. Fine at current scale; revisit if tag counts grow to the thousands.
 
 ### setup-dotnet
 

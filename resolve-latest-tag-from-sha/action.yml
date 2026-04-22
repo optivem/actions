@@ -1,5 +1,5 @@
 name: 'Resolve Latest Tag from SHA'
-description: 'Finds the highest tag (by version sort) matching a glob pattern that points at a given commit SHA. Tool-agnostic — uses git ls-remote, works against any git remote.'
+description: 'Finds the highest tag (by version sort — `sort -V`) that points at a given commit SHA, optionally filtered by a glob pattern. With the default `pattern: ''*''` returns the highest-version tag among all tags on the SHA. Tool-agnostic — uses git ls-remote, works against any git remote.'
 author: 'Optivem'
 branding:
   icon: 'tag'
@@ -14,8 +14,9 @@ inputs:
     description: 'Commit SHA to look up'
     required: true
   pattern:
-    description: 'Tag glob pattern (e.g. monolith-typescript-v1.0.26-rc.*)'
-    required: true
+    description: 'Tag glob pattern to filter by (e.g. `monolith-typescript-v1.0.26-rc.*`). Defaults to `*` which matches any tag.'
+    required: false
+    default: '*'
   token:
     description: 'Token for authenticating to the remote'
     required: false
