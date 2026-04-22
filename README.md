@@ -31,7 +31,7 @@ Two lint checks enforce the conventions:
 |---|---|---|
 | [bump-patch-versions](#bump-patch-versions) | • `version-files`<br>• `repository`<br>• `git-host`<br>• `token` | • `bumps`<br>• `bumped`<br>• `summary` |
 | [check-changes-since-tag](#check-changes-since-tag) | • `tag-patterns`<br>• `paths` | • `changed`<br>• `baseline-tag`<br>• `baseline-sha`<br>• `changed-files` |
-| [check-commit-status-exists](#check-commit-status-exists) | • `sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
+| [check-commit-status-exists](#check-commit-status-exists) | • `commit-sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
 | [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `repository`<br>• `token` | • `exist` |
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
 | [check-tag-pattern-exists](#check-tag-pattern-exists) | • `tag-pattern`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
@@ -112,13 +112,13 @@ Walks tag patterns in priority order, resolves the most recent matching tag as a
 
 ### check-commit-status-exists
 
-Boolean existence check for a success commit-status on `head-sha` matching `(context, description=sha)`. Returns `exists=true` when the status is present, `false` otherwise. Caller-defined semantics — the caller picks the `status-context` label, the action only reports presence. Fails open to `exists=false` on transient API errors so callers never silently skip work. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
+Boolean existence check for a success commit-status on `head-sha` matching `(context, description=commit-sha)`. Returns `exists=true` when the status is present, `false` otherwise. Caller-defined semantics — the caller picks the `status-context` label, the action only reports presence. Fails open to `exists=false` on transient API errors so callers never silently skip work. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `sha` | yes | — | SHA to look up in the `description` field of commit-statuses (typically an upstream-repo commit the pipeline previously processed). |
+| `commit-sha` | yes | — | Commit SHA to look up in the `description` field of commit-statuses (typically an upstream-repo commit the pipeline previously processed). |
 | `status-context` | yes | — | The commit-status context to search for (e.g. `acceptance-stage`). Matched against the `context` field. Caller-chosen label encoding the type of check; no verb suffix — the `state` field carries the outcome. |
 | `head-sha` | no | `${{ github.sha }}` | Commit whose statuses are inspected |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
@@ -128,7 +128,7 @@ Boolean existence check for a success commit-status on `head-sha` matching `(con
 
 | Name | Description |
 |---|---|
-| `exists` | `true` when a success commit-status on head-sha matches the given context + description=sha. `false` when none found. Fails open to `false` on transient API errors. |
+| `exists` | `true` when a success commit-status on head-sha matches the given context + description=commit-sha. `false` when none found. Fails open to `false` on transient API errors. |
 | `created-at` | ISO 8601 `createdAt` of the matching success status, if one was found. Empty otherwise. |
 
 ### check-ghcr-packages-exist

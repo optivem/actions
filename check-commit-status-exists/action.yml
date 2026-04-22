@@ -2,8 +2,8 @@ name: 'Check Commit Status Exists'
 description: 'Boolean existence check for a success commit-status on head-sha matching (context, description=sha). Returns exists=true when the status is present, false otherwise. Caller-defined semantics — the caller picks the context label, the action only reports presence. Fails open to exists=false on transient API errors so callers do not silently skip work when the API is flaky. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).'
 
 inputs:
-  sha:
-    description: 'SHA whose presence as the description of a commit-status is being checked (typically an upstream-repo commit whose work the pipeline previously processed). Matched against the `description` field of commit-statuses on head-sha.'
+  commit-sha:
+    description: 'Commit SHA whose presence as the description of a commit-status is being checked (typically an upstream-repo commit whose work the pipeline previously processed). Matched against the `description` field of commit-statuses on head-sha.'
     required: true
   status-context:
     description: 'The commit-status context to search for (e.g. `acceptance-stage`, `security-scan`, `license-check`). Matched against the `context` field. Caller-chosen label encoding the type of check.'
@@ -39,7 +39,7 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
-        SUBJECT_SHA: ${{ inputs.sha }}
+        COMMIT_SHA: ${{ inputs.commit-sha }}
         STATUS_CONTEXT: ${{ inputs.status-context }}
         HEAD_SHA: ${{ inputs.head-sha }}
         REPOSITORY: ${{ inputs.repository }}
@@ -53,7 +53,7 @@ runs:
         fi
 
         echo "Head SHA: $HEAD_SHA"
-        echo "Subject SHA (description): $SUBJECT_SHA"
+        echo "Commit SHA (matched against description): $COMMIT_SHA"
         echo "Status context: $STATUS_CONTEXT"
 
         if ! statuses=$(gh_retry api "repos/${REPOSITORY}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
@@ -65,7 +65,7 @@ runs:
           exit 0
         fi
 
-        match_created_at=$(echo "$statuses" | jq -r --arg ctx "$STATUS_CONTEXT" --arg sha "$SUBJECT_SHA" '
+        match_created_at=$(echo "$statuses" | jq -r --arg ctx "$STATUS_CONTEXT" --arg sha "$COMMIT_SHA" '
           map(select(.context == $ctx and .description == $sha and .state == "success"))
           | .[0].created_at // ""
         ')
