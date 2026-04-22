@@ -43,8 +43,10 @@ runs:
 
         target_sha="${SHA:-$(git rev-parse HEAD)}"
 
+        push_args=()
         if [ -n "$TOKEN" ]; then
-          push_target="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+          push_target="https://${GIT_HOST}/${REPO}.git"
+          push_args=(-c "http.extraheader=Authorization: Bearer $TOKEN")
           git config --local --unset-all "http.https://${GIT_HOST}/.extraheader" 2>/dev/null || true
         else
           push_target="origin"
@@ -67,7 +69,7 @@ runs:
           git tag "$TAG"
         fi
 
-        if git push "$push_target" "$TAG"; then
+        if git "${push_args[@]}" push "$push_target" "$TAG"; then
           echo "Created and pushed tag $TAG at $target_sha" >> "$GITHUB_STEP_SUMMARY"
           exit 0
         fi

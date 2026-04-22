@@ -35,9 +35,9 @@ runs:
       run: |
         echo "Checking if tag '$TAG' exists on $REPO..."
 
-        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+        remote_url="https://${GIT_HOST}/${REPO}.git"
 
-        if git ls-remote --tags "$remote_url" "refs/tags/$TAG" 2>/dev/null | grep -q "refs/tags/$TAG"; then
+        if git -c "http.extraheader=Authorization: Bearer $TOKEN" ls-remote --tags "$remote_url" "refs/tags/$TAG" 2>/dev/null | grep -q "refs/tags/$TAG"; then
           echo "✅ Tag '$TAG' found in $REPO"
           exit 0
         fi

@@ -45,9 +45,9 @@ runs:
           exit 1
         fi
 
-        remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+        remote_url="https://${GIT_HOST}/${REPO}.git"
 
-        TAG=$(git ls-remote --tags "$remote_url" "refs/tags/${PREFIX}*" 2>/dev/null \
+        TAG=$(git -c "http.extraheader=Authorization: Bearer $TOKEN" ls-remote --tags "$remote_url" "refs/tags/${PREFIX}*" 2>/dev/null \
           | awk '{print $2}' \
           | sed 's#refs/tags/##' \
           | grep -v '\^{}$' \

@@ -22,10 +22,19 @@ inputs:
     required: false
     default: ${{ github.token }}
 
+outputs:
+  created-tags:
+    description: 'JSON array of tag names newly pushed by this run (includes tags created by concurrent runs pointing to the same commit).'
+    value: ${{ steps.create.outputs.created-tags }}
+  skipped-tags:
+    description: 'JSON array of tag names that already existed on the remote and were skipped.'
+    value: ${{ steps.create.outputs.skipped-tags }}
+
 runs:
   using: 'composite'
   steps:
     - name: Create Component Tags
+      id: create
       shell: bash
       env:
         COMPONENTS: ${{ inputs.components }}
@@ -36,11 +45,17 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
+        push_args=()
         if [ -n "$TOKEN" ]; then
-          push_target="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+          push_target="https://${GIT_HOST}/${REPO}.git"
+          push_args=(-c "http.extraheader=Authorization: Bearer $TOKEN")
+          git config --local --unset-all "http.https://${GIT_HOST}/.extraheader" 2>/dev/null || true
         else
           push_target="origin"
         fi
+
+        created_tags=()
+        skipped_tags=()
 
         while IFS= read -r line; do
           [[ -z "$line" ]] && continue
@@ -57,12 +72,14 @@ runs:
 
           if git ls-remote --tags --exit-code origin "refs/tags/$component_tag" >/dev/null 2>&1; then
             echo "Skipped $component_name: tag $component_tag already exists on remote"
+            skipped_tags+=("$component_tag")
             continue
           fi
 
           git tag "$component_tag"
-          if git push "$push_target" "$component_tag" 2>/dev/null; then
+          if git "${push_args[@]}" push "$push_target" "$component_tag" 2>/dev/null; then
             echo "Created component tag: $component_tag"
+            created_tags+=("$component_tag")
             continue
           fi
 
@@ -70,8 +87,22 @@ runs:
           local_sha=$(git rev-parse "$component_tag")
           if [[ -n "$remote_sha" && "$remote_sha" == "$local_sha" ]]; then
             echo "Tag $component_tag created by concurrent run (same commit)"
+            created_tags+=("$component_tag")
           else
             echo "::error::Failed to push tag $component_tag (remote: $remote_sha, local: $local_sha)"
             exit 1
           fi
         done <<< "$COMPONENTS"
+
+        to_json_array() {
+          if (( $# == 0 )); then
+            echo '[]'
+          else
+            printf '%s\n' "$@" | jq -R . | jq -s -c .
+          fi
+        }
+
+        {
+          echo "created-tags=$(to_json_array "${created_tags[@]}")"
+          echo "skipped-tags=$(to_json_array "${skipped_tags[@]}")"
+        } >> "$GITHUB_OUTPUT"

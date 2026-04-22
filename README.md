@@ -587,24 +587,37 @@ Calls `git ls-remote --tags` against the remote URL, filters by the given glob p
 
 **Notes:** `git ls-remote --tags` fetches the full tag list and filters client-side. Fine at current scale (dozens of tags); for thousands of tags, a paginated `gh api /repos/.../tags` would be faster.
 
-### resolve-prerelease-tag
+### setup-dotnet
 
-Calls `gh api` (via `gh_retry`) to look up published GitHub releases. If `input-tag` is empty, returns the latest release whose tag starts with `tag-prefix` (sorted by `created_at`). If `input-tag` is set, validates it starts with `tag-prefix`, rejects `main`/`refs/heads/main`, and confirms it corresponds to a published release.
+Thin wrapper around `actions/setup-dotnet@v5` that installs the requested .NET SDK version.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `repository` | yes | — | Repository in `owner/name` form (e.g. `optivem/shop`) |
-| `input-tag` | no | `` | Explicit tag to validate. Empty = resolve to the latest published release matching `tag-prefix`. |
-| `tag-prefix` | no | `meta-v` | Required tag prefix (e.g. `meta-v`). Used to filter releases when `input-tag` is empty, and to validate `input-tag` when set. |
-| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+| `dotnet-version` | yes | — | .NET SDK version to install |
 
-**Outputs**
+### setup-java-gradle
 
-| Name | Description |
-|---|---|
-| `tag` | The validated tag |
+Thin wrapper that composes `actions/setup-java@v5` (Temurin distribution) and `gradle/actions/setup-gradle@v5`. The `working-directory` input is declared but is not used by the composed steps.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `java-version` | yes | — | Java version to install |
+| `working-directory` | yes | — | Working directory containing the Gradle wrapper |
+
+### setup-node
+
+Wraps `actions/setup-node@v5` with npm caching keyed on `{working-directory}/package-lock.json`, then runs `npm ci` in the working directory.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `node-version` | yes | — | Node.js version to install |
+| `working-directory` | yes | — | Working directory containing the `package-lock.json` |
 
 ### trigger-and-wait-for-github-workflow
 
