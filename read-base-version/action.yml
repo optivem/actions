@@ -1,5 +1,5 @@
-name: 'Read Target Version'
-description: 'Reads the target semantic version from a VERSION file'
+name: 'Read Base Version'
+description: 'Reads the base semantic version (MAJOR.MINOR.PATCH) from a VERSION file'
 
 inputs:
   file:
@@ -8,14 +8,14 @@ inputs:
     default: 'VERSION'
 
 outputs:
-  target-version:
-    description: 'The target semantic version (e.g., 1.0.0)'
-    value: ${{ steps.read.outputs.target-version }}
+  base-version:
+    description: 'The base semantic version (e.g., 1.0.0)'
+    value: ${{ steps.read.outputs.base-version }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Read Target Version
+    - name: Read Base Version
       id: read
       shell: bash
       env:
@@ -25,5 +25,5 @@ runs:
           echo "::error::VERSION file not found at '$VERSION_FILE'. Make sure to include the VERSION file in your repository."
           exit 1
         fi
-        target_version=$(head -n 1 "$VERSION_FILE" | tr -d '[:space:]')
-        echo "target-version=$target_version" >> "$GITHUB_OUTPUT"
+        base_version=$(head -n 1 "$VERSION_FILE" | tr -d '[:space:]')
+        echo "base-version=$base_version" >> "$GITHUB_OUTPUT"

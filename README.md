@@ -1,5 +1,17 @@
 # optivem/actions
 
+## Versioning policy — stay on `@v1`
+
+This repo is a single-consumer project (only the `optivem` org workspace uses it). We **do not bump the major tag** on breaking input renames or removals — the `@v1` tag gets moved to the new commit, and all callers inside the workspace are updated atomically in the same change.
+
+This deliberately violates SemVer. It's safe here because:
+
+- There are no external consumers pinned to `@v1` who could silently break.
+- All callers live alongside the actions in this workspace and move together.
+- Skipping `@v2`/`@v3` cycles avoids churn that buys nothing when the consumer graph is `{self}`.
+
+If this repo ever gains an external consumer, revisit this policy and start cutting proper major tags.
+
 ## Shell choice — bash only
 
 All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothing a bash toolchain doesn't already cover. To avoid paying every cross-cutting concern twice (retry wrappers, lint rules, structured logging, auth), **all production code is bash-only**:
@@ -13,25 +25,6 @@ Two lint checks enforce the conventions:
 - [shared/_lint/check-no-raw-gh.sh](shared/_lint/check-no-raw-gh.sh) (via `.github/workflows/lint-gh-usage.yml`) fails PRs that call `gh` without the `gh_retry` wrapper. Whitelist: `gh auth status`, `gh api rate_limit`.
 
 ## Actions
-
-### build-docker-image
-
-Runs `docker build` against a Dockerfile in a working directory and tags the result locally as `{image-name}:{commit-sha}`. Single-concern: no registry tagging, no push. Retries the build up to 3 times with a 15s backoff on failure.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `working-directory` | no | `.` | Working directory where Dockerfile is located |
-| `image-name` | yes | — | Local Docker image name (no registry prefix). Used as the base of the local tag `{image-name}:{commit-sha}`. |
-| `commit-sha` | no | `${{ github.sha }}` | Git commit SHA used as the local image tag |
-| `dockerfile` | no | `Dockerfile` | Path to Dockerfile relative to working-directory |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `local-image-ref` | The local image reference (`{image-name}:{commit-sha}`). Feed into `tag-docker-image-local` to apply registry tags. |
 
 ### bump-patch-versions
 
@@ -270,16 +263,16 @@ Pure string transform. Concatenates `{prerelease-version}-{environment}-{status}
 
 ### compose-prerelease-version
 
-Pure string transform. Validates `target-version` matches `X.Y.Z` and composes `v{version}-{suffix}.{number}` (or `{prefix}-v{version}-{suffix}.{number}` when a prefix is supplied).
+Pure string transform. Validates `base-version` matches `X.Y.Z` and composes `v{version}-{suffix}.{build-number}` (or `{prefix}-v{version}-{suffix}.{build-number}` when a prefix is supplied).
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `target-version` | yes | — | Target semantic version (e.g., `1.0.0`) |
+| `base-version` | yes | — | Base semantic version the prerelease parts are appended to (e.g., `1.0.0`) |
 | `suffix` | yes | — | Prerelease suffix (e.g., `rc`, `dev`, `alpha`, `beta`) |
-| `number` | yes | — | Counter appended after the suffix (e.g., `github.run_number` or a build number) |
-| `prefix` | no | `` | Optional prefix prepended to the tag. Produces `{prefix}-v{version}-{suffix}.{number}` when set, else `v{version}-{suffix}.{number}` |
+| `build-number` | yes | — | CI build counter appended after the suffix (e.g., `github.run_number`). Forms the second dot-separated pre-release identifier per SemVer. |
+| `prefix` | no | `` | Optional prefix prepended to the tag. Produces `{prefix}-v{version}-{suffix}.{build-number}` when set, else `v{version}-{suffix}.{build-number}` |
 
 **Outputs**
 
@@ -543,28 +536,7 @@ Promotes a JSON array of Docker images by pulling each source image, applying a 
 |---|---|
 | `image-urls` | JSON array of Docker image URLs with new tags applied |
 
-### push-docker-image
-
-Logs in to a Docker registry, then runs `docker push` on the SHA-tagged image (with retry: up to 3 attempts, exponential backoff with jitter), followed by the latest-tagged URL and optionally a version-tagged URL. Parses the `sha256:` digest from the first push output and composes `image-digest-url` as `{base-image}@{digest}`.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `image-sha-url` | yes | — | Fully-qualified image reference tagged with the commit SHA, e.g. `ghcr.io/org/repo/svc:abc123def` (output from `tag-docker-image`) |
-| `image-latest-url` | yes | — | Fully-qualified image reference tagged with `latest`, e.g. `ghcr.io/org/repo/svc:latest` (output from `tag-docker-image`) |
-| `registry` | no | `ghcr.io` | Container registry host (e.g., `ghcr.io`, `docker.io`, `gcr.io`) |
-| `image-version-url` | no | `` | Fully-qualified image reference tagged with the component version, e.g. `ghcr.io/org/repo/svc:1.2.3` (output from `tag-docker-image`). Optional. |
-| `registry-username` | no | `${{ github.actor }}` | Username for registry authentication |
-| `token` | no | `${{ github.token }}` | Token for registry authentication. Defaults to `github.token` for GHCR pushes. |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `image-digest-url` | Full image URL with SHA256 digest (`{base-image}@sha256:...`) |
-
-### read-target-version
+### read-base-version
 
 Reads the first line of a VERSION file (stripping whitespace) and exposes it as an output. Fails the step if the file does not exist.
 
@@ -578,7 +550,7 @@ Reads the first line of a VERSION file (stripping whitespace) and exposes it as 
 
 | Name | Description |
 |---|---|
-| `target-version` | The target semantic version (e.g., `1.0.0`) |
+| `base-version` | The base semantic version (e.g., `1.0.0`) |
 
 ### render-stage-summary
 
@@ -703,26 +675,6 @@ Wraps `actions/setup-node@v5` with npm caching keyed on `{working-directory}/pac
 |---|---|---|---|
 | `node-version` | yes | — | Node.js version to install |
 | `working-directory` | yes | — | Working directory containing the `package-lock.json` |
-
-### tag-docker-image
-
-Pure-local `docker tag` wrapper. For each input tag, runs `docker tag <source> {registry}/{namespace}/{image-name}:{tag}` and returns the full tagged URLs as a JSON array. No network, no auth, no push — use `push-docker-image` or `promote-docker-images` to publish.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `source` | yes | — | Local Docker image reference to tag from (e.g., `monolith-system-java:abc123`). Typically the `local-image-ref` output of `build-docker-image`. |
-| `registry` | no | `ghcr.io` | Container registry URL used to compose tagged URLs. No network call; only string composition. |
-| `namespace` | no | `${{ github.repository }}` | Namespace/organization portion of the image URL |
-| `image-name` | yes | — | Image name embedded in the tagged URL |
-| `tags` | yes | — | Tag values to apply, one per line. Each becomes `{registry}/{namespace}/{image-name}:{tag}`. |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `image-urls` | JSON array of full tagged image URLs, in the same order as the input tags. Use `fromJSON(...)[N]` to read individual tags. |
 
 ### trigger-and-wait-for-github-workflow
 

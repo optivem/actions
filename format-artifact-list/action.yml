@@ -1,5 +1,5 @@
 name: 'Format Artifact List'
-description: 'Formats a JSON array of artifact identifiers (image URLs, release URLs, arbitrary strings) into a bulleted markdown list. Pure string transform — no side effects.'
+description: 'Formats a newline-separated list of artifact identifiers (image URLs, release URLs, arbitrary strings) into a bulleted markdown list. Pure string transform — no side effects.'
 author: 'Optivem'
 branding:
   icon: 'list'
@@ -7,7 +7,7 @@ branding:
 
 inputs:
   artifacts:
-    description: 'JSON array of artifact identifiers, e.g. ["docker.io/app:v1"] or ["url1","url2"]. Empty string returns empty output.'
+    description: 'Newline-separated artifact identifiers, e.g. a single "docker.io/app:v1" or multiple entries via a multiline YAML string. Empty string returns empty output.'
     required: false
     default: ''
 
@@ -27,16 +27,12 @@ runs:
         set -euo pipefail
         echo "🔧 Formatting artifact list..."
 
-        formatted=""
-        trimmed="$(printf '%s' "$ARTIFACTS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        formatted="$(printf '%s\n' "$ARTIFACTS" \
+          | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+          | sed '/^$/d' \
+          | sed 's/^/• /')"
 
-        if [[ -n "$trimmed" ]]; then
-          echo "📦 Input received: $ARTIFACTS"
-          if ! items="$(jq -r 'if type == "array" then .[] else . end' <<<"$trimmed" 2>/dev/null)"; then
-            echo "::error::Invalid JSON array format. Expected [\"value\"] or [\"v1\",\"v2\"]."
-            exit 1
-          fi
-          formatted="$(printf '%s\n' "$items" | sed '/^$/d' | sed 's/^/• /')"
+        if [[ -n "$formatted" ]]; then
           echo "📋 Formatted output:"
           echo "$formatted"
         else
