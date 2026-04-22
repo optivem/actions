@@ -22,9 +22,9 @@ inputs:
     default: ${{ github.token }}
 
 outputs:
-  image-urls:
+  tagged-image-urls:
     description: 'JSON array of Docker image URLs with new tags applied'
-    value: ${{ steps.tag-images.outputs.image-urls }}
+    value: ${{ steps.tag-images.outputs.tagged-image-urls }}
 
 runs:
   using: 'composite'

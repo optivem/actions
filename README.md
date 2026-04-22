@@ -59,7 +59,7 @@ Two lint checks enforce the conventions:
 | [resolve-docker-image-digests](#resolve-docker-image-digests) | • `image-urls`<br>• `base-image-urls`<br>• `commit-sha` | • `image-digest-urls`<br>• `latest-updated-at` |
 | [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
 | [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
-| [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `registry`<br>• `registry-username`<br>• `token` | • `image-urls` |
+| [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
 | [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 | [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
 | [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
@@ -659,7 +659,7 @@ Promotes a JSON array of Docker images by issuing a server-side manifest retag (
 
 | Name | Description |
 |---|---|
-| `image-urls` | JSON array of Docker image URLs with new tags applied |
+| `tagged-image-urls` | JSON array of Docker image URLs with new tags applied |
 
 ### trigger-and-wait-for-github-workflow
 

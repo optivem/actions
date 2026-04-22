@@ -80,7 +80,7 @@ fi
 new_image_urls_json="$(printf '%s\n' "${new_image_urls[@]}" | jq -R . | jq -sc .)"
 
 echo "📦 New image URLs: $new_image_urls_json"
-echo "image-urls=$new_image_urls_json" >> "$GITHUB_OUTPUT"
+echo "tagged-image-urls=$new_image_urls_json" >> "$GITHUB_OUTPUT"
 
 success_count=${#new_image_urls[@]}
 total_count=${#source_images[@]}
@@ -91,4 +91,4 @@ else
   echo "⚠️  Partially completed: $success_count/$total_count images tagged successfully"
 fi
 
-echo "📤 Output parameter set: image-urls"
+echo "📤 Output parameter set: tagged-image-urls"
