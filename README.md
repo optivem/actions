@@ -121,6 +121,25 @@ Queries a remote git repository with `git ls-remote --tags "refs/tags/<pattern>"
 |---|---|
 | `exists` | Whether at least one matching tag exists (`true`/`false`) |
 
+### check-timestamp-newer
+
+Pure ISO 8601 timestamp comparator. Lexicographically compares `subject` against `baseline` — outputs `newer=true` when `subject` is strictly newer, OR when `baseline` is empty (fail-open). Outputs `newer=false` when `baseline` is set and `subject` is not newer. No platform dependency.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `subject` | yes | — | ISO 8601 timestamp under observation (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). |
+| `baseline` | no | `` | ISO 8601 timestamp to compare against. When empty, the action returns `newer=true` (fail-open — useful for "first run" semantics). |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `newer` | `true` when `subject` is strictly newer than `baseline`, OR when `baseline` is empty (fail-open). `false` when `baseline` is set AND `subject` is not newer than it. |
+
+**Notes:** ISO 8601 lexicographic comparison is only correct when both timestamps are UTC with the same format (both Z-suffixed). GitHub API and typical subject timestamps (docker push times, git commit times) satisfy this.
+
 ### check-unverified-commit-status
 
 Fetches commit statuses on `head-sha` via `gh api repos/{repo}/commits/{sha}/statuses` and checks whether any entry has `context == status-context`, `description == subject-sha`, and `state == success`. Used to skip re-verification when the same subject has already been verified on this HEAD. Fails open to `changed=true` on transient API errors.
@@ -141,28 +160,6 @@ Fetches commit statuses on `head-sha` via `gh api repos/{repo}/commits/{sha}/sta
 |---|---|
 | `changed` | `true` when no matching success status is found on head-sha (subject has NOT been verified yet — run). `false` when a matching success status exists (subject already verified — skip). Fails open to `true` on transient API errors. |
 | `verified-at` | ISO 8601 `createdAt` of the matching success status, if one was found. Empty otherwise. |
-
-### check-update-since-last-github-workflow-run
-
-Fetches the most recent successful run of a given workflow via `gh run list` and lexicographically compares its `createdAt` against the caller-supplied `last-updated-at` timestamp. Generic timestamp-vs-run comparator — caller decides what "updated" means (docker push time, git commit time, artifact build time). Fail-open on first run.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `last-updated-at` | yes | — | ISO 8601 timestamp representing when the subject under observation was last updated. Typically resolved by the caller from whatever source is relevant (e.g. latest docker image push time, a git commit time, an artifact push time). |
-| `workflow-name` | yes | — | Workflow file name or display name to check last successful run against (e.g. `github.workflow`) |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
-| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `changed` | `true` when `last-updated-at` is strictly newer than the last successful run's `createdAt`, OR when there is no previous successful run (fail-open on first run). `false` when a previous successful run was found AND the subject is not newer than it. |
-| `last-run-at` | ISO 8601 `createdAt` of the last successful run. Empty if no previous successful run exists. |
-
-**Notes:** ISO 8601 lexicographic comparison is only correct when both timestamps are UTC with the same format (both Z-suffixed). GitHub API and typical subject timestamps (docker push times, git commit times) satisfy this.
 
 ### cleanup-github-deployments
 
@@ -360,30 +357,9 @@ For each `component-name:version-file-path` entry, reads the VERSION file and cr
 |---|---|---|---|
 | `components` | yes | — | Newline-separated list of `component-name:version-file-path` entries (e.g., `monolith-system-java:system/monolith/java/VERSION`) |
 
-### create-github-release
-
-Idempotent GitHub Release primitive. Uses `gh release view` to check existence; if the release exists, updates title/notes via `gh release edit` (preserves asset uploads). Otherwise creates it via `gh release create`. All `gh` calls go through `gh_retry`.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `tag` | yes | — | Git tag the release is attached to (must already exist on the remote) |
-| `title` | yes | — | Release title |
-| `notes-file` | yes | — | Path to a file containing the release notes body (markdown) |
-| `is-prerelease` | no | `false` | Whether to mark the release as a prerelease |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` form |
-| `token` | no | `${{ github.token }}` | GitHub token for release API calls |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `release-url` | URL of the created or updated GitHub release |
-
 ### deploy-docker-compose
 
-Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working directory. The `environment`, `version`, and `image-urls` inputs are logged for operator visibility but do not alter behavior. Pair with `wait-for-urls` to verify readiness after deployment.
+Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working directory. The `environment`, `version`, and `image-urls` inputs are logged for operator visibility but do not alter behavior. Pair with `wait-for-endpoints` to verify readiness after deployment.
 
 **Inputs**
 
@@ -394,38 +370,6 @@ Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working
 | `image-urls` | yes | — | Docker image URLs being run (JSON array format) — surfaced in logs |
 | `compose-file` | no | `` | Docker Compose file to use (e.g., `docker-compose.yml`). Empty = default compose file resolution. |
 | `working-directory` | yes | — | Working directory containing the Docker Compose file |
-
-### deploy-to-cloud-run
-
-Validates `image-url` includes a tag or digest, then calls `gcloud run deploy` with the configured memory/CPU/scaling/env-vars/secrets. Reads the resulting service URL via `gcloud run services describe` and writes a summary table to `$GITHUB_STEP_SUMMARY`. Optionally delegates to `wait-for-urls` to poll the service URL until ready.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `environment` | yes | — | Target deployment environment (e.g., acceptance, qa, production) |
-| `version` | yes | — | Release version to deploy (e.g., `v1.0.0-rc.1` or `latest`) |
-| `image-url` | yes | — | Docker image URL to deploy (e.g., `ghcr.io/org/repo/service:tag`). Must include a tag or digest. |
-| `project-id` | yes | — | GCP project ID |
-| `region` | no | `us-central1` | GCP region for Cloud Run deployment |
-| `service-name` | yes | — | Full Cloud Run service name to deploy to (e.g., `shop-monolith-java-production`). Caller owns the naming convention; the action does not append the environment. |
-| `port` | no | `8080` | Container port to expose |
-| `env-vars` | no | `` | Environment variables to set on the Cloud Run service (`KEY=VALUE` format, one per line) |
-| `secrets` | no | `` | Secret environment variables to set (`KEY=SECRET_NAME:VERSION` format, one per line) |
-| `memory` | no | `512Mi` | Memory limit for the Cloud Run service |
-| `cpu` | no | `1` | CPU limit for the Cloud Run service |
-| `min-instances` | no | `0` | Minimum number of instances (0 for scale-to-zero) |
-| `max-instances` | no | `3` | Maximum number of instances |
-| `allow-unauthenticated` | no | `true` | Allow unauthenticated access to the service |
-| `wait-for-ready` | no | `true` | Whether to poll the service URL after deploy and fail if it does not become ready. Set to `false` to publish without verifying readiness (e.g. canary deploys with custom health checks). |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `service-url` | The URL of the deployed Cloud Run service |
-
-**Notes:** Caller is responsible for ensuring `image-url` is pushed and reachable before invoking. Authentication is assumed to be set up by a prior `google-github-actions/auth` step.
 
 ### ensure-env-vars-defined
 
@@ -499,6 +443,24 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 | `description` | The description field of the matched status |
 | `state` | The state of the matched status |
 | `target-url` | The `target_url` of the matched status |
+
+### get-last-successful-github-workflow-run-timestamp
+
+Returns the `createdAt` timestamp of the most recent successful run of a given workflow, queried via `gh run list`. Empty when no previous successful run exists. Pair with `check-timestamp-newer` to skip stages when nothing has changed since the last successful run.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `workflow-name` | yes | — | Workflow file name or display name to query (e.g. `github.workflow`) |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
+| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `timestamp` | ISO 8601 `createdAt` of the last successful run. Empty if no previous successful run exists. |
 
 ### map-signoff-to-stage-result
 
@@ -644,38 +606,6 @@ Calls `gh api` (via `gh_retry`) to look up published GitHub releases. If `input-
 |---|---|
 | `tag` | The validated tag |
 
-### setup-dotnet
-
-Thin wrapper around `actions/setup-dotnet@v5` that installs the requested .NET SDK version.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `dotnet-version` | yes | — | .NET SDK version to install |
-
-### setup-java-gradle
-
-Thin wrapper that composes `actions/setup-java@v5` (Temurin distribution) and `gradle/actions/setup-gradle@v5`. The `working-directory` input is declared but is not used by the composed steps.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `java-version` | yes | — | Java version to install |
-| `working-directory` | yes | — | Working directory containing the Gradle wrapper |
-
-### setup-node
-
-Wraps `actions/setup-node@v5` with npm caching keyed on `{working-directory}/package-lock.json`, then runs `npm ci` in the working directory.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `node-version` | yes | — | Node.js version to install |
-| `working-directory` | yes | — | Working directory containing the `package-lock.json` |
-
 ### trigger-and-wait-for-github-workflow
 
 Probes the GitHub rate limit (and sleeps until reset if below threshold), dispatches a `workflow_dispatch` workflow via `gh workflow run` (through `gh_retry`), captures the triggered run's ID via `gh run list`, and then `gh run watch --exit-status`es the run to fail the step if the triggered run fails.
@@ -722,7 +652,7 @@ Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `h
 |---|---|
 | `run-id` | The database ID of the matched workflow run |
 
-### wait-for-urls
+### wait-for-endpoints
 
 For each `{name, url}` in the input array, polls the URL with `curl -f` up to `max-attempts` times (waiting `wait-seconds` between attempts). Fails the step if any URL never succeeds. On failure, if `compose-file` is set, dumps `docker compose logs --timestamps` and `docker compose ps` for debugging.
 
@@ -730,7 +660,7 @@ For each `{name, url}` in the input array, polls the URL with `curl -f` up to `m
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `systems` | yes | — | JSON array of systems to health check, each with `name` and `url` (e.g., `[{"name": "API", "url": "http://localhost:8080/health"}]`) |
+| `endpoints` | yes | — | JSON array of endpoints to health check, each with `name` and `url` (e.g., `[{"name": "API", "url": "http://localhost:8080/health"}]`) |
 | `compose-file` | no | `` | Docker Compose file for log dump on failure. If set, runs `docker compose -f <file> logs/ps` when any URL fails. |
 | `working-directory` | no | `.` | Working directory for the Docker Compose log dump (used only when `compose-file` is set) |
 | `max-attempts` | no | `30` | Maximum number of polling attempts per URL |

@@ -1,13 +1,13 @@
-name: 'Wait for URLs'
-description: 'Polls a list of HTTP URLs until each responds with success (curl -f) or max attempts are exhausted. On failure, optionally dumps Docker Compose logs and container status.'
+name: 'Wait for Endpoints'
+description: 'Polls a list of HTTP endpoints until each responds with success (curl -f) or max attempts are exhausted. On failure, optionally dumps Docker Compose logs and container status.'
 author: 'Optivem'
 branding:
   icon: 'clock'
   color: 'blue'
 
 inputs:
-  systems:
-    description: 'JSON array of systems to health check, each with name and url (e.g., [{"name": "API", "url": "http://localhost:8080/health"}])'
+  endpoints:
+    description: 'JSON array of endpoints to health check, each with name and url (e.g., [{"name": "API", "url": "http://localhost:8080/health"}])'
     required: true
   compose-file:
     description: 'Docker Compose file for log dump on failure. If set, runs `docker compose -f <file> logs/ps` when any URL fails.'
@@ -29,21 +29,21 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Wait for URLs
+    - name: Wait for Endpoints
       env:
-        SYSTEMS: ${{ inputs.systems }}
+        ENDPOINTS: ${{ inputs.endpoints }}
         COMPOSE_FILE: ${{ inputs.compose-file }}
         MAX_ATTEMPTS: ${{ inputs.max-attempts }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
       run: |
-        COUNT=$(echo "$SYSTEMS" | jq 'length')
+        COUNT=$(echo "$ENDPOINTS" | jq 'length')
 
         if [[ "$COUNT" -eq 0 ]]; then
-          echo "⚠️ No system URLs provided, skipping health checks"
+          echo "⚠️ No endpoints provided, skipping health checks"
           exit 0
         fi
 
-        echo "⏳ Waiting for $COUNT system(s) to be ready..."
+        echo "⏳ Waiting for $COUNT endpoint(s) to be ready..."
         echo ""
 
         # Cap exponential growth so a long-running pipeline doesn't wait 8+ minutes between probes.
@@ -51,8 +51,8 @@ runs:
         FAILED=0
 
         for i in $(seq 0 $((COUNT - 1))); do
-          NAME=$(echo "$SYSTEMS" | jq -r ".[$i].name")
-          URL=$(echo "$SYSTEMS" | jq -r ".[$i].url")
+          NAME=$(echo "$ENDPOINTS" | jq -r ".[$i].name")
+          URL=$(echo "$ENDPOINTS" | jq -r ".[$i].url")
 
           echo "⏳ Waiting for $NAME at $URL..."
 
@@ -90,6 +90,6 @@ runs:
           exit 1
         fi
 
-        echo "✅ All systems are ready!"
+        echo "✅ All endpoints are ready!"
       shell: bash
       working-directory: ${{ inputs.working-directory }}

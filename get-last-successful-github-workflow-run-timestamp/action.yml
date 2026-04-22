@@ -1,0 +1,56 @@
+name: 'Get Last Successful GitHub Workflow Run Timestamp'
+description: 'Returns the createdAt timestamp of the most recent successful run of a given workflow, queried via gh run list. Empty when no previous successful run exists.'
+author: 'Optivem'
+branding:
+  icon: 'clock'
+  color: 'blue'
+
+inputs:
+  workflow-name:
+    description: 'Workflow file name or display name to query (e.g. `github.workflow`).'
+    required: true
+  repository:
+    description: 'Repository in "owner/name" form. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  timestamp:
+    description: 'ISO 8601 createdAt of the last successful run. Empty if no previous successful run exists.'
+    value: ${{ steps.get.outputs.timestamp }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get last successful workflow run timestamp
+      id: get
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        WORKFLOW_NAME: ${{ inputs.workflow-name }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+
+        # Limit 50 to handle short bursts of failed/in-progress runs preceding the last success.
+        timestamp=$(gh_retry run list \
+          --repo "${REPOSITORY}" \
+          --workflow "$WORKFLOW_NAME" \
+          --status completed \
+          --limit 50 \
+          --json conclusion,createdAt \
+          2>/dev/null \
+          | jq -r 'map(select(.conclusion == "success"))[0].createdAt // ""')
+
+        if [[ -z "$timestamp" ]]; then
+          echo "No previous successful run found for workflow '$WORKFLOW_NAME'."
+        else
+          echo "Last successful run: $timestamp"
+        fi
+
+        echo "timestamp=$timestamp" >> "$GITHUB_OUTPUT"

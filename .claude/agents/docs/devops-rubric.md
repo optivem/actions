@@ -199,7 +199,7 @@ If a wrapper fails the "thin" test and passes the "material logic" test, keep it
 | `setup-java-gradle` (two-step composite, hardcoded distribution) | `actions/setup-java` + `gradle/actions/setup-gradle` | `@v5` + `@v5` | Inline both steps in the workflow; `distribution: temurin` becomes a caller-visible choice. |
 | `setup-node` (setup + `npm ci` conflated) | `actions/setup-node` + `npm ci` | `@v5` | Keep `cache: 'npm'` + `cache-dependency-path` on `setup-node`; move `npm ci` to a separate caller step. Separates "setup" from "build". |
 | `create-github-release` (thin `gh release create/edit`) | `softprops/action-gh-release` | `@v2` | Idempotent by default when `tag_name` exists; preserves existing assets unless `files:` is set. Input mapping: `tag`→`tag_name`, `title`→`name`, `notes-file`→`body_path`, `is-prerelease`→`prerelease`. Output: consume `steps.<id>.outputs.url`. |
-| `deploy-to-cloud-run` (thin `gcloud run deploy`) | `google-github-actions/deploy-cloudrun` | `@v2` | Google's official action covers all current inputs 1:1 (`service`, `image`, `region`, `project_id`, `env_vars`, `secrets`, sizing flags, `--allow-unauthenticated` via `flags`). Lift the embedded readiness poll (`wait-for-urls`) into a separate caller step. |
+| `deploy-to-cloud-run` (thin `gcloud run deploy`) | `google-github-actions/deploy-cloudrun` | `@v2` | Google's official action covers all current inputs 1:1 (`service`, `image`, `region`, `project_id`, `env_vars`, `secrets`, sizing flags, `--allow-unauthenticated` via `flags`). Lift the embedded readiness poll (`wait-for-endpoints`) into a separate caller step. |
 
 When auditing, apply this lens to any custom wrapper: does it forward inputs to a mainstream action without adding material logic? If yes, delete. Extend the table above when new mainstream actions subsume further custom wrappers in this repo.
 
@@ -212,7 +212,7 @@ When auditing, apply this lens to any custom wrapper: does it forward inputs to 
 
 **Does NOT apply to:**
 
-- Concerns with no maintained mainstream action (e.g. `wait-for-urls`, `commit-files` via Contents API with SHA preconditions, org-specific prerelease-retention actions). Pass the "material logic" test → keep.
+- Concerns with no maintained mainstream action (e.g. `wait-for-endpoints`, `commit-files` via Contents API with SHA preconditions, org-specific prerelease-retention actions). Pass the "material logic" test → keep.
 - Wrappers that exist for a documented, time-bounded reason (migration bridge, deprecation shim). Flag these with an expected removal date and revisit on each audit.
 - Unmaintained "alternatives" (last release >18 months old, open security advisories, single-maintainer with no backup). `convictional/trigger-workflow-and-wait` is the canonical example — do not recommend migration to unmaintained actions (see the "no deprecated tools" rule in repo policy).
 
