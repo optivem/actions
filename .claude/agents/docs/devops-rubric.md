@@ -338,6 +338,8 @@ For each violation, propose a specific better name and say which rule it violate
 
 # 5. Architecture: primitives first, composites optional and thin
 
+> **Terminology.** This rubric uses "primitive", "single-concern action", and "one concern per action" interchangeably — all refer to the same construct: an action that owns exactly one concern from the orthogonal set enumerated in §6.
+
 Prefer small, single-concern **primitive** actions over large composite actions that bundle multiple concerns. Composites are acceptable **only as thin sugar** over primitives that can also be called directly at the call site.
 
 > **Rule:** every behavior exposed by a composite must also be reachable by calling primitives directly. A composite that hides logic that callers cannot otherwise replicate step-by-step is a design smell.
@@ -490,6 +492,11 @@ A thin composite wrapper that runs these four steps in this order is acceptable 
 | Composite hides logic that can't be replicated step-by-step | DevOps alignment → **Composite opacity** |
 | Composite runs steps in an order where early-step failure leaves a dangling reference | DevOps alignment → **Composition ordering** |
 | Primitive fails on rerun because "the thing already exists" | DevOps alignment → **Idempotence** |
+| Action retries on failure without a bounded retry count / backoff, or polls indefinitely | DevOps alignment → **Idempotence** |
 | Action expects caller to set an implicit `env:` for a token instead of declaring it as a named input | DevOps alignment → **Secrets / auth** |
 | Action interpolates `${{ inputs.token }}` or `${{ env.TOKEN }}` directly into a `run:` shell line instead of bridging via step-level `env:` | DevOps alignment → **Secrets / auth** |
+| Action calls `gh api` in a loop or at high frequency without rate-limit awareness (no backoff, no caching) | DevOps alignment → **Other** |
+| Action pins a dependency to a mutable ref (`@main`, `@v1`, branch tag) rather than an immutable SHA | DevOps alignment → **Other** |
+| Action uses `exit 1` for a recoverable failure, hiding the specific error from observability | DevOps alignment → **Other** |
+| Action uses `shell: pwsh` or `.ps1` outside the `shared/_test-*` scope, violating shell portability | DevOps alignment → **Other** |
 | Everything else DevOps-related that doesn't fit above | DevOps alignment → **Other** |
