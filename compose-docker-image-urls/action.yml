@@ -1,9 +1,5 @@
 name: 'Compose Docker Image URLs'
 description: 'String-composition helper. Takes base image URLs and a tag, returns a JSON array of `{base}:{tag}` URLs. No registry lookup (see `resolve-docker-image-digests` for that).'
-author: 'Optivem'
-branding:
-  icon: 'package'
-  color: 'blue'
 
 inputs:
   tag:

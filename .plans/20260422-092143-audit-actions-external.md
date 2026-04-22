@@ -34,8 +34,3 @@ Items that require consumer workflows to be updated OR change runtime behaviour 
   - Category: naming
   - VJ: what is industry practice in naming of compose vs format?
 
-- [ ] **Rename `check-unverified-commit-status` → `check-subject-verified` and flip output `changed` → `verified`** — Double-negative action name is hard to reason about at call sites; output `changed=true` when NOT verified inverts English. Per rubric §4 `check-*` is a read-only boolean query. Recommended rename: `check-subject-verified` with output `verified` (true = already verified / skip; false = not verified / run).
-  - Affects: `check-unverified-commit-status`
-  - Consumers to update (0 files in shop, 1 in gh-optivem, 0 in optivem-testing):
-    - `gh-optivem/.github/workflows/gh-acceptance-stage.yml`
-  - Category: naming

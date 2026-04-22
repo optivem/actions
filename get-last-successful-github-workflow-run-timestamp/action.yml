@@ -1,9 +1,5 @@
 name: 'Get Last Successful GitHub Workflow Run Timestamp'
 description: 'Returns the createdAt timestamp of the most recent successful run of a given workflow, queried via gh run list. Empty when no previous successful run exists.'
-author: 'Optivem'
-branding:
-  icon: 'clock'
-  color: 'blue'
 
 inputs:
   workflow-name:

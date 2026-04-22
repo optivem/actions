@@ -1,9 +1,5 @@
 name: 'Check GHCR Packages Exist'
 description: 'Checks if container packages exist for the repository using the GitHub Packages API. Useful for skipping pipeline stages when no artifacts have been built yet.'
-author: 'Optivem'
-branding:
-  icon: 'package'
-  color: 'blue'
 
 inputs:
   repository:

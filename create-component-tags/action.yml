@@ -1,9 +1,5 @@
 name: 'Create Component Tags'
 description: 'For each "component-name:version-file-path" entry, reads the VERSION file and creates + pushes a git tag "{component-name}-v{version}". Idempotent — skips tags that already exist on the remote, tolerates concurrent creation. Tool-agnostic — uses git commands only.'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'green'
 
 inputs:
   components:

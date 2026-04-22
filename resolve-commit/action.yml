@@ -1,10 +1,5 @@
 name: 'Resolve Commit'
 description: 'Resolves a git ref (branch, tag, or SHA) in a remote repository to its commit SHA and committer timestamp. Tool-agnostic — uses git fetch + git log, works against any git remote that allows reachable-SHA fetches.'
-author: 'Optivem'
-
-branding:
-  icon: 'git-commit'
-  color: 'green'
 
 inputs:
   repository:

@@ -1,9 +1,5 @@
 name: 'Map Signoff To Stage Result'
 description: 'Maps a human signoff decision (approved/rejected) to a CI stage result (success/failure). Pure string mapping — no git, no platform dependency.'
-author: 'Optivem'
-branding:
-  icon: 'check-square'
-  color: 'green'
 
 inputs:
   result:

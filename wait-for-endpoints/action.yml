@@ -1,9 +1,5 @@
 name: 'Wait for Endpoints'
 description: 'Polls a list of HTTP endpoints until each responds with success (curl -f) or max attempts are exhausted. On failure, optionally dumps Docker Compose logs and container status.'
-author: 'Optivem'
-branding:
-  icon: 'clock'
-  color: 'blue'
 
 inputs:
   endpoints:

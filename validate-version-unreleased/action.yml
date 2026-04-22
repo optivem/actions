@@ -1,9 +1,5 @@
 name: 'Validate Version Unreleased'
 description: 'Asserts that a version tag does NOT yet exist in the repository; fails the step if it does. Inverse of validate-tag-exists. Tool-agnostic — uses git tag -l, no platform API dependency.'
-author: 'Optivem'
-branding:
-  icon: 'x-circle'
-  color: 'red'
 
 inputs:
   version:

@@ -1,9 +1,5 @@
 name: 'Cleanup GitHub Prereleases'
 description: 'Cleans up prerelease git tags, GitHub releases, and Docker image tags that are no longer needed'
-author: 'Optivem'
-branding:
-  icon: 'trash-2'
-  color: 'orange'
 
 inputs:
   retention-days:

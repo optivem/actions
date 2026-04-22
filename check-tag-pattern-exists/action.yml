@@ -1,9 +1,5 @@
 name: 'Check Tag Pattern Exists'
 description: 'Checks whether any tag matching a pattern exists in the remote repository. Tool-agnostic — uses git ls-remote, no platform API dependency.'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'blue'
 
 inputs:
   tag-pattern:

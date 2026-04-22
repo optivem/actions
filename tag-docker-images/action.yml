@@ -1,9 +1,5 @@
 name: 'Tag Docker Images'
 description: 'Applies a new tag to existing Docker images via server-side manifest operation (`docker buildx imagetools create`) for each source image. Preserves multi-arch manifest lists; zero image data crosses the runner. Same registry throughout — only a tag is added, no image content moves. Useful for pipeline-stage promotions that are expressed purely as a tag change.'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'blue'
 
 inputs:
   image-urls:

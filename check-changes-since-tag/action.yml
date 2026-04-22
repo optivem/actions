@@ -1,9 +1,5 @@
 name: 'Check Changes Since Tag'
 description: 'Detects whether specified paths have changed since the most recent git tag matching the provided patterns. Generic change-detection primitive — callers decide what to do with the answer (skip a workflow, invalidate a cache, trigger a deploy, etc.).'
-author: 'Optivem'
-branding:
-  icon: 'git-branch'
-  color: 'blue'
 
 inputs:
   tag-patterns:

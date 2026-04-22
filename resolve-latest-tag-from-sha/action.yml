@@ -1,9 +1,5 @@
 name: 'Resolve Latest Tag from SHA'
 description: 'Finds the highest tag (by version sort — `sort -V`) that points at a given commit SHA, optionally filtered by a glob pattern. With the default `pattern: ''*''` returns the highest-version tag among all tags on the SHA. Tool-agnostic — uses git ls-remote, works against any git remote.'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'green'
 
 inputs:
   repository:

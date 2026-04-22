@@ -1,10 +1,5 @@
 name: 'Check SHA Is On Branch'
 description: 'Checks whether a given commit SHA is an ancestor of a branch (default: main). Outputs on-branch=true/false. Use to guard downstream steps against workflow_dispatch inputs pointing at commits not in the base branch.'
-author: 'Optivem'
-
-branding:
-  icon: 'git-branch'
-  color: 'green'
 
 inputs:
   commit-sha:

@@ -1,10 +1,5 @@
 name: 'Render System Stage Summary'
 description: 'Thin composite: validates inputs, formats success + latest artifact arrays via `format-artifact-list`, renders via `render-stage-summary`, and emits a `::notice` annotation on skipped.'
-author: 'Optivem'
-
-branding:
-  icon: 'clipboard'
-  color: 'blue'
 
 inputs:
   stage-name:

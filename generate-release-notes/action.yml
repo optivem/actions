@@ -1,9 +1,5 @@
 name: 'Generate Release Notes'
 description: 'Generates a production-release title and a markdown notes file for the release being cut. Writes the notes file to a `mktemp` path on the runner filesystem; the path is returned as an output for the caller to pass to `softprops/action-gh-release` or equivalent. Production-deployment releases only — this action hardcodes the `🚀`/`PROD` title shape because every caller to date emits prod-deployed release notes. If a QA / signoff / acceptance variant is ever needed, write a sibling action.'
-author: 'Optivem'
-branding:
-  icon: 'file-text'
-  color: 'blue'
 
 inputs:
   prerelease-version:

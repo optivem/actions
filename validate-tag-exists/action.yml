@@ -1,9 +1,5 @@
 name: 'Validate Tag Exists'
 description: 'Asserts that a git tag exists in the repository; fails the step if it does not. Tool-agnostic — uses git ls-remote, no platform API dependency.'
-author: 'Optivem'
-branding:
-  icon: 'check-circle'
-  color: 'green'
 
 inputs:
   tag:

@@ -1,9 +1,5 @@
 name: 'Resolve Latest Prerelease Tag'
 description: 'Finds the latest git tag in a GitHub repository that matches a given prefix (and optional suffix), using version-aware sort. Tool-agnostic — uses git ls-remote, no releases API dependency. Pairs with validate-tag-exists for the "validate an explicit tag" case.'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'green'
 
 inputs:
   tag-prefix:

@@ -1,9 +1,5 @@
 name: 'Resolve Docker Image Digests'
 description: 'Finds Docker images and resolves their digests from any container registry. Accepts either fully-qualified URLs (image-urls) or base URLs plus an optional commit-sha (base-image-urls + commit-sha). With base-image-urls, an empty commit-sha resolves to the :latest tag; a set commit-sha resolves to the :sha-<commit-sha> tag — matching docker/metadata-action''s type=sha,format=long convention used by the commit stage.'
-author: 'Optivem'
-branding:
-  icon: 'search'
-  color: 'blue'
 inputs:
   image-urls:
     description: 'Fully-qualified image URLs (with :tag or @digest). Mutually exclusive with base-image-urls. Supports newline-separated list or JSON array format.'

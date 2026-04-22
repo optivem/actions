@@ -338,6 +338,51 @@ Not covered yet: **AWS CodePipeline** (stage/action model is atypical — each s
 
 When adding a new validated platform, extend the portability-pass list in the `actions-auditor-reviewer` agent too.
 
+## 3.6 Tags vs commit-statuses — when to use which
+
+A pipeline gate's state ("deployed to QA", "QA-approved", "acceptance-tests passed") can be recorded in two fundamentally different mechanisms. They look similar at a glance but serve different purposes. Pick the right one per gate.
+
+### Decision criterion
+
+Ask: **do downstream workflows need to *find* the thing by name, or just *check if it happened*?**
+
+| Need | Mechanism | Why |
+|---|---|---|
+| Identifier used for lookup/resolve/trigger (e.g., "deploy the latest `-qa-approved` RC"; `on: push: tags:` triggers) | **Git tag** | Tags have names that workflows can resolve and trigger on. |
+| Boolean "has this happened?" bookkeeping (e.g., "skip acceptance-stage re-run if same SHA already tested") | **Commit status** | Statuses live on the specific commit, carry `state`, and never need to be resolved by name. |
+
+### Properties
+
+| | Git tag | Commit status |
+|---|---|---|
+| Tier (§3.1) | Tier 2 — portable (Git-native) | Tier 3 — GitHub-specific |
+| Name-addressable | Yes (`refs/tags/<name>`) | No (query by SHA + context) |
+| Carries state field? | No — all meaning must live in the name | Yes (`success` / `failure` / `pending` / `error`) |
+| Can be the target of `on: push:` triggers? | Yes | No |
+| Visible in `git tag -l` / `gh release list`? | Yes | No (API-only) |
+| Cross-host portable? | Yes (works on GitLab, Bitbucket, self-hosted) | No (GitHub only; other hosts have similar but not identical concepts) |
+| Cleanup needed? | Yes — the tag namespace grows per-commit (`cleanup-github-prereleases` handles this) | No — statuses ride with the commit |
+
+### Naming convention consequences
+
+Because tags and commit-statuses have different data models, their name conventions diverge:
+
+- **Tag names end in a past-participle verb.** The name carries the full meaning (`v1.0.0-rc.5-qa-deployed`, `v1.0.0-rc.5-qa-approved`) — tags have no `state` field, so the verb IS the state. Failure states typically aren't recorded as tags at all (you just don't create the tag).
+- **Commit-status contexts do NOT end in a verb.** The `state` field carries the outcome; the context names the *type of check* (`acceptance-stage`, not `acceptance-stage-passed`). Putting `-passed` in the context is redundant with `state=success` and becomes self-contradictory if you ever record a failure (`context: acceptance-stage-passed, state: failure`).
+
+### When a finding applies
+
+Flag an action/workflow as mechanism-mismatched when:
+
+- A name-addressable gate (something downstream resolves, triggers on, or looks up by name) uses commit-statuses — the caller has to resort to API scans to find what should be a simple `git ls-remote` or `on: push: tags:`.
+- A pure boolean-bookkeeping gate (no downstream name-lookup) uses tags — cluttering the tag namespace and forcing cleanup jobs that wouldn't exist if it were a commit-status.
+- A commit-status context ends in a past-participle verb (`-passed`, `-approved`, `-deployed`) — propose dropping the verb suffix and relying on `state`.
+- A pipeline tag name is a pure noun with no verb (e.g., `v1.0.0-rc.5-qa`) — propose adding the verb so the tag is self-explanatory without context lookups.
+
+### Mixed usage is OK
+
+It's correct for a single pipeline to use both mechanisms — tags for pipeline-stage identifiers (`-qa-deployed`, `-qa-approved`), commit-statuses for "has-this-been-done-yet" bookkeeping. Don't flag the coexistence; flag only individual mechanism-mismatches per the criterion above.
+
 ---
 
 # 4. Naming rules

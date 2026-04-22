@@ -1,10 +1,5 @@
 name: 'Render Stage Summary'
 description: 'Rendering engine for stage summaries — emits markdown to $GITHUB_STEP_SUMMARY tailored to stage-result (success/failure/skipped/etc.). Used directly by commit-stage workflows and composed by `render-system-stage-summary` for richer system-stage rendering.'
-author: 'Optivem'
-
-branding:
-  icon: 'clipboard'
-  color: 'blue'
 
 inputs:
   stage-name:

@@ -1,9 +1,5 @@
 name: 'Check Timestamp Newer'
 description: 'Pure ISO 8601 timestamp comparator. Outputs newer=true when subject is strictly newer than baseline, OR when baseline is empty (fail-open). Outputs newer=false when baseline is set and subject is not newer.'
-author: 'Optivem'
-branding:
-  icon: 'fast-forward'
-  color: 'blue'
 
 inputs:
   subject:

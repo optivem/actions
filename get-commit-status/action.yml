@@ -1,9 +1,5 @@
 name: 'Get Commit Status'
 description: 'Reads the most recent commit status with a given context (and optionally a required state) from a commit. Fails if no matching status is found.'
-author: 'Optivem'
-branding:
-  icon: 'search'
-  color: 'green'
 inputs:
   commit-sha:
     description: 'Commit SHA to read the status from'

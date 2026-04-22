@@ -1,9 +1,5 @@
 name: 'Format Artifact List'
 description: 'Formats a newline-separated list of artifact identifiers (image URLs, release URLs, arbitrary strings) into a bulleted markdown list. Pure string transform — no side effects.'
-author: 'Optivem'
-branding:
-  icon: 'list'
-  color: 'blue'
 
 inputs:
   artifacts:

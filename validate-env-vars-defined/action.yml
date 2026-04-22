@@ -1,9 +1,5 @@
 name: 'Validate Env Vars Defined'
 description: 'Validates that required variables and secrets are defined before workflow execution. List the names in the names input and pass the values via env.'
-author: 'Optivem'
-branding:
-  icon: 'shield'
-  color: 'red'
 
 inputs:
   names:

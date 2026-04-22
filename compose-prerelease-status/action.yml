@@ -1,9 +1,5 @@
 name: 'Compose Prerelease Status'
 description: 'Composes a status-marker tag from a prerelease version by appending environment and status (e.g., v1.0.0-rc.1 + qa + deployed → v1.0.0-rc.1-qa-deployed). Used to tag RCs as they cross pipeline gates. Output is a git tag, not a SemVer version.'
-author: 'Optivem'
-branding:
-  icon: 'tag'
-  color: 'blue'
 
 inputs:
   prerelease-version:
