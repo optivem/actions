@@ -31,11 +31,11 @@ Two lint checks enforce the conventions:
 |---|---|---|
 | [bump-patch-versions](#bump-patch-versions) | `version-files`, `repository`, `git-host`, `token` | `bumps`, `bumped`, `summary` |
 | [check-changes-since-tag](#check-changes-since-tag) | `tag-patterns`, `paths` | `changed`, `baseline-tag`, `baseline-sha`, `changed-files` |
+| [check-commit-status-exists](#check-commit-status-exists) | `sha`, `status-context`, `head-sha`, `repository`, `token` | `exists`, `created-at` |
 | [check-ghcr-packages-exist](#check-ghcr-packages-exist) | `repository`, `token` | `exist` |
 | [check-sha-on-branch](#check-sha-on-branch) | `commit-sha`, `base-branch` | `on-branch` |
 | [check-tag-pattern-exists](#check-tag-pattern-exists) | `tag-pattern`, `repository`, `token`, `git-host` | `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | `subject`, `baseline` | `newer` |
-| [check-commit-status-exists](#check-commit-status-exists) | `sha`, `status-context`, `head-sha`, `repository`, `token` | `exists`, `created-at` |
 | [cleanup-github-deployments](#cleanup-github-deployments) | `keep-count`, `retention-days`, `protected-environments`, `delete-delay-seconds`, `rate-limit-threshold`, `dry-run`, `token` | `deleted-count`, `dry-run-count` |
 | [cleanup-github-prereleases](#cleanup-github-prereleases) | `retention-days`, `container-packages`, `delete-delay-seconds`, `rate-limit-threshold`, `dry-run`, `token` | `deleted-count`, `dry-run-count` |
 | [commit-files](#commit-files) | `files`, `branch`, `max-retries`, `token` | `commits`, `committed` |
@@ -110,6 +110,27 @@ Walks tag patterns in priority order, resolves the most recent matching tag as a
 
 **Notes:** Requires the caller to have checked out with `fetch-depth: 0` (or equivalent) so tag history is available. A defensive `git fetch --tags` runs first.
 
+### check-commit-status-exists
+
+Boolean existence check for a success commit-status on `head-sha` matching `(context, description=sha)`. Returns `exists=true` when the status is present, `false` otherwise. Caller-defined semantics — the caller picks the `status-context` label, the action only reports presence. Fails open to `exists=false` on transient API errors so callers never silently skip work. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `sha` | yes | — | SHA to look up in the `description` field of commit-statuses (typically an upstream-repo commit the pipeline previously processed). |
+| `status-context` | yes | — | The commit-status context to search for (e.g. `acceptance-stage`). Matched against the `context` field. Caller-chosen label encoding the type of check; no verb suffix — the `state` field carries the outcome. |
+| `head-sha` | no | `${{ github.sha }}` | Commit whose statuses are inspected |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
+| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `exists` | `true` when a success commit-status on head-sha matches the given context + description=sha. `false` when none found. Fails open to `false` on transient API errors. |
+| `created-at` | ISO 8601 `createdAt` of the matching success status, if one was found. Empty otherwise. |
+
 ### check-ghcr-packages-exist
 
 Calls `gh api repos/{repo}/packages?package_type=container` (via `gh_retry`) and sets `exist=true`/`false` based on whether the list is non-empty. Useful for skipping pipeline stages when no artifacts have been built yet.
@@ -183,27 +204,6 @@ Pure ISO 8601 timestamp comparator. Lexicographically compares `subject` against
 | `newer` | `true` when `subject` is strictly newer than `baseline`, OR when `baseline` is empty (fail-open). `false` when `baseline` is set AND `subject` is not newer than it. |
 
 **Notes:** ISO 8601 lexicographic comparison is only correct when both timestamps are UTC with the same format (both Z-suffixed). GitHub API and typical subject timestamps (docker push times, git commit times) satisfy this.
-
-### check-commit-status-exists
-
-Boolean existence check for a success commit-status on `head-sha` matching `(context, description=sha)`. Returns `exists=true` when the status is present, `false` otherwise. Caller-defined semantics — the caller picks the `status-context` label, the action only reports presence. Fails open to `exists=false` on transient API errors so callers never silently skip work. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `sha` | yes | — | SHA to look up in the `description` field of commit-statuses (typically an upstream-repo commit the pipeline previously processed). |
-| `status-context` | yes | — | The commit-status context to search for (e.g. `acceptance-stage`). Matched against the `context` field. Caller-chosen label encoding the type of check; no verb suffix — the `state` field carries the outcome. |
-| `head-sha` | no | `${{ github.sha }}` | Commit whose statuses are inspected |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
-| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `exists` | `true` when a success commit-status on head-sha matches the given context + description=sha. `false` when none found. Fails open to `false` on transient API errors. |
-| `created-at` | ISO 8601 `createdAt` of the matching success status, if one was found. Empty otherwise. |
 
 ### cleanup-github-deployments
 
