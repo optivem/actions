@@ -1,6 +1,6 @@
 # DevOps rubric for auditing GitHub Actions
 
-**Rubric version: 8** (updated 2026-04-22 — added §1.8 "Thin wrappers around mainstream actions — delete in favour of direct use", generalising §1.6 to cover setup/release/deploy wrappers with a concrete replacement table (`setup-dotnet`/`setup-java-gradle`/`setup-node` → official `actions/setup-*`; `create-github-release` → `softprops/action-gh-release`; `deploy-to-cloud-run` → `google-github-actions/deploy-cloudrun`). Refreshed §3.1 Tier 1 examples to cross-reference §1.8. Previously: v7 2026-04-22 — **posture shift: this repo is production infra, not a teaching vehicle.** Rewrote §2 "Forward-looking context" to drop the teaching-vehicle framing and the "teaching-clarity override" (real-world best practice is now the default, not a tie-breaker). Added §1.6 "Container image build/tag/push — use mainstream composite actions" requiring `docker/build-push-action` + `docker/metadata-action` over hand-rolled build/tag/push splits, with supply-chain flags (SLSA provenance, SBOM, digest-pinned deploys). Renumbered DORA linkage to §1.7. Previously: v6 2026-04-22 — added §1.5 "Version-handling actions — follow SemVer": any action that composes, parses, or validates a version string must use SemVer 2.0.0 vocabulary and shape, with concrete input-name guidance (`base-version`, `suffix`, `build-number`) and explicit guidance against using SemVer build metadata for CI counters. v5 2026-04-22 — extended the `commit-sha` rule in §1 to cover outputs: qualification now preferred for action outputs / job outputs when the producer is generic or produces multiple SHAs; bare `sha` stays acceptable when a resolver-style action's name already disambiguates. v4 2026-04-22 — strengthened the `commit-sha` vs. `sha` rule for inputs. v3 2026-04-22 — added ambiguity test for Tier 3 `github` prefix; decoupled "Tier 3" from "name carries `github`". v2 2026-04-21 — added Mainstream-first principle, bounded-retry rule, VCS-vs-platform-API renaming, promote/publish/ship verb rules. When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
+**Rubric version: 8** (updated 2026-04-22). See [§ Version history](#version-history) at the end of this file for what changed in each version. When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
 
 This is the reference rubric used by the `actions-auditor` agent (and any sibling agent that wants DevOps-aligned reviews). It defines "what correct looks like" so the agent file can stay focused on process and output schema.
 
@@ -58,8 +58,9 @@ Default recommendation for an output "unread today" is **keep**. An output's cos
 - **Build-once-promote-many.** Flag any action whose name or `runs:` block implies rebuilding an artifact past the commit stage (e.g. `build-image` called from a promote/deploy workflow, or a promote action that shells out to `docker build` or runs a compiler). Promote actions must consume an existing artifact reference (image digest, tag, URL), not rebuild from source. Source: Farley & Humble, *Continuous Delivery* ch. 5.
 - **Error handling / idempotence.** DevOps practice expects actions to be idempotent or fail-fast with clear errors. Flag actions that silently succeed on no-op, or that have ambiguous failure semantics.
 - **Fail-fast on cheap preconditions.** Input validation, format checks, and reachability probes must happen *before* any API call, docker build, or external side effect. Flag actions whose first side-effecting step can fail on a precondition the action could have validated in a prior, side-effect-free step. Source: Farley & Humble, *Continuous Delivery* ch. 4.
+- **Fast-feedback sizing.** Actions that block a job's progress (polling, waiting, retrying) must expose a `timeout-seconds` (or `max-attempts` + `poll-interval`) input with a default that respects the target commit-stage budget of roughly 5 minutes end-to-end (Farley & Humble ch. 4, *Implementing a Deployment Pipeline*). Applies to `wait-for-urls`, `wait-for-github-workflow`, `trigger-and-wait-for-github-workflow`, and any future blocker. Flag actions whose default wait-times could sum above ~5min under common caller compositions without the caller being able to cap them.
 - **Rate-limit awareness for `gh api` actions.** Flag any action that uses `gh api` in a loop (iterating over items, following pagination, or called repeatedly from a caller loop) and does not accept a `rate-limit-threshold` / `poll-interval` input or back off when approaching the limit. Reference pattern: `cleanup-github-prereleases` and `trigger-and-wait-for-github-workflow`. Point callers at `gh api rate_limit` for headroom checks.
-- **Bounded retry with backoff.** Flag any action whose `runs:` block retries a transient-failure-prone operation (network call, API request, polling loop) without **(a)** an explicit maximum attempt count or deadline, and **(b)** exponential or jittered backoff between attempts. Unbounded `while true; do ... done` loops and flat-interval retries burn the caller's error budget and inflate MTTR during partial outages — a single wedged action can consume an entire pipeline's retry budget. A healthy retry loop has a ceiling (e.g. `max-attempts: 5` input, or a `timeout-seconds` input) and grows the sleep between attempts (e.g. 2s → 4s → 8s → 16s → 32s, optionally with jitter). Source: Google SRE book, ch. 22 "Addressing Cascading Failures" (retry amplification) and ch. 3 "Embracing Risk" (error-budget framing).
+- **Bounded retry with backoff.** Flag any action whose `runs:` block retries a transient-failure-prone operation (network call, API request, polling loop) without **(a)** an explicit maximum attempt count or deadline, and **(b)** exponential or jittered backoff between attempts. Unbounded `while true; do ... done` loops and flat-interval retries burn the caller's error budget and inflate MTTR during partial outages — a single wedged action can consume an entire pipeline's retry budget. A healthy retry loop has a ceiling (e.g. `max-attempts: 5` input, or a `timeout-seconds` input) and grows the sleep between attempts (e.g. 2s → 4s → 8s → 16s → 32s, optionally with jitter). **DORA linkage — MTTR.** Unbounded retries are an MTTR amplifier: a 30-second transient registry outage escalates into a 30-minute pipeline wedge under flat-interval retry, so the MTTR observed by the team is dominated by the retry policy rather than the underlying fault. Source: Google SRE book, ch. 22 "Addressing Cascading Failures" (retry amplification) and ch. 3 "Embracing Risk" (error-budget framing); *Accelerate* (Forsgren, Humble, Kim) on MTTR as a DORA metric.
 
 ## 1.4 Secrets, supply chain, observability, shell, branding
 
@@ -82,10 +83,20 @@ Default recommendation for an output "unread today" is **keep**. An output's cos
     env:
       GH_TOKEN: ${{ inputs.token }}
   ```
-- **Supply chain.** Flag actions whose `uses:` references point at a mutable ref (`@main`, `@master`, `@latest`, any branch name), or at an action from an untrusted author. Pinning to a major tag (`@v4`) is acceptable for Marketplace-trusted actions (`actions/*`, well-known vendors); pinning to a SHA is preferred for untrusted sources. Cite GitHub's hardening guide for GitHub Actions and SLSA level-3 build integrity.
+
+  The bridge-via-env pattern aligns with **Twelve-Factor Factor III** for secret *delivery* (config travels through the environment, not baked into the rendered command); the named-input requirement in the bullet above is a distinct concern and addresses *interface declaration* at the composite's `action.yml` boundary. Both rules are live together — Factor III explains *why* the env bridge is safer; the Marketplace-interface rule explains *why* the input must still be declared.
+- **Supply chain.** Flag actions whose `uses:` references point at a mutable ref (`@main`, `@master`, `@latest`, any branch name), or at an action from an untrusted author. Cite GitHub's hardening guide for GitHub Actions and SLSA level-3 build integrity.
+
+  **Default pin-strategy ladder for this repo** (apply consistently when making a finding):
+
+  1. **Mainstream, Marketplace-trusted publishers — major-tag-pin is acceptable.** `actions/*` (official), `docker/*`, `google-github-actions/*`, `softprops/action-gh-release`, `gradle/actions/*`. Use `@v4`/`@v5`/`@v6` etc. The publisher's security posture and move-on-break track record make major-tag acceptable.
+  2. **Untrusted / single-maintainer / less-audited sources — SHA-pin.** Full 40-character commit SHA, with a trailing comment recording the intended human-readable tag (`@abcdef1234... # v2.3.1`).
+  3. **Escalation — when the repo commits to SLSA Level 3**, SHA-pin *everything* (including tier 1 above) and rotate pins on a cadence. Note this in the finding.
+
+  Flag any `uses:` that violates tiers 1–2 above. Keep "escalate to SHA-pin-everything at SLSA L3" as a forward-looking recommendation rather than a current requirement.
 - **Observability — dual surface.** For human review: useful logs and step summaries when the action does significant work. For downstream pipeline decisions: where an action can fail in a recoverable way, expose a structured failure reason as an output (e.g. `status`, `failure-reason`) rather than only exiting non-zero. Flag actions that use `exit 1` for recoverable conditions a caller might want to branch on. Source: SRE ch. 4 "Service Level Objectives", ch. 11 "Being On-Call".
 - **Shell portability.** Repo policy is bash-only (see README "Shell choice"); `shell: pwsh` and `.ps1` files are rejected by [check-no-pwsh.sh](../../../shared/_lint/check-no-pwsh.sh). Flag any `shell: pwsh` or `.ps1` found outside the `shared/_test-*` allowlist as a lint-rule escape. Do not recommend keeping pwsh because "the logic benefits from PowerShell object handling" — bash + `jq` is the repo standard for the JSON-munging cases that historically motivated pwsh.
-- **`branding:` field.** Optional for internal actions; required by the Marketplace publishing flow. If publication intent is Marketplace, flag actions missing `branding:`; if internal-only, the field is a stylistic choice and should not be flagged.
+- **`branding:` field.** `branding:` is required by the Marketplace publishing flow but optional for internal actions. **This repo's publication intent is internal-only** (see `actions-auditor.md` "Publication intent for this repo"); therefore missing `branding:` is NOT a finding here. If the author ever flips publication intent to Marketplace, revisit this rule and flag actions lacking `branding:` at that point.
 
 ## 1.5 Version-handling actions — follow SemVer
 
@@ -120,15 +131,28 @@ Flag as `name-mainstream-convention` any version-handling input named `version`/
 
 **Source**: Semantic Versioning 2.0.0 spec, §§2, 9, 10, 11. Authoritative for the naming conventions above; when repo style and spec disagree, the spec wins (per the Mainstream-first principle).
 
-## 1.6 Container image build/tag/push — use mainstream composite actions
+## 1.6 Container image build/tag/push — use BuildKit's fused build+tag+push step
 
-Any workflow that builds a container image, labels it, and pushes it to a registry must use the mainstream Marketplace composites — **`docker/build-push-action`** with **`docker/metadata-action`** (and `docker/login-action` for registry auth) — rather than hand-rolled `build-*` / `tag-*` / `push-*` primitives that shell out to `docker build`, `docker tag`, and `docker push`.
+**The rule (platform-agnostic).** Any workflow that builds a container image, labels it, and pushes it to a registry must delegate the three steps to **BuildKit as a single atomic operation** — build, tag, push, and emit attestations (SLSA provenance + SBOM) in one invocation — rather than decomposing them into hand-rolled `build-*` / `tag-*` / `push-*` primitives that shell out to `docker build`, `docker tag`, and `docker push` separately. BuildKit fuses these three steps at the tool level: the build graph already knows the target tags and push destinations, so splitting them externally forces the image through unnecessary local-daemon round-trips and skips BuildKit's remote cache, parallel multi-arch emit, and attestation pipeline.
 
 Applies whenever a workflow or composite action produces a container image that will be consumed downstream (commit-stage → acceptance-stage image handoff, release-stage publication, etc.).
 
-**Rationale — the three-primitive split is the wrong shape for Docker.** Separation of concerns (§6) treats artifact construction, tagging, and push as orthogonal because for some ecosystems (Maven, npm) they genuinely are. For Docker with BuildKit, they are not: BuildKit fuses build + tag + push into a single atomic step driven by the same build graph, and splitting it externally forces the image through unnecessary local-daemon round-trips (`docker build` → local store → `docker tag` → `docker push` layer-by-layer) that skip BuildKit's remote cache, parallel multi-arch emit, and attestation pipeline. The Marketplace composite does not violate §6 — it respects the Docker ecosystem's *actual* build/release seam, which is one step, not three.
+**Platform-specific expressions of the rule.** The rule is universal; each CI platform has its own canonical wrapper around BuildKit's fused capability:
 
-**Mainstream-first (see top of file).** `docker/build-push-action` is the ecosystem standard (used by `actions/*` examples, by Docker Inc.'s own docs, and by the overwhelming majority of public workflows on GitHub). Hand-rolled primitives that replicate a subset of its behavior push the repo toward a private dialect for no corresponding gain.
+| Platform | BuildKit-capability expression |
+|---|---|
+| GitHub Actions | `docker/login-action` + `docker/metadata-action` + `docker/build-push-action` |
+| GitLab CI | `docker buildx build --push` from a `docker:dind` service (or the Container Registry integration) |
+| Jenkins | `docker buildx build --push` pipeline step; Docker Pipeline plugin's BuildKit-aware path |
+| Azure Pipelines | `Docker@2` task with `buildAndPush` command (BuildKit-backed when `DOCKER_BUILDKIT=1`) |
+| CircleCI | `setup_remote_docker` + `docker buildx build --push`, or the `docker/build` orb |
+| Buildkite | `docker buildx build --push` in a shell step, or the `docker-compose` plugin's build+push path |
+
+What they share: a single atomic step that fuses build + tag + push + (where supported) SLSA provenance and SBOM attestation. On any platform, the three-primitive split is wrong because BuildKit collapses the seam; the ecosystem wrapper is the honest representation.
+
+**Rationale — the three-primitive split is the wrong shape for Docker.** Separation of concerns (§6) treats artifact construction, tagging, and push as orthogonal because for some ecosystems (Maven, npm) they genuinely are. For Docker with BuildKit, they are not. The Marketplace composite (on GitHub Actions) and its platform-peer wrappers do not violate §6 — they respect the Docker ecosystem's *actual* build/release seam, which is one step, not three.
+
+**Mainstream-first (see top of file).** `docker/build-push-action` is the ecosystem standard on GitHub Actions (used by `actions/*` examples, by Docker Inc.'s own docs, and by the overwhelming majority of public workflows on GitHub); `docker buildx` is the ecosystem standard everywhere else. Hand-rolled primitives that replicate a subset of either push the repo toward a private dialect for no corresponding gain.
 
 **Capabilities lost when splitting build/tag/push into custom primitives:**
 
@@ -138,7 +162,7 @@ Applies whenever a workflow or composite action produces a container image that 
 - **SBOM attestation** (`sbom: true`) — emits a CycloneDX/SPDX SBOM attached to the manifest during build, not bolted on afterwards.
 - **Atomic digest output** — `steps.<id>.outputs.digest` returns the registry-resolved digest of the just-pushed image, which is what downstream stages must pin to (see §1 "build-once-promote-many" and the digest-pinning rule below). The three-primitive split requires an extra `resolve-docker-image-digests` round-trip to reconstruct something the Marketplace action already returns for free.
 
-**Companion actions — the standard trio.**
+**Companion actions on GitHub Actions — the standard trio.**
 
 | Action | Role | Version pin |
 |---|---|---|
@@ -152,23 +176,23 @@ Applies whenever a workflow or composite action produces a container image that 
 
 - `provenance: mode=max` — full SLSA provenance (not `mode=min`, which omits materials).
 - `sbom: true` — emit SBOM as a manifest attestation.
-- Pin companion actions by major tag (`@v4`/`@v5`/`@v6`) per §1 supply-chain rule; pin by SHA if the repo is targeting SLSA L3.
+- Pin companion actions per §1.4 supply-chain pin-strategy ladder (major-tag acceptable for `docker/*`; SHA-pin at SLSA L3).
 
-**Digest-pinned deploy consumers.** Downstream stages (acceptance, release, production) must pin to the image **digest** (`@sha256:...`) emitted by `docker/build-push-action`, not to a mutable tag. Flag any post-commit-stage consumer that references an image by tag alone (exceptions: the repo's documented `:latest` acceptance-stage pull — see §2).
+**Digest-pinned deploy consumers.** Downstream stages (acceptance, release, production) must pin to the image **digest** (`@sha256:...`) emitted by the BuildKit-fused step, not to a mutable tag. Flag any post-commit-stage consumer that references an image by tag alone (exceptions: the repo's documented `:latest` acceptance-stage pull — see §2).
 
 **Flag as DevOps alignment finding → "Separation of concerns" or "Other":**
 
-- Any workflow or composite that uses hand-rolled `build-docker-image` / `tag-docker-image` / `push-docker-image` primitives (or equivalent shelled `docker build` + `docker tag` + `docker push` sequences) in place of the Marketplace trio. Cite this section and recommend migration to `docker/build-push-action` + `docker/metadata-action` + `docker/login-action`.
-- Missing `provenance:` or `sbom:` on a `docker/build-push-action` step whose output is consumed downstream of the commit stage.
+- Any workflow or composite that uses hand-rolled `build-docker-image` / `tag-docker-image` / `push-docker-image` primitives (or equivalent shelled `docker build` + `docker tag` + `docker push` sequences) in place of the platform's BuildKit-fused expression. Cite this section and recommend migration to the appropriate platform wrapper (GitHub Actions: the Marketplace trio; elsewhere: `docker buildx`).
+- Missing `provenance:` or `sbom:` on a fused build step whose output is consumed downstream of the commit stage.
 - Downstream stages that reference images by mutable tag instead of digest.
 
-**Does NOT override §6 for non-Docker artifacts.** npm, Maven, NuGet, and zip artifacts retain the build / tag / push separation because their ecosystems model those concerns as genuinely distinct steps (e.g. `npm publish` is tag + push, but `npm pack` is a separate build artifact). This rule is Docker-specific: it recognises that BuildKit collapses the seam, and the Marketplace action is the honest representation of that.
+**Does NOT override §6 for non-Docker artifacts.** npm, Maven, NuGet, and zip artifacts retain the build / tag / push separation because their ecosystems model those concerns as genuinely distinct steps (e.g. `npm publish` is tag + push, but `npm pack` is a separate build artifact). This rule is Docker-specific: it recognises that BuildKit collapses the seam, and the Marketplace action (or its platform peer) is the honest representation of that.
 
-**Source:** [`docker/build-push-action` README](https://github.com/docker/build-push-action), [`docker/metadata-action` README](https://github.com/docker/metadata-action), Docker Inc.'s "[Build and push Docker images with GitHub Actions](https://docs.docker.com/build/ci/github-actions/)", [SLSA v1.0 build track](https://slsa.dev/spec/v1.0/levels).
+**Source:** [`docker/build-push-action` README](https://github.com/docker/build-push-action), [`docker/metadata-action` README](https://github.com/docker/metadata-action), Docker Inc.'s "[Build and push Docker images with GitHub Actions](https://docs.docker.com/build/ci/github-actions/)", [SLSA v1.0 build track](https://slsa.dev/spec/v1.0/levels); BuildKit's [`docker buildx build` reference](https://docs.docker.com/reference/cli/docker/buildx/build/) for cross-platform equivalents.
 
 ## 1.7 DORA linkage (sensemaking, not required)
 
-Where useful, link a finding to the DORA metric it moves: composite opacity → MTTR; missing idempotence → change-failure rate; missing primitive-level reusability → lead time; rebuilding downstream of commit stage → change-failure rate and lead time. Source: *Accelerate* (Forsgren, Humble, Kim); DORA State of DevOps reports.
+Where useful, link a finding to the DORA metric it moves: composite opacity → MTTR; missing idempotence → change-failure rate; missing primitive-level reusability → lead time; rebuilding downstream of commit stage → change-failure rate and lead time; unbounded retries → MTTR (see §1.3 bounded-retry rule for the specific amplification argument). Source: *Accelerate* (Forsgren, Humble, Kim); DORA State of DevOps reports.
 
 ## 1.8 Thin wrappers around mainstream actions — delete in favour of direct use
 
@@ -192,6 +216,8 @@ A custom composite that exists only to forward inputs to one or two mainstream a
 If a wrapper fails the "thin" test and passes the "material logic" test, keep it. If it fails "thin" AND fails "material logic", delete it — but add an `Additional findings` note naming which material-logic category was missing, in case the author meant to add it.
 
 **Concrete replacement table — setup, release, and cloud deploy.**
+
+Version pins below are current as of rubric v8 (2026-04-22). Re-validate against the latest Marketplace release before citing in an audit report — major tags roll (e.g. `actions/setup-node@v5` → `@v6`) and stale pins in a rubric don't invalidate the pattern but can mislead authors following the table literally.
 
 | Thin wrapper pattern | Mainstream replacement | Version pin | Migration notes |
 |---|---|---|---|
@@ -254,7 +280,7 @@ Three conceptual tiers. Only the third gets a prefix.
 
   | Core noun | Ambiguous bare? | Name |
   |---|---|---|
-  | release | yes (product release, software release) | `create-github-release` |
+  | release | yes (product release, software release) | `create-github-release` † |
   | deployment | yes (generic software deployments — k8s, Cloud Run) | `cleanup-github-deployments` |
   | prerelease | yes (semver prerelease tag) | `cleanup-github-prereleases` |
   | workflow, workflow-run | yes (business workflows, data workflows, ML workflows) | `wait-for-github-workflow`, `trigger-and-wait-for-github-workflow` |
@@ -262,6 +288,8 @@ Three conceptual tiers. Only the third gets a prefix.
   | commit-status | no — compound noun, no collision in any dev domain | `create-commit-status`, `get-commit-status` |
 
   Rationale: "commit status" means the same thing on GitHub, GitLab, Gitea, and Bitbucket, and nothing else in software uses the compound — so prefixing with `github` would falsely narrow the name without adding clarity. "Release" or "workflow" alone is ambiguous across domains, so the prefix earns its keep.
+
+  † `create-github-release` is retained here as a naming-pattern illustration only. This repo no longer ships it as a local action — per §1.8 it has been replaced by direct calls to `softprops/action-gh-release@v2`. The name remains the canonical example of a Tier 3 concept that needs the `github` segment.
 
   *Porting caveat for Tier 3:* a Tier 3 concept may not have identical shape on other platforms. `create-github-release` ports to an Azure DevOps "Release" but Azure Releases model deployment stages, which GitHub Releases do not; `has-update-since-last-github-workflow-run` ports to GitLab as pipeline-runs, which contain jobs rather than runs. Treat Tier 3 renames as **"start here", not "done"** — the rename is the first step; inputs/outputs may also shift when the target concept has a different shape.
 
@@ -330,7 +358,25 @@ For each action directory, check:
   - `validate-*` must fail the step on invalid input. An action that logs a warning and continues is `check-*` or `inspect-*`, not `validate-*`.
   - `cleanup-*` must remove things. An action that scans and lists candidates without removing is `find-*` or `list-stale-*`.
   - `wait-for-*` must poll until the thing becomes true (or time out). An action that checks once is a one-shot boolean-return query — the preferred verb is `check-*` (mainstream default); `has-*` and `is-*` are acceptable aliases. Do not enforce a rubric-internal distinction between them (the "`check-*` = assert-and-fail vs. `has-*` = query" split is not Marketplace convention).
-- **Generalise the above rule beyond this list.** The eight verbs above are the repo's most commonly-abused ones, but the principle — *the verb must honestly describe what `runs:` does, per mainstream DevOps/CD meaning* — applies to every verb. In particular, spot-check any verb that *sounds* read-only but could have side effects: `resolve-*`, `compose-*`, `generate-*`, `ensure-*`, `read-*`, `get-*`, `find-*`, `list-*`, `has-*`, `is-*`, `check-*`, `inspect-*`. An `ensure-*` or `resolve-*` action that writes state (creates files, pushes refs, posts commit statuses) should be renamed to the appropriate side-effecting verb (`create-*`, `push-*`, `set-*`). When in doubt, flag it and let the author decide.
+- **Generalise the above rule beyond this list.** The eight verbs above are the repo's most commonly-abused ones, but the principle — *the verb must honestly describe what `runs:` does, per mainstream DevOps/CD meaning* — applies to every verb. In particular, spot-check any verb that *sounds* read-only but could have side effects: `resolve-*`, `compose-*`, `generate-*`, `ensure-*`, `read-*`, `get-*`, `find-*`, `list-*`, `has-*`, `is-*`, `check-*`, `inspect-*` (prefer `get-*` over `read-*` per the Mainstream-first principle at top-of-file). An `ensure-*` or `resolve-*` action that writes state (creates files, pushes refs, posts commit statuses) should be renamed to the appropriate side-effecting verb (`create-*`, `push-*`, `set-*`). When in doubt, flag it and let the author decide.
+
+  **Canonical semantics for the spot-check verbs** (use this table to judge whether an action's `runs:` block matches its verb):
+
+  | Verb | Canonical meaning | Side effects allowed |
+  |---|---|---|
+  | `resolve-*` | Look up / compute a value from existing state (e.g. SHA from tag, digest from tag). Pure function of its inputs + read-only queries. | None — read-only. If it writes, rename to `create-*` / `set-*` / `push-*`. |
+  | `compose-*` | Pure string / data transform over its inputs (e.g. compose a version string from base + suffix + build-number; compose a list of image URLs). | None — no I/O beyond reading inputs. If it queries the network or filesystem, it's probably `resolve-*`. |
+  | `generate-*` | Produce a fresh artifact from inputs (file, token, config). May write locally but shouldn't mutate shared state. | Local writes only (step output, workspace file). If it pushes anywhere, rename to `create-*` / `publish-*`. |
+  | `ensure-*` | Idempotent create-if-missing: if already in the desired state, no-op; otherwise converge it. | Creates the thing named in the suffix (tag, file, label). Never deletes. |
+  | `read-*` | Read from a declared source (file, env, input). Prefer `get-*` over `read-*` (mainstream-first); `read-*` is acceptable when the source is a specific file by path. | None — read-only. |
+  | `get-*` | Side-effect-free read of a remote or computed value (API, VCS, step context). Mainstream ecosystem default for read actions. | None — read-only. |
+  | `find-*` | Query that returns matches (zero or more) from a scan over an enumerable space. May require listing; must not mutate. | None — read-only. |
+  | `list-*` | Enumerate items in a known collection. | None — read-only. |
+  | `has-*` / `is-*` | Boolean-return query. `has-*` for set membership / existence; `is-*` for a state predicate. Acceptable aliases of `check-*`. | None — read-only. |
+  | `check-*` | Mainstream boolean-return query verb (see Mainstream-first principle). Does NOT mean "assert-and-fail"; the assert form is `validate-*`. | None — read-only. |
+  | `inspect-*` | Read + enrich / summarise (e.g. inspect a tag to report author + timestamp + signed-status). | None — read-only. |
+
+  When a verb's semantics here conflict with what the action's `runs:` block actually does, flag it and propose a better verb.
 
 For each violation, propose a specific better name and say which rule it violates.
 
@@ -346,7 +392,7 @@ Prefer small, single-concern **primitive** actions over large composite actions 
 
 Why:
 
-- **Scales with new artifact types / targets.** A Docker-specific prerelease composite can't accept npm packages. If prerelease creation is decomposed into `compose-prerelease-version` → `tag-<artifact-type>` → `create-github-release`, adding a new artifact type means adding one new tagging primitive — not a whole parallel composite.
+- **Scales with new artifact types / targets.** A Docker-specific prerelease composite can't accept npm packages. If prerelease creation is decomposed into `compose-prerelease-version` → `tag-<artifact-type>` → `softprops/action-gh-release@v2`, adding a new artifact type means adding one new tagging primitive — not a whole parallel composite.
 - **Composition across artifact types.** When a project ships Docker images *and* npm packages under the same release version, primitives compose naturally. Monolithic composites cannot — calling two of them generates two versions.
 - **No hidden magic.** Readers see the actual steps at the call site. Debugging a broken release doesn't require opening the composite's `action.yml`.
 - **Independent testability.** Each primitive has a narrow contract and can be tested in isolation.
@@ -378,7 +424,7 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 | **Artifact construction** | build | Docker images / npm packages / Maven JARs / NuGet / zip bundles | For Docker: `docker/build-push-action@v6` (see §1.6 — build/tag/push collapse into one Marketplace step). For npm/Maven: dedicated primitives per ecosystem. |
 | **Artifact release tagging** | release | `docker tag :v{version}` / `npm publish --tag` / Maven release plugin | For Docker: `docker/metadata-action@v5` feeding `docker/build-push-action@v6` (§1.6). For other ecosystems: future `tag-npm-package`, `publish-maven-artifact`. |
 | **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `publish-tag`, `ensure-tag-exists` |
-| **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `create-github-release` |
+| **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `softprops/action-gh-release@v2` (GitHub) — per §1.8 the repo no longer ships a local `create-github-release`. |
 | **Commit of generated files** | release | `git push` / Contents API / merge-request PR | `commit-files` |
 | **Status / approval signalling** | release | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-commit-status` |
 
@@ -421,10 +467,10 @@ Rough reversibility ranking (cheapest → hardest):
 A concrete ordering for a Docker + GitHub release:
 
 ```
-build-and-push docker image   # 1. artifact exists but nothing references it yet
-create-and-push git tag       # 2. tag points at an already-published image
-create-github-release         # 3. release references an already-existing tag
-notify / announce             # 4. only after the release record is real
+docker/build-push-action@v6             # 1. artifact exists but nothing references it yet
+publish-tag                             # 2. tag points at an already-published image
+softprops/action-gh-release@v2          # 3. release references an already-existing tag
+notify / announce                       # 4. only after the release record is real
 ```
 
 If step 3 fails, you have a tagged image and a git tag — both re-runnable. If the order were reversed (release first, then tag, then image), a failure at step 2 leaves a GitHub Release pointing at a tag that doesn't exist, visible to users.
@@ -446,10 +492,10 @@ Actions that silently succeed on a genuine no-op are fine; actions that *fail* o
 (external)  docker/build-push-action@v6        # concern: artifact type & push  (see §1.6)
 actions/
   publish-tag/action.yml                       # concern: git tag creation
-  create-github-release/action.yml             # concern: release record
+(external)  softprops/action-gh-release@v2     # concern: release record        (see §1.8)
 ```
 
-Image build + tag + push is owned by the Marketplace composite, not a local primitive (§1.6). The remaining primitives each accept only the inputs for their own concern (e.g. `publish-tag` takes `tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
+Image build + tag + push is owned by the Marketplace composite, not a local primitive (§1.6). Release-record creation is owned by `softprops/action-gh-release` per §1.8, not a local `create-github-release` wrapper. The remaining local primitive (`publish-tag`) accepts only the inputs for its own concern (`tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
 
 ```yaml
 jobs:
@@ -470,8 +516,10 @@ jobs:
         with: { push: true, tags: ${{ steps.meta.outputs.tags }}, provenance: mode=max, sbom: true }
       - uses: optivem/actions/publish-tag@v1     # 2. movable
         with: { tag: v${{ inputs.version }}, sha: ${{ github.sha }} }
-      - uses: optivem/actions/create-github-release@v1   # 3. user-visible
-        with: { tag: v${{ inputs.version }}, notes: ${{ inputs.notes }} }
+      - uses: softprops/action-gh-release@v2     # 3. user-visible (per §1.8 — no local wrapper)
+        with:
+          tag_name: v${{ inputs.version }}
+          body: ${{ inputs.notes }}
 ```
 
 Downstream stages pin to `steps.push.outputs.digest` (the `@sha256:…` digest), not the mutable tag — see §1.6 "Digest-pinned deploy consumers".
@@ -500,3 +548,17 @@ A thin composite wrapper that runs these four steps in this order is acceptable 
 | Action uses `exit 1` for a recoverable failure, hiding the specific error from observability | DevOps alignment → **Other** |
 | Action uses `shell: pwsh` or `.ps1` outside the `shared/_test-*` scope, violating shell portability | DevOps alignment → **Other** |
 | Everything else DevOps-related that doesn't fit above | DevOps alignment → **Other** |
+
+---
+
+# Version history
+
+Newest first. Bump `Rubric version:` at the top of this file whenever §1–§8 change materially, and tag any re-audit findings that exist only because of the bump as `[RUBRIC-CHANGE v<N>]`.
+
+- **v8 (2026-04-22)** — added §1.8 "Thin wrappers around mainstream actions — delete in favour of direct use", generalising §1.6 to cover setup/release/deploy wrappers with a concrete replacement table (`setup-dotnet`/`setup-java-gradle`/`setup-node` → official `actions/setup-*`; `create-github-release` → `softprops/action-gh-release`; `deploy-to-cloud-run` → `google-github-actions/deploy-cloudrun`). Refreshed §3.1 Tier 1 examples to cross-reference §1.8. Reframed §1.6 as a platform-agnostic "BuildKit-capability" rule with per-platform expressions (Jenkins/GitLab/Azure/CircleCI/Buildkite alongside the GitHub Actions Marketplace trio). Added §1.3 "Fast-feedback sizing" rule for blocking actions (Farley 5-minute commit-stage budget). Appended DORA/MTTR linkage to the §1.3 bounded-retry rule. Tightened §1.4 supply-chain rule with a default pin-strategy ladder (mainstream major-tag / untrusted SHA / SLSA-L3 everything-SHA). Carved out the `branding:` rule for internal-only publication intent. Appended a Twelve-Factor III linkage to the §1.4 bridge-via-env example. Added §4 canonical-semantics table for the spot-check verbs (`resolve-*`, `compose-*`, `ensure-*`, `get-*`, `read-*`, etc.) so verb judgments are mechanical. Extracted this version-history section.
+- **v7 (2026-04-22)** — **posture shift: this repo is production infra, not a teaching vehicle.** Rewrote §2 "Forward-looking context" to drop the teaching-vehicle framing and the "teaching-clarity override" (real-world best practice is now the default, not a tie-breaker). Added §1.6 "Container image build/tag/push — use mainstream composite actions" requiring `docker/build-push-action` + `docker/metadata-action` over hand-rolled build/tag/push splits, with supply-chain flags (SLSA provenance, SBOM, digest-pinned deploys). Renumbered DORA linkage to §1.7.
+- **v6 (2026-04-22)** — added §1.5 "Version-handling actions — follow SemVer": any action that composes, parses, or validates a version string must use SemVer 2.0.0 vocabulary and shape, with concrete input-name guidance (`base-version`, `suffix`, `build-number`) and explicit guidance against using SemVer build metadata for CI counters.
+- **v5 (2026-04-22)** — extended the `commit-sha` rule in §1 to cover outputs: qualification now preferred for action outputs / job outputs when the producer is generic or produces multiple SHAs; bare `sha` stays acceptable when a resolver-style action's name already disambiguates.
+- **v4 (2026-04-22)** — strengthened the `commit-sha` vs. `sha` rule for inputs.
+- **v3 (2026-04-22)** — added ambiguity test for Tier 3 `github` prefix; decoupled "Tier 3" from "name carries `github`".
+- **v2 (2026-04-21)** — added Mainstream-first principle, bounded-retry rule, VCS-vs-platform-API renaming, promote/publish/ship verb rules.

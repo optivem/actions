@@ -72,14 +72,42 @@ Do not modify the consumer repos. Read-only.
 
 2. **Action naming.** Apply the rules in rubric §4 (kebab-case, verb-first, Title Case `name:`, no misleading verbs vs. mainstream CD meaning). Also apply the naming-tier rules in rubric §3: Tier 1 (generic) and Tier 2 (git-native) get no prefix; Tier 3 (GitHub-platform-specific) requires `github` in the name. For each violation, propose a specific better name and say which rule it violates.
 
-3. **Parameter-level audit (inputs and outputs).** For every input and output on every action, check:
+3. **Parameter-level audit (inputs and outputs).** For every input and output on every action, evaluate each of the rules below. Cite the exact rule code when reporting a finding.
 
-   - **Name** (`name-kebab-case` / `name-mainstream-convention` / `name-misleading` / `output-name-verb-led`)**.** kebab-case; matches mainstream `actions/checkout` / `actions/setup-*` conventions where applicable (`repository`, `ref`, `token`, `path`, `working-directory`, `commit-sha`); not misleading vs. the value it carries (e.g. an input called `tag` that actually accepts a full image URL). Output names should be noun-based, not verb-led. Flag inconsistency *between* actions (e.g. `repo` in one action, `repository` in another).
-   - **Semantic shape ("type")** (`type-shape-ambiguous`)**.** GitHub composite actions do NOT have a formal `type:` field on inputs or outputs — all values are strings at runtime. Treat "type" as the semantic shape the value is expected to carry (URL, path, glob, SemVer, SHA, tag, timestamp, comma-separated list, JSON array, bool-as-`'true'`/`'false'`). The `description:` must make the shape explicit when it is not obvious from the name. Flag descriptions that leave the shape ambiguous (e.g. an input `target` described only as "deploy target" — is that a URL, an environment name, a service id?).
-   - **Optionality** (`required-implicit` / `required-default-contradiction`)**.** For inputs: `required:` must be declared explicitly, not left implicit. If `required: true`, there must be no `default:` (an always-overridden default is a contradiction and usually a bug). If `required: false`, a `default:` should be present — an optional input with no default silently resolves to the empty string, which is almost always a latent bug. Flag both shapes. For outputs: outputs are effectively always optional for consumers; there is nothing to enforce here beyond presence of `value:` and `description:`.
-   - **Description** (`description-missing` / `description-tautological` / `description-too-terse`)**.** Present, non-empty, and actually informative. Flag descriptions that (a) are missing, (b) just restate the name ("image-name" → "The image name"), (c) are so terse the consumer can't tell shape or purpose, or (d) cross-reference a sibling action by name without saying what shape the value is (readers shouldn't need to open another action.yml to understand this one).
-   - **Default values** (`default-placeholder`)**.** Where a default is present, it should be (a) a sensible real value, or (b) a well-known expression like `${{ github.sha }}`, `${{ github.token }}`, `${{ github.repository }}`. Flag defaults that are placeholder-looking (`"TODO"`, `"example"`, `"change-me"`) or that couple the action to a specific caller's environment.
-   - **Deprecation** (`deprecation-no-replacement`)**.** If `deprecationMessage:` is present, the message should name the replacement input or action. Flag bare deprecation messages that don't tell the caller what to use instead.
+   Rule codes for the name family:
+
+   - `name-kebab-case` — parameter key is not kebab-case.
+   - `name-mainstream-convention` — parameter name conflicts with mainstream `actions/*` precedent (e.g. `repo` where `repository` is the ecosystem norm), or conflicts with a SemVer-vocabulary input name mandated by rubric §1.5, or conflicts with a commit-SHA qualification rule from rubric §1.
+   - `name-misleading` — the name does not honestly describe the value the parameter actually carries.
+
+   Rule code for outputs specifically:
+
+   - `output-name-verb-led` — an output's name starts with a verb (e.g. `resolve-digest`). Outputs should be noun-based (`digest`, `release-url`, `changed`) because consumers read them as *values*, not *actions*.
+
+   Semantic-shape rule:
+
+   - `type-shape-ambiguous` — GitHub composite actions do NOT have a formal `type:` field on inputs or outputs; all values are strings at runtime. Treat "type" as the semantic shape the value is expected to carry (URL, path, glob, SemVer, SHA, tag, timestamp, comma-separated list, JSON array, bool-as-`'true'`/`'false'`). The `description:` must make the shape explicit when it is not obvious from the name. Flag descriptions that leave the shape ambiguous (e.g. an input `target` described only as "deploy target" — is that a URL, an environment name, a service id?). *Forward-looking note:* if this repo ever ships a JavaScript or Docker action (currently bash-only — see `README.md` "Shell choice"), native `type:` fields on those runtimes may subsume part of this rule; revisit at that point.
+
+   Optionality rules (inputs):
+
+   - `required-implicit` — `required:` is not declared explicitly on an input. The GitHub Actions schema treats missing `required:` as implicitly false, so strictly speaking mainstream actions commonly omit it. **This rubric is intentionally stricter than mainstream here** — always require an explicit `required: true|false` — because latent empty-string defaults on implicitly-optional inputs have historically masked missing-caller-argument bugs in this repo. Keep the rule; cite this rationale in the finding.
+   - `required-default-contradiction` — `required: true` with a `default:` present, OR `required: false` with no `default:` and no documented empty-string semantics. The runtime ignores `default:` when `required: true`, so either (a) the field is not really required (drop `required:`), (b) the `default:` is documenting the expected value shape (move that guidance to `description:`), or (c) the combination is a latent bug. Do NOT assert "usually a bug" — present the three resolutions and ask the author to pick one.
+
+   Description rules:
+
+   - `description-missing` — no `description:` field.
+   - `description-tautological` — description just restates the name (`image-name` → "The image name").
+   - `description-too-terse` — description does not convey shape or purpose, or cross-references a sibling action by name without saying what shape the value is. Readers should not need to open another `action.yml` to understand this one.
+
+   Default-value rule:
+
+   - `default-placeholder` — default is a placeholder (`"TODO"`, `"example"`, `"change-me"`) or couples the action to a specific caller's environment.
+
+   Deprecation rule:
+
+   - `deprecation-no-replacement` — `deprecationMessage:` is present but does not name a replacement input or action.
+
+   **Rule-precedence tie-breaker (name family).** When a single parameter violates more than one name-family rule, cite them in priority order **`name-mainstream-convention` > `name-misleading` > `name-kebab-case`**, and list *every* applicable rule on the finding. Do not silently pick one and drop the others — an honest report shows the full overlap. (Example: bare `sha:` violates `name-mainstream-convention` per rubric §1's commit-SHA qualification rule AND arguably `name-misleading` because `sha` could be commit/tree/content; cite both, with `name-mainstream-convention` leading.)
 
    For each violation, cite the action and the specific input/output, say which rule it violates, and propose the concrete fix (renamed key, added/corrected `description:`, added `default:`, corrected `required:`, etc.).
 
@@ -89,7 +117,7 @@ Do not modify the consumer repos. Read-only.
 
 6. **Default to "no-flag unless proven".** Flag two actions as duplicates only if **both** conditions hold: (a) their `runs:` block produces the same side effect on the same target, AND (b) a caller could swap one for the other without changing inputs or outputs. Similar names without both are not duplicates — say so explicitly in the report (e.g. "examined and rejected: X vs Y — similar verb but different side-effect shape") so the absence of a finding is visible.
 
-7. **DevOps alignment pass.** Walk every action against the dimensions in rubric §1 (build-once-promote-many, idempotence, fail-fast, rate-limit awareness, secrets, supply chain, observability dual surface, shell portability, `branding:`), the architectural principles in §5–§7 (primitives vs. composites, one-concern-per-action, composition order, idempotence), and the filing guide in §8. Respect the forward-looking exemptions in §2.
+7. **DevOps alignment pass.** Walk every action against the dimensions in rubric §1 (build-once-promote-many, idempotence, fail-fast, fast-feedback sizing, rate-limit awareness, bounded retry with backoff, secrets, supply chain, observability dual surface, shell portability, `branding:`), the architectural principles in §5–§7 (primitives vs. composites, one-concern-per-action, composition order, idempotence), and the filing guide in §8. Respect the forward-looking exemptions in §2.
 
 8. **Recommend the best-practice option, not the lowest-effort one.** When a finding has multiple viable fixes, present them all (numbered) but explicitly recommend the one most aligned with long-term rubric compliance — even when it means more consumer churn. State the chosen recommendation and *why it's the best-practice choice*, then briefly note the cheaper alternatives and what they sacrifice (e.g., "option X is lower-churn but preserves the zero-value abstraction flagged in §5"). Do NOT default to the cheapest option. The reader should see "do it right" first; the shortcuts are there for informed escape hatches only.
 
@@ -151,17 +179,19 @@ Grouped by action. For each action with at least one finding, produce a sub-bloc
 Rules that can be cited here (from Process step 3):
 
 - `name-kebab-case` — parameter key is not kebab-case.
-- `name-mainstream-convention` — parameter name conflicts with mainstream `actions/*` precedent (e.g. `repo` where `repository` is the ecosystem norm) or is inconsistent with sibling actions in this repo.
+- `name-mainstream-convention` — parameter name conflicts with mainstream `actions/*` precedent (e.g. `repo` where `repository` is the ecosystem norm), with a SemVer-vocabulary input name mandated by rubric §1.5, or with the commit-SHA qualification rule from rubric §1.
 - `name-misleading` — the name does not honestly describe the value it carries.
 - `output-name-verb-led` — output names should be noun-based, not verb-led.
 - `type-shape-ambiguous` — description does not make the semantic shape (URL / path / SemVer / SHA / tag / bool-as-string / comma-separated list / JSON) clear for a non-obvious parameter.
-- `required-implicit` — `required:` not declared explicitly on an input.
-- `required-default-contradiction` — `required: true` with a `default:` set (or `required: false` with no `default:` and no meaningful empty-string semantics).
+- `required-implicit` — `required:` not declared explicitly on an input. (Stricter than mainstream — see Process step 3 for the rationale.)
+- `required-default-contradiction` — `required: true` with a `default:` set, OR `required: false` with no `default:` and no documented empty-string semantics. Present the three resolutions (drop `required:` / move guidance to `description:` / fix the latent bug) rather than asserting "usually a bug".
 - `description-missing` — no `description:` field.
 - `description-tautological` — description just restates the name.
 - `description-too-terse` — description does not convey shape or purpose.
 - `default-placeholder` — default is a placeholder (`TODO`, `example`, `change-me`) or couples the action to a specific caller.
 - `deprecation-no-replacement` — `deprecationMessage:` present but does not name a replacement.
+
+**Rule-precedence tie-breaker (name family).** When one parameter triggers more than one of `name-kebab-case` / `name-mainstream-convention` / `name-misleading`, cite them in priority order **`name-mainstream-convention` > `name-misleading` > `name-kebab-case`** and list *every* applicable rule — never silently drop the lower-priority ones.
 
 If none, write "None."
 
