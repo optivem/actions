@@ -1,5 +1,5 @@
 name: 'Resolve Latest Prerelease Tag'
-description: 'Finds the latest git tag in a GitHub repository that matches a given prefix, using version-aware sort. Tool-agnostic — uses git ls-remote, no releases API dependency. Pairs with ensure-tag-exists for the "validate an explicit tag" case.'
+description: 'Finds the latest git tag in a GitHub repository that matches a given prefix (and optional suffix), using version-aware sort. Tool-agnostic — uses git ls-remote, no releases API dependency. Pairs with ensure-tag-exists for the "validate an explicit tag" case.'
 author: 'Optivem'
 branding:
   icon: 'tag'
@@ -7,8 +7,12 @@ branding:
 
 inputs:
   tag-prefix:
-    description: 'Required tag prefix (e.g. "monolith-java-v"). Tags matching "${tag-prefix}*" are considered; the highest by version-aware sort wins.'
+    description: 'Required tag prefix (e.g. "monolith-java-v"). Tags matching "${tag-prefix}*${tag-suffix}" are considered; the highest by version-aware sort wins.'
     required: true
+  tag-suffix:
+    description: 'Optional tag suffix (e.g. "-qa-approved"). When set, only tags that also end with this suffix are considered, and the base-tag output contains the matched tag with the suffix stripped.'
+    required: false
+    default: ''
   repository:
     description: 'Repository in owner/repo format'
     required: false
@@ -24,8 +28,11 @@ inputs:
 
 outputs:
   tag:
-    description: 'The latest tag matching tag-prefix'
+    description: 'The latest tag matching tag-prefix (and tag-suffix, if provided)'
     value: ${{ steps.resolve.outputs.tag }}
+  base-tag:
+    description: 'The matched tag with tag-suffix stripped (equals tag when tag-suffix is empty)'
+    value: ${{ steps.resolve.outputs.base-tag }}
 
 runs:
   using: 'composite'
@@ -34,6 +41,7 @@ runs:
       shell: bash
       env:
         PREFIX: ${{ inputs.tag-prefix }}
+        SUFFIX: ${{ inputs.tag-suffix }}
         REPO: ${{ inputs.repository }}
         TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
@@ -47,7 +55,15 @@ runs:
 
         remote_url="https://${GIT_HOST}/${REPO}.git"
 
-        TAG=$(git -c "http.extraheader=Authorization: Bearer $TOKEN" ls-remote --tags "$remote_url" "refs/tags/${PREFIX}*" 2>/dev/null \
+        if [ -n "$SUFFIX" ]; then
+          pattern="refs/tags/${PREFIX}*${SUFFIX}"
+          label="${PREFIX}*${SUFFIX}"
+        else
+          pattern="refs/tags/${PREFIX}*"
+          label="${PREFIX}*"
+        fi
+
+        TAG=$(git -c "http.extraheader=Authorization: Bearer $TOKEN" ls-remote --tags "$remote_url" "$pattern" 2>/dev/null \
           | awk '{print $2}' \
           | sed 's#refs/tags/##' \
           | grep -v '\^{}$' \
@@ -55,10 +71,17 @@ runs:
           | tail -n 1)
 
         if [ -z "$TAG" ]; then
-          echo "::error::No ${PREFIX}* git tag found in $REPO — create a ${PREFIX}* tag first, or pass an explicit tag elsewhere."
+          echo "::error::No ${label} git tag found in $REPO — create a ${label} tag first, or pass an explicit tag elsewhere."
           exit 1
         fi
 
-        echo "Resolved latest ${PREFIX}* git tag in $REPO: $TAG"
-        echo "Using latest ${PREFIX}* git tag from $REPO: $TAG" >> "$GITHUB_STEP_SUMMARY"
+        if [ -n "$SUFFIX" ]; then
+          BASE_TAG="${TAG%$SUFFIX}"
+        else
+          BASE_TAG="$TAG"
+        fi
+
+        echo "Resolved latest ${label} git tag in $REPO: $TAG"
+        echo "Using latest ${label} git tag from $REPO: $TAG" >> "$GITHUB_STEP_SUMMARY"
         echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        echo "base-tag=$BASE_TAG" >> "$GITHUB_OUTPUT"
