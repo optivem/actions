@@ -11,9 +11,8 @@ inputs:
     description: 'JSON array of `{path, content, message}` entries. `path` is repo-relative, `content` is the full new file content (plain text, will be base64-encoded before PUT), `message` is the commit message for that file.'
     required: true
   branch:
-    description: 'Branch to commit to (default: the branch of the current run)'
-    required: false
-    default: ${{ github.ref_name }}
+    description: 'Branch to commit to. Required — pass explicitly (e.g. `main`). Do not rely on `github.ref_name`: on tag pushes it is the tag name, and on `workflow_call`/`workflow_dispatch` it is the caller/dispatcher ref, neither of which is a safe commit target.'
+    required: true
   max-retries:
     description: 'Maximum number of retries per file on SHA-precondition conflict (HTTP 409/422)'
     required: false
