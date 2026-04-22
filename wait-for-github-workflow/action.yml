@@ -1,5 +1,5 @@
 name: 'Wait for GitHub Workflow'
-description: 'Waits for a GitHub Actions workflow run triggered by a specific commit SHA to complete. Polls by head-sha to find the run, then uses `gh run watch --exit-status` to block until finished. Includes GitHub API rate-limit protection. Sibling of `trigger-and-wait-for-github-workflow` — use that when you need to dispatch the workflow yourself.'
+description: 'Waits for a GitHub Actions workflow run triggered by a specific commit SHA to complete. Polls by head-sha to find the run, then uses `gh run watch --exit-status` to block until finished. Includes GitHub API rate-limit protection and a hard timeout ceiling on the combined discovery + watch phases. Sibling of `trigger-and-wait-for-github-workflow` — use that when you need to dispatch the workflow yourself.'
 inputs:
   workflow:
     description: 'Workflow filename to wait for (e.g., java-commit-stage.yml)'
@@ -27,6 +27,10 @@ inputs:
     description: 'Pause when remaining API requests fall below this number (default: 50)'
     required: false
     default: '50'
+  timeout-seconds:
+    description: 'Hard timeout on the combined discovery + watch phases. The action fails with exit code 124 if a matching run has not been discovered AND watched to completion within this many seconds. Default: 1800 (30 minutes) — aligned with fast-feedback sizing. Callers waiting for longer-running workflows must override upward.'
+    required: false
+    default: '1800'
   token:
     description: 'GitHub token used for API calls. Defaults to github.token.'
     required: false
@@ -50,13 +54,22 @@ runs:
         WATCH_INTERVAL: ${{ inputs.watch-interval }}
         MAX_DISCOVERY_ATTEMPTS: ${{ inputs.max-discovery-attempts }}
         RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
       shell: bash
       run: |
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-        echo "Waiting for $WORKFLOW (commit: $COMMIT_SHA)..."
+        echo "Waiting for $WORKFLOW (commit: $COMMIT_SHA, timeout: ${TIMEOUT_SECONDS}s)..."
+
+        DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))
 
         attempt=1
         while [ "$attempt" -le "$MAX_DISCOVERY_ATTEMPTS" ]; do
+          now=$(date +%s)
+          if [ "$now" -ge "$DEADLINE" ]; then
+            echo "::error::Timed out after ${TIMEOUT_SECONDS}s waiting for $WORKFLOW to appear for commit $COMMIT_SHA (discovery phase)."
+            exit 124
+          fi
+
           # --- Rate limit check (skip retry wrapper — local probe) ---
           remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
           if [ "$remaining" -lt "$RATE_LIMIT_THRESHOLD" ]; then
@@ -79,11 +92,23 @@ runs:
           if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
             echo "Found run $run_id on attempt $attempt, watching..."
             echo "run_id=$run_id" >> $GITHUB_OUTPUT
-            gh_retry run watch "$run_id" \
-              --repo "$REPOSITORY" \
-              --exit-status \
-              --interval "$WATCH_INTERVAL"
-            exit 0
+            export RUN_ID="$run_id"
+            remaining_secs=$(( DEADLINE - $(date +%s) ))
+            if [ "$remaining_secs" -le 0 ]; then
+              echo "::error::Timed out after ${TIMEOUT_SECONDS}s before watch could start for run $run_id."
+              exit 124
+            fi
+            set +e
+            timeout "$remaining_secs" bash -c '
+              source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+              gh_retry run watch "$RUN_ID" --repo "$REPOSITORY" --exit-status --interval "$WATCH_INTERVAL"
+            '
+            code=$?
+            set -e
+            if [ "$code" -eq 124 ]; then
+              echo "::error::Workflow $WORKFLOW (run $run_id) exceeded timeout of ${TIMEOUT_SECONDS}s."
+            fi
+            exit "$code"
           fi
 
           echo "Run not found yet (attempt $attempt/$MAX_DISCOVERY_ATTEMPTS), waiting ${POLL_INTERVAL}s..."
