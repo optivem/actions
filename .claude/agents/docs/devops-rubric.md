@@ -1,6 +1,6 @@
 # DevOps rubric for auditing GitHub Actions
 
-**Rubric version: 2** (updated 2026-04-21 — added Mainstream-first principle, bounded-retry rule, VCS-vs-platform-API renaming, promote/publish/ship verb rules). When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
+**Rubric version: 3** (updated 2026-04-22 — added ambiguity test for Tier 3 `github` prefix; decoupled "Tier 3" from "name carries `github`". Previously: v2 2026-04-21 — added Mainstream-first principle, bounded-retry rule, VCS-vs-platform-API renaming, promote/publish/ship verb rules). When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
 
 This is the reference rubric used by the `actions-auditor` agent (and any sibling agent that wants DevOps-aligned reviews). It defines "what correct looks like" so the agent file can stay focused on process and output schema.
 
@@ -17,7 +17,7 @@ Concrete implications:
 - **`check-*` is the preferred mainstream verb for boolean-return query actions** in the GitHub Actions ecosystem (and in mainstream DevOps shell conventions more broadly). It does NOT have to mean "assert-and-fail"; the `check-*` / `has-*` distinction taught by some style guides is not Marketplace convention and must not be enforced. When unifying a mixed `check-*` / `has-*` / `is-*` set, the default target is `check-*`. `has-*` and `is-*` are acceptable aliases but are secondary; existing `has-*` actions do not need to be renamed unless the author wants repo-wide uniformity (explicit opt-in).
 - `get-*` is an accepted mainstream verb for side-effect-free reads (HTTP `GET`, `gh api`, `actions/github-script`). Prefer `get-*` over `read-*` unless the repo is actively standardising on `read-*` for a documented reason.
 - Input naming should follow `actions/checkout` and `actions/setup-*` precedent first (`repository`, `ref`, `token`, `path`, `working-directory`). Short aliases (`repo`) are acceptable local conventions only when applied uniformly AND documented as a deliberate deviation.
-- Prefixing with `github` is reserved for concepts that don't exist off-platform (Tier 3 — Releases, Deployments, workflow runs, commit statuses, Packages). Do not add `github` to names for didactic tier-marking when the concept is universal.
+- Prefixing with `github` (or a narrower segment like `ghcr`) is reserved for Tier 3 concepts whose bare noun would be ambiguous — see §3.1 "When a Tier 3 name gets the `github` segment" for the full rule. Do not add `github` to Tier 1/2 names for didactic tier-marking.
 
 When a rule in this rubric contradicts mainstream practice, the mainstream practice wins unless the author has explicitly overridden it as a course-level teaching device (see §2, teaching-clarity override — which is narrow and requires evidence of active curricular use, not just "our style guide says so").
 
@@ -121,7 +121,20 @@ Three conceptual tiers. Only the third gets a prefix.
 
   *Implementation sub-rule for Tier 2:* Tier 2 actions must not hardcode `github.com` in their implementation. Remote URLs should be parameterised — either accept a `git-host` input with default `github.com`, or derive the host from a `repo` input given in URL form. The pattern `https://x-access-token:${TOKEN}@github.com/...` breaks Tier 2's portability claim: a student porting to GitLab, Bitbucket, Gitea, or self-hosted would have to edit every Tier 2 action. Flag actions that hardcode the git host as a **portability violation** under **DevOps alignment findings** → "Tool-agnostic composition".
 
-- **Tier 3 — GitHub-platform-specific** (requires GitHub, not just git). `github` segment required. These are concepts that genuinely do not exist in vanilla git: Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs. Examples: `create-github-release`, `create-commit-status`, `trigger-and-wait-for-github-workflow`, `cleanup-github-deployments`, `check-ghcr-packages-exist`.
+- **Tier 3 — platform-API-specific** (requires a forge API, not just git). These are concepts accessed through a platform API rather than git itself: Releases, commit statuses, Deployments, workflow runs, Packages, Issues, PRs, check runs. Most of these concepts exist across forges — GitHub, GitLab, Gitea, and Bitbucket all have Releases and commit statuses; GitLab calls workflow runs "pipeline runs" — so "Tier 3" means "reached via platform API", not "GitHub-exclusive".
+
+  **When a Tier 3 name gets the `github` segment — the ambiguity test:** add `github` (or a narrower segment like `ghcr`) only when the bare core noun would collide with generic English or other domains. Leave it off when the compound noun is already self-disambiguating.
+
+  | Core noun | Ambiguous bare? | Name |
+  |---|---|---|
+  | release | yes (product release, software release) | `create-github-release` |
+  | deployment | yes (generic software deployments — k8s, Cloud Run) | `cleanup-github-deployments` |
+  | prerelease | yes (semver prerelease tag) | `cleanup-github-prereleases` |
+  | workflow, workflow-run | yes (business workflows, data workflows, ML workflows) | `wait-for-github-workflow`, `trigger-and-wait-for-github-workflow` |
+  | packages | yes (npm, OS, language packages) — use narrower `ghcr` | `check-ghcr-packages-exist` |
+  | commit-status | no — compound noun, no collision in any dev domain | `create-commit-status`, `get-commit-status` |
+
+  Rationale: "commit status" means the same thing on GitHub, GitLab, Gitea, and Bitbucket, and nothing else in software uses the compound — so prefixing with `github` would falsely narrow the name without adding clarity. "Release" or "workflow" alone is ambiguous across domains, so the prefix earns its keep.
 
   *Porting caveat for Tier 3:* a Tier 3 concept may not have identical shape on other platforms. `create-github-release` ports to an Azure DevOps "Release" but Azure Releases model deployment stages, which GitHub Releases do not; `has-update-since-last-github-workflow-run` ports to GitLab as pipeline-runs, which contain jobs rather than runs. Treat Tier 3 renames as **"start here", not "done"** — the rename is the first step; inputs/outputs may also shift when the target concept has a different shape.
 
