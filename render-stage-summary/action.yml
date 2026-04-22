@@ -7,11 +7,11 @@ branding:
   color: 'blue'
 
 inputs:
-  stage-result:
-    description: 'Result of the stage job (success, failure, cancelled, etc.)'
-    required: true
   stage-name:
     description: 'Name of the stage being summarized'
+    required: true
+  stage-result:
+    description: 'Result of the stage job (success, failure, cancelled, etc.)'
     required: true
   stage-content:
     description: 'General content to display for any stage result (supports markdown)'
@@ -32,8 +32,8 @@ runs:
     - name: Generate Stage Summary
       shell: bash
       env:
-        STAGE_RESULT: ${{ inputs.stage-result }}
         STAGE_NAME: ${{ inputs.stage-name }}
+        STAGE_RESULT: ${{ inputs.stage-result }}
         STAGE_CONTENT: ${{ inputs.stage-content }}
         STAGE_SUCCESS_CONTENT: ${{ inputs.stage-success-content }}
         STAGE_SKIPPED_CONTENT: ${{ inputs.stage-skipped-content }}

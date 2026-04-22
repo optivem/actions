@@ -7,7 +7,7 @@ branding:
 
 inputs:
   names:
-    description: 'Newline-separated list of environment variable names to validate'
+    description: 'Newline-separated list of environment variable names to validate. Leading/trailing whitespace on each name is trimmed; blank lines are ignored.'
     required: true
 
 runs:

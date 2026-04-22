@@ -1,18 +1,18 @@
 name: 'Compose Prerelease Version'
-description: 'Compose a prerelease version string from its parts (target-version, suffix, number, optional prefix). Pure function — no side effects.'
+description: 'Compose a prerelease version string from its parts (base-version, suffix, build-number, optional prefix). Pure function — no side effects.'
 
 inputs:
-  target-version:
-    description: 'Target semantic version (e.g., 1.0.0)'
+  base-version:
+    description: 'Base semantic version the prerelease parts are appended to (e.g., 1.0.0)'
     required: true
   suffix:
     description: 'Prerelease suffix (e.g., rc, dev, alpha, beta)'
     required: true
-  number:
-    description: 'Counter appended after the suffix (e.g., github.run_number or a build number)'
+  build-number:
+    description: 'CI build counter appended after the suffix (e.g., github.run_number). Forms the second dot-separated pre-release identifier per SemVer.'
     required: true
   prefix:
-    description: 'Optional prefix prepended to the tag. Produces {prefix}-v{version}-{suffix}.{number} when set, else v{version}-{suffix}.{number}'
+    description: 'Optional prefix prepended to the tag. Produces {prefix}-v{version}-{suffix}.{build-number} when set, else v{version}-{suffix}.{build-number}'
     required: false
     default: ''
 
@@ -28,22 +28,22 @@ runs:
       id: compose
       shell: bash
       env:
-        TARGET_VERSION: ${{ inputs.target-version }}
+        BASE_VERSION: ${{ inputs.base-version }}
         SUFFIX: ${{ inputs.suffix }}
-        NUMBER: ${{ inputs.number }}
+        BUILD_NUMBER: ${{ inputs.build-number }}
         PREFIX: ${{ inputs.prefix }}
       run: |
         set -euo pipefail
 
-        if [[ ! "$TARGET_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-          echo "::error::Invalid version format: $TARGET_VERSION. Expected: X.Y.Z (e.g., 1.0.0)"
+        if [[ ! "$BASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::Invalid version format: $BASE_VERSION. Expected: X.Y.Z (e.g., 1.0.0)"
           exit 1
         fi
 
         if [[ -n "$PREFIX" ]]; then
-          version="${PREFIX}-v${TARGET_VERSION}-${SUFFIX}.${NUMBER}"
+          version="${PREFIX}-v${BASE_VERSION}-${SUFFIX}.${BUILD_NUMBER}"
         else
-          version="v${TARGET_VERSION}-${SUFFIX}.${NUMBER}"
+          version="v${BASE_VERSION}-${SUFFIX}.${BUILD_NUMBER}"
         fi
 
         echo "Composed prerelease version: $version"

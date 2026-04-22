@@ -19,6 +19,11 @@ inputs:
     description: 'Working directory containing the Docker Compose file'
     required: true
 
+outputs:
+  service-urls:
+    description: 'JSON array of deployed service URLs. Empty array for Compose deployments — callers know the URLs from their compose file and local port bindings. Present for symmetry with `deploy-to-cloud-run`, so callers can consume a uniform `service-urls` contract across deploy backends.'
+    value: '[]'
+
 runs:
   using: 'composite'
   steps:

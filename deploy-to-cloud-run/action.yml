@@ -25,11 +25,23 @@ inputs:
     required: false
     default: '8080'
   env-vars:
-    description: 'Environment variables to set on the Cloud Run service (KEY=VALUE format, one per line)'
+    description: |
+      Plain-value environment variables to set on the Cloud Run service.
+      Format: KEY=VALUE, one per line (value is the literal string).
+      Example:
+        LOG_LEVEL=info
+        FEATURE_FLAG_X=true
+      For Secret Manager references, use the `secrets` input instead — the two shapes are distinct.
     required: false
     default: ''
   secrets:
-    description: 'Secret environment variables to set (KEY=SECRET_NAME:VERSION format, one per line)'
+    description: |
+      Secret Manager-backed environment variables to set on the Cloud Run service.
+      Format: KEY=SECRET_NAME:VERSION, one per line (value is a Secret Manager reference, not a literal).
+      Example:
+        DB_PASSWORD=db-password:latest
+        API_KEY=my-api-key:3
+      For literal values, use the `env-vars` input instead.
     required: false
     default: ''
   memory:

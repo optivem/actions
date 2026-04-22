@@ -21,7 +21,7 @@ inputs:
     required: false
     default: ''
   success-artifact-ids:
-    description: 'The artifact IDs created on success as JSON array. Single artifacts must also be in array format: ["artifact"]. Multiple artifacts: ["artifact1", "artifact2"]'
+    description: 'The artifact IDs created on success as a newline-separated list. Single artifact: a plain string. Multiple artifacts: a multiline YAML string (one per line).'
     required: false
     default: ''
   skipped-reason:
@@ -29,7 +29,7 @@ inputs:
     required: false
     default: ''
   latest-artifact-ids:
-    description: 'The latest known artifact IDs as JSON array (even though the stage did not run against them). Displayed on skipped. Same format as success-artifact-ids.'
+    description: 'The latest known artifact IDs as a newline-separated list (even though the stage did not run against them). Displayed on skipped. Same format as success-artifact-ids.'
     required: false
     default: ''
   latest-updated-at:
