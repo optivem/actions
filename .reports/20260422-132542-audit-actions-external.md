@@ -98,6 +98,8 @@ The summary table above has been cross-verified against each `action.yml` at aud
   - **Proposed fix (Recommended — best-practice):** rename output `exist` → `exists`. Update 18 consumer workflow files in `shop/.github/workflows/` (all `*-acceptance-stage*.yml` files) that read `steps.<id>.outputs.exist`.
   - Alternative: rename the sibling actions' `exists` → `exist` for internal consistency on the singular spelling. Rejected — mainstream convention (`test -e`, `ls`, `find`, most query APIs) uses `exists`, and the siblings already follow it. Moving siblings backwards would violate mainstream-first.
 
+  > **Post-audit status (2026-04-22):** **Rejected** — recorded as an English-grammar exception. The action name's subject is plural (`packages`), so subject–verb agreement yields the bare verb form `exist` (plural subject + plural verb — "check if packages exist"). The sibling actions' subjects are singular (`commit-status`, `tag-pattern`), so they correctly use `exists` (singular subject + third-person-singular verb). Keeping `exist` on this action preserves the grammatical contract with its own name; switching to `exists` would break subject–verb agreement with the action's own plural subject. The 18 consumers remain correct as-is.
+
 #### tag-docker-images
 
 - `output.image-urls` — `name-misleading`: this output carries the *retagged* image URLs and shadows the input `image-urls:` (which carries the *source* image URLs). A caller writing `steps.tag-images.outputs.image-urls` has to read the step id, then re-read the action's docs to know whether that's the input it passed in or the result it got back. The ambiguity is latent but real.
