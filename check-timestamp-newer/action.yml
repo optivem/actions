@@ -1,0 +1,64 @@
+name: 'Check Timestamp Newer'
+description: 'Pure ISO 8601 timestamp comparator. Outputs newer=true when subject is strictly newer than baseline, OR when baseline is empty (fail-open). Outputs newer=false when baseline is set and subject is not newer.'
+author: 'Optivem'
+branding:
+  icon: 'fast-forward'
+  color: 'blue'
+
+inputs:
+  subject:
+    description: 'ISO 8601 timestamp under observation (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). Required.'
+    required: true
+  baseline:
+    description: 'ISO 8601 timestamp to compare against. When empty, the action returns newer=true (fail-open — useful for "first run" semantics).'
+    required: false
+    default: ''
+
+outputs:
+  newer:
+    description: |
+      'true' when subject is strictly newer than baseline,
+      OR when baseline is empty (fail-open).
+      'false' when baseline is set AND subject is not newer than it.
+    value: ${{ steps.check.outputs.newer }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compare subject timestamp against baseline
+      id: check
+      shell: bash
+      env:
+        SUBJECT: ${{ inputs.subject }}
+        BASELINE: ${{ inputs.baseline }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "$SUBJECT" ]]; then
+          echo "::error::subject is empty"
+          exit 1
+        fi
+
+        echo "Subject:  $SUBJECT"
+
+        if [[ -z "$BASELINE" ]]; then
+          echo "Baseline is empty — reporting newer=true (fail-open)."
+          echo "newer=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "Baseline: $BASELINE"
+
+        # ISO 8601 lexicographic comparison is correct when both timestamps are in UTC
+        # with the same format (both include 'Z'). GitHub API returns UTC Z-suffixed;
+        # typical subject timestamps (docker push times, git commit times) are likewise
+        # UTC Z-suffixed.
+        if [[ "$SUBJECT" > "$BASELINE" ]]; then
+          echo "Subject is newer than baseline — newer=true"
+          newer=true
+        else
+          echo "Subject is not newer than baseline — newer=false"
+          newer=false
+        fi
+
+        echo "newer=$newer" >> "$GITHUB_OUTPUT"

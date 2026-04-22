@@ -1,5 +1,5 @@
 name: 'Deploy Docker Compose'
-description: 'Deploys (brings up) a Docker Compose stack in detached mode — the local-deployment stepping stone from the Farley deploy vocabulary. Pair with `wait-for-urls` to verify readiness after deployment.'
+description: 'Deploys (brings up) a Docker Compose stack in detached mode — the local-deployment stepping stone from the Farley deploy vocabulary. Pair with `wait-for-endpoints` to verify readiness after deployment.'
 
 inputs:
   environment:
