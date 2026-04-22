@@ -19,6 +19,7 @@ All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothin
 - `action.yml` steps use `shell: bash`.
 - Scripts are `.sh`, not `.ps1`. Inline the bash directly in `action.yml` when practical — it's the prevailing pattern in this repo.
 - Use [shared/gh-retry.sh](shared/gh-retry.sh) (`gh_retry` wrapper) for any `gh` CLI calls, and `jq` for JSON handling.
+- UTF-8 shell is assumed. Several actions emit emoji (✅ ❌ 🚀 📦) to `$GITHUB_STEP_SUMMARY`. GitHub-hosted Linux runners default to UTF-8 so this is transparent; any self-hosted runner must run bash under a UTF-8 locale.
 
 Two lint checks enforce the conventions:
 - [shared/_lint/check-no-pwsh.sh](shared/_lint/check-no-pwsh.sh) (via `.github/workflows/lint-shell-policy.yml`) fails PRs that contain any `shell: pwsh` or `.ps1` files (except `shared/_test-*` harnesses).
@@ -480,7 +481,7 @@ Pure string mapping. Emits `stage-result=success` if `result == approved`, other
 
 ### promote-docker-images
 
-Promotes a JSON array of Docker images by pulling each source image, applying a new tag via `docker tag`, and pushing the retagged image to the registry. Used for moving an already-built artifact through pipeline stages (Farley-style promotion: `build-once`, promote-many). Handles login, per-image failure isolation, and emits the new URLs as a JSON array.
+Promotes a JSON array of Docker images by issuing a server-side manifest retag (`docker buildx imagetools create --tag <new> <source>`) for each entry. Used for moving an already-built artifact through pipeline stages (Farley-style promotion: `build-once`, promote-many). No image data crosses the runner; multi-arch manifest lists are preserved. Handles login, per-image failure isolation, and emits the new URLs as a JSON array.
 
 **Inputs**
 

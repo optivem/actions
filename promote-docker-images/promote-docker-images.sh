@@ -10,7 +10,7 @@ if [[ "$TARGET_TAG" =~ [\<\>:\"\|\?\*\\] ]]; then
   exit 1
 fi
 
-echo "🏷️  Tagging Docker images for production release..."
+echo "🏷️  Retagging Docker images via buildx imagetools (server-side manifest create)..."
 echo "🎯 Target tag: $TARGET_TAG"
 
 if ! source_images_json="$(jq -c 'if type == "array" then . else [.] end' <<<"$IMAGE_URLS")"; then
@@ -25,7 +25,7 @@ if [[ ${#source_images[@]} -eq 0 ]]; then
   exit 1
 fi
 
-echo "🔍 Found ${#source_images[@]} images to tag"
+echo "🔍 Found ${#source_images[@]} images to retag"
 
 new_image_urls=()
 failed_images=()
@@ -47,26 +47,16 @@ for source_image_url in "${source_images[@]}"; do
     echo "  🏷️  Current reference: $ref"
     echo "  ✨ New image: $new_image_url"
 
-    if ! docker pull "$source_image_url"; then
-      echo "  ❌ Failed to pull source image: $source_image_url"
-      failed_images+=("$source_image_url")
-      continue
-    fi
-
-    if ! docker tag "$source_image_url" "$new_image_url"; then
-      echo "  ❌ Failed to tag image: $source_image_url -> $new_image_url"
-      failed_images+=("$source_image_url")
-      continue
-    fi
-
-    if ! docker push "$new_image_url"; then
-      echo "  ❌ Failed to push new image: $new_image_url"
+    # Server-side manifest retag — no image data crosses the runner, multi-arch manifest
+    # lists are preserved, and no local docker daemon round trip is needed.
+    if ! docker buildx imagetools create --tag "$new_image_url" "$source_image_url"; then
+      echo "  ❌ Failed to retag image: $source_image_url -> $new_image_url"
       failed_images+=("$source_image_url")
       continue
     fi
 
     new_image_urls+=("$new_image_url")
-    echo "  ✅ Successfully tagged: $source_image_url -> $new_image_url"
+    echo "  ✅ Successfully retagged: $source_image_url -> $new_image_url"
   else
     echo "  ⚠️  Invalid image URL format: $source_image_url"
     echo "  ℹ️  Expected format: registry/image:tag or registry/image@digest"
