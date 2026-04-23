@@ -3,7 +3,7 @@ description: 'Aggregates multiple skip signals into a single go/no-go decision f
 
 inputs:
   skip-conditions:
-    description: 'JSON array of {"when": boolean, "reason": string} entries, evaluated in priority order. The first entry whose "when" is true short-circuits the gate: should-run=false, skip-reason=that entry''s reason. If no entry matches, should-run=true and skip-reason is empty. Caller composes each "when" from GitHub Actions expressions (e.g. `${{ steps.x.outputs.y == ''true'' }}`) so the boolean is already resolved before the action runs.'
+    description: 'JSON array of {"when": boolean, "reason": string} entries, evaluated in priority order. The first entry whose "when" is true short-circuits the gate: should-run=false, skip-reason=that entry''s reason. If no entry matches, should-run=true and skip-reason is empty. Caller composes each "when" from a GitHub Actions expression (e.g. steps.x.outputs.y == ''true'', wrapped in the usual ${ expression } braces by the caller) so the boolean is already resolved before the action runs.'
     required: true
 
 outputs:
