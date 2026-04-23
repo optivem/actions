@@ -13,6 +13,10 @@ inputs:
     description: 'Filename of the workflow that bumps VERSION (e.g. gh-auto-bump-patch.yml). When set and the version is already released, the error and job summary include a clickable link to run that workflow. Ignored when on-already-released=skip.'
     required: false
     default: ''
+  rc-workflow-file:
+    description: 'Filename of the workflow that creates a new RC prerelease (e.g. gh-acceptance-stage.yml). When set and the version is already released, the error and job summary include a clickable link to run that workflow after the VERSION bump. Recovering from an already-released version usually needs two steps — bump VERSION, then create a new RC — so pass both workflow inputs when applicable. Ignored when on-already-released=skip.'
+    required: false
+    default: ''
 
 outputs:
   already-released:
@@ -29,6 +33,7 @@ runs:
         TAG: ${{ inputs.version }}
         ON_ALREADY_RELEASED: ${{ inputs.on-already-released }}
         BUMP_WORKFLOW_FILE: ${{ inputs.bump-workflow-file }}
+        RC_WORKFLOW_FILE: ${{ inputs.rc-workflow-file }}
       run: |
         if [[ "$ON_ALREADY_RELEASED" != "fail" && "$ON_ALREADY_RELEASED" != "skip" ]]; then
           echo "::error::Invalid on-already-released value '$ON_ALREADY_RELEASED'. Must be 'fail' or 'skip'."
@@ -41,16 +46,25 @@ runs:
             echo "::notice::Version $TAG is already released — caller opted to skip instead of fail."
             exit 0
           fi
-          if [[ -n "$BUMP_WORKFLOW_FILE" ]]; then
-            BUMP_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/${BUMP_WORKFLOW_FILE}"
+          BASE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows"
+          BUMP_URL=""
+          RC_URL=""
+          [[ -n "$BUMP_WORKFLOW_FILE" ]] && BUMP_URL="${BASE_URL}/${BUMP_WORKFLOW_FILE}"
+          [[ -n "$RC_WORKFLOW_FILE" ]] && RC_URL="${BASE_URL}/${RC_WORKFLOW_FILE}"
+          if [[ -n "$BUMP_URL" || -n "$RC_URL" ]]; then
             {
               echo "## Version already released"
               echo ""
-              echo "\`$TAG\` already exists as a final release."
+              echo "\`$TAG\` already exists as a final release. To ship a new version:"
               echo ""
-              echo "Run the [\`${BUMP_WORKFLOW_FILE}\` workflow](${BUMP_URL}) to bump the VERSION file, then re-run this workflow."
+              i=1
+              [[ -n "$BUMP_URL" ]] && { echo "${i}. Bump VERSION — run [\`${BUMP_WORKFLOW_FILE}\`](${BUMP_URL})."; i=$((i+1)); }
+              [[ -n "$RC_URL" ]] && { echo "${i}. Create a new RC — run [\`${RC_WORKFLOW_FILE}\`](${RC_URL})."; }
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::Version $TAG is already released. Bump VERSION and create a new RC: ${BUMP_URL}"
+            MSG="Version $TAG is already released."
+            [[ -n "$BUMP_URL" ]] && MSG="$MSG Bump VERSION: ${BUMP_URL}."
+            [[ -n "$RC_URL" ]] && MSG="$MSG Create a new RC: ${RC_URL}."
+            echo "::error::${MSG}"
           else
             echo "::error::Version $TAG is already released. Cannot re-release. Bump the VERSION file and create a new RC."
           fi

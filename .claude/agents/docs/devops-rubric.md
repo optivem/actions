@@ -194,6 +194,41 @@ What they share: a single atomic step that fuses build + tag + push + (where sup
 
 Where useful, link a finding to the DORA metric it moves: composite opacity → MTTR; missing idempotence → change-failure rate; missing primitive-level reusability → lead time; rebuilding downstream of commit stage → change-failure rate and lead time; unbounded retries → MTTR (see §1.3 bounded-retry rule for the specific amplification argument). Source: *Accelerate* (Forsgren, Humble, Kim); DORA State of DevOps reports.
 
+## 1.9 Marketplace-action version currency — pin to the latest major
+
+Every `uses: <owner>/<repo>@<ref>` reference to a marketplace (non-local, non-first-party-internal) action inside an `action.yml` `runs.steps:` block or inside a consumer workflow must pin to the **latest major tag** published upstream. Stale majors silently miss security fixes, bug fixes, Node-runtime upgrades, and (when the ecosystem moves) eventual forced migration under time pressure. The rubric's "no deprecated tools" stance (see repo policy) applies here as a positive duty, not just an avoidance rule.
+
+**In scope for this dimension:**
+
+- `uses:` refs to GitHub-hosted third-party actions (`actions/*`, `docker/*`, `google-github-actions/*`, `softprops/*`, etc.).
+- `uses:` refs to reusable workflows (`owner/repo/.github/workflows/foo.yml@ref`).
+- Both the top-level workflow `jobs.<job>.steps.uses:` and the composite `runs.steps.uses:` inside this repo's `action.yml` files.
+
+**Out of scope:**
+
+- Local composite refs (`./`, `../`) — no upstream release cadence.
+- First-party internal actions owned by this workspace (`optivem/actions/*`, `optivem/<name>-action`) — version cadence is governed by the internal release process documented elsewhere, not by external Marketplace releases.
+- Refs pinned to a full commit SHA with a trailing `# v<N>` comment — honour the comment as the intended major; only flag if the comment itself is behind latest.
+
+**How to check.** For each unique `<owner>/<repo>` in scope, query `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` and extract the leading major. Compare against the major embedded in each `uses:` ref. Deduplicate queries across the audit — one query per distinct repo, not per call site.
+
+**Categories of finding (shared with `workflow-auditor` §2):**
+
+- **D — Behind latest major.** A ref pins an older major than upstream `releases/latest`. Recommend bumping to the new major tag. Note breaking-change risk when the diff is known to be non-mechanical (breaking input renames, removed inputs, runtime bumps).
+- **E — Mixed majors within the workspace.** The same action is referenced at two or more majors across the audited repos. Recommend aligning on the latest major already in use (usually matches upstream latest; if not, say so).
+- **F — Deprecated / archived upstream.** Upstream is archived, README points to a replacement, or the repo has had no release in >24 months with an open advisory (e.g. `actions/create-release@v1` → migrate to `softprops/action-gh-release`). Recommend naming the maintained replacement and migrating — **not** merely bumping the major — because the interface has likely changed.
+
+**Anti-patterns flagged alongside D/E/F:**
+
+- `@master` / `@main` floating refs on marketplace actions — pins the caller to whatever HEAD happens to be. Recommend a major tag.
+- Patch-pinned refs (`@v1.0.2`) without a documented rationale (security review lock, reproducibility guarantee). Prefer the major tag so consumers pick up patches automatically.
+
+**Rate-limit awareness.** `gh api releases/latest` calls count against the 5000/hr authenticated ceiling. Cap at one query per distinct `<owner>/<repo>` per audit run. If the unique-repo count exceeds a reasonable budget (roughly 60 distinct repos for a single pass), split the audit across runs or accept partial results and say so in the report.
+
+**Filing guide.** File findings under the DevOps alignment section's **Other** subsection in the auditor reports, tagged `§1.9`. External-scope (because the fix changes a surface-visible `uses:` ref that consumers can see in reviews, and on a major bump may require synchronised consumer updates when inputs changed). Classify **breaking** when the upstream major changelog documents removed or renamed inputs, **non-breaking** when the major bump is input-compatible (common for `actions/checkout` major bumps). When in doubt, classify as **breaking** per the external-file tie-breaker.
+
+**Source:** repo policy "no deprecated tools"; `workflow-auditor.md` §2 (shares this rubric dimension); workspace audit on 2026-04-23 that surfaced ~170 stale `actions/checkout@v5` refs alongside multiple other behind-latest actions.
+
 ## 1.8 Thin wrappers around mainstream actions — delete in favour of direct use
 
 A custom composite that exists only to forward inputs to one or two mainstream actions (no retry, no cross-host handling, no org-specific composition, no material shared logic) is a private dialect and must be replaced by calling the mainstream action directly from the workflow. Generalises §1.6 — what the docker trio rule is for build/tag/push, this rule is for setup, release, and deploy.
