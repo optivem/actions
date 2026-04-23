@@ -7,6 +7,9 @@
 # Scenario 1 — Released versions (final tag vX.Y.Z exists):
 #   - Immediately delete deployments whose SHA corresponds to any
 #     vX.Y.Z-rc.* tag (bypassing keep-count and retention)
+#   - Tag prefixes (meta-, <flavor>-, etc.) are supported; tags are
+#     keyed by version so a final at any prefix marks that version's
+#     RCs across all prefixes as eligible for deletion
 #
 # Scenario 2 — Superseded per environment (count cap + retention floor):
 #   - For each environment, keep the newest KEEP_COUNT deployments
@@ -99,25 +102,35 @@ echo
 # ── Step 1: Categorize tags (local, no API calls) ───────────────────
 echo "Categorizing tags..."
 
-declare -A final_releases    # "1.0.0" -> "v1.0.0"
-declare -A prerelease_tags   # "1.0.0" -> "v1.0.0-rc.1 v1.0.0-rc.2"
+# Keyed by version (X.Y.Z) — values are space-separated tags. Prefixes
+# (meta-, <flavor>-, etc.) collapse onto the same key: a final release at any
+# prefix marks that version as released for cleanup purposes.
+declare -A final_releases=()    # "1.0.0" -> "v1.0.0 meta-v1.0.0 ..."
+declare -A prerelease_tags=()   # "1.0.0" -> "v1.0.0-rc.1 monolith-java-v1.0.0-rc.2 ..."
 
 while IFS= read -r tag; do
   [[ -z "$tag" ]] && continue
-  if [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
-    final_releases[${BASH_REMATCH[1]}]="$tag"
-  elif [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-[a-zA-Z]+\.[0-9]+$ ]]; then
-    version="${BASH_REMATCH[1]}"
+  # Final release (optional prefix): "v1.0.0", "meta-v1.0.0", "monolith-java-v1.0.0"
+  if [[ "$tag" =~ ^([a-z][a-z0-9-]*-)?v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    version="${BASH_REMATCH[2]}"
+    existing="${final_releases[$version]:-}"
+    final_releases[$version]="${existing:+$existing }$tag"
+  # Prerelease (optional prefix, no trailing status suffix):
+  #   "v1.0.0-rc.1", "meta-v1.0.0-rc.5", "monolith-java-v1.0.0-rc.2"
+  # Status tags like "...-rc.5-qa-approved" point to the same SHA as their
+  # parent RC, so we don't need to track them separately for SHA enumeration.
+  elif [[ "$tag" =~ ^([a-z][a-z0-9-]*-)?v([0-9]+\.[0-9]+\.[0-9]+)-[a-zA-Z0-9_]+\.[0-9]+$ ]]; then
+    version="${BASH_REMATCH[2]}"
     existing="${prerelease_tags[$version]:-}"
     prerelease_tags[$version]="${existing:+$existing }$tag"
   fi
-done < <(git tag -l "v*")
+done < <(git tag -l)
 
 echo "  Final releases:  ${#final_releases[@]}"
 echo "  RC versions:     ${#prerelease_tags[@]}"
 
 # ── Step 2: Build set of "released-RC SHAs" ─────────────────────────
-declare -A released_rc_shas    # "<sha>" -> "<rc-tag>"
+declare -A released_rc_shas=()    # "<sha>" -> "<rc-tag>"
 
 for version in "${!final_releases[@]}"; do
   rc_list="${prerelease_tags[$version]:-}"

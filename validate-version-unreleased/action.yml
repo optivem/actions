@@ -1,22 +1,43 @@
 name: 'Validate Version Unreleased'
-description: 'Asserts that a version tag does NOT yet exist in the repository; fails the step if it does. Inverse of validate-tag-exists. Tool-agnostic — uses git tag -l, no platform API dependency.'
+description: 'Asserts that a version tag does NOT yet exist in the repository. By default fails the step if it does; with on-already-released=skip, sets the already-released output so the caller can short-circuit. Inverse of validate-tag-exists. Tool-agnostic — uses git tag -l, no platform API dependency.'
 
 inputs:
   version:
     description: 'Fully composed version tag to check (e.g., v1.0.0, monolith-java-v1.0.0, meta-v1.0.0-rc.1-qa-approved). Compose prefix/version yourself before passing.'
     required: true
+  on-already-released:
+    description: 'Behavior when the tag already exists. "fail" (default) exits the step with an error. "skip" exits successfully and sets already-released=true so the caller can short-circuit downstream jobs — useful for scheduled acceptance-stage runs that race with an in-flight release before the post-release VERSION bump lands.'
+    required: false
+    default: 'fail'
+
+outputs:
+  already-released:
+    description: '"true" if the version tag already exists (only possible when on-already-released=skip; otherwise the step fails). "false" when the tag does not exist.'
+    value: ${{ steps.check.outputs.already-released }}
 
 runs:
   using: 'composite'
   steps:
     - name: Ensure Version Unreleased
+      id: check
       shell: bash
       env:
         TAG: ${{ inputs.version }}
+        ON_ALREADY_RELEASED: ${{ inputs.on-already-released }}
       run: |
+        if [[ "$ON_ALREADY_RELEASED" != "fail" && "$ON_ALREADY_RELEASED" != "skip" ]]; then
+          echo "::error::Invalid on-already-released value '$ON_ALREADY_RELEASED'. Must be 'fail' or 'skip'."
+          exit 1
+        fi
         git fetch --tags --force origin >/dev/null 2>&1 || true
         if git tag -l "$TAG" | grep -q -F -x "$TAG"; then
+          if [[ "$ON_ALREADY_RELEASED" == "skip" ]]; then
+            echo "already-released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Version $TAG is already released — caller opted to skip instead of fail."
+            exit 0
+          fi
           echo "::error::Version $TAG is already released. Cannot re-release. Bump the VERSION file and create a new RC."
           exit 1
         fi
+        echo "already-released=false" >> "$GITHUB_OUTPUT"
         echo "Version $TAG has not been released yet — OK to proceed."

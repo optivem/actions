@@ -63,7 +63,7 @@ Two lint checks enforce the conventions:
 | [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 | [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
 | [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
-| [validate-version-unreleased](#validate-version-unreleased) | • `version` | — |
+| [validate-version-unreleased](#validate-version-unreleased) | • `version`<br>• `on-already-released` | • `already-released` |
 | [wait-for-endpoints](#wait-for-endpoints) | • `endpoints`<br>• `compose-file`<br>• `working-directory`<br>• `max-attempts`<br>• `wait-seconds`<br>• `timeout-seconds` | — |
 | [wait-for-github-workflow](#wait-for-github-workflow) | • `workflow`<br>• `commit-sha`<br>• `repository`<br>• `poll-interval`<br>• `watch-interval`<br>• `max-discovery-attempts`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 
@@ -713,13 +713,20 @@ Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<
 
 ### validate-version-unreleased
 
-Asserts that a fully-composed version tag does NOT yet exist locally via `git tag -l`. Fails the step if it does. Caller is responsible for composing the full tag (prefix + version). Works against the local workspace only.
+Asserts that a fully-composed version tag does NOT yet exist locally via `git tag -l`. By default fails the step if the tag exists; with `on-already-released: skip`, sets the `already-released` output so the caller can short-circuit downstream jobs instead. Caller is responsible for composing the full tag (prefix + version). Works against the local workspace only.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
 | `version` | yes | — | Fully composed version tag to check (e.g., `v1.0.0`, `monolith-java-v1.0.0`, `meta-v1.0.0-rc.1-qa-approved`) |
+| `on-already-released` | no | `fail` | Behavior when the tag exists. `fail` exits with an error. `skip` exits successfully and sets `already-released=true` — useful for scheduled acceptance-stage runs that race with an in-flight release before the post-release VERSION bump lands. |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `already-released` | `true` if the version tag already exists (only possible when `on-already-released=skip`; otherwise the step fails). `false` when the tag does not exist. |
 
 ### wait-for-endpoints
 
