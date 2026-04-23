@@ -43,7 +43,13 @@ runs:
 
         if [ -n "$TOKEN" ]; then
           push_target="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
+          # actions/checkout persists GITHUB_TOKEN differently by version: @v5 and earlier
+          # use http.<host>.extraheader; @v6 uses includeIf.gitdir:<path>.path pointing to a
+          # credentials config file. Clear both so git push uses only the URL-embedded token.
           git config --local --unset-all "http.https://${GIT_HOST}/.extraheader" 2>/dev/null || true
+          while IFS= read -r key; do
+            [ -n "$key" ] && git config --local --unset-all "$key" 2>/dev/null || true
+          done < <(git config --local --name-only --get-regexp '^includeIf\.gitdir:' 2>/dev/null || true)
         else
           push_target="origin"
         fi
