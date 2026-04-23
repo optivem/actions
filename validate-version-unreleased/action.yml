@@ -9,6 +9,10 @@ inputs:
     description: 'Behavior when the tag already exists. "fail" (default) exits the step with an error. "skip" exits successfully and sets already-released=true so the caller can short-circuit downstream jobs — useful for scheduled acceptance-stage runs that race with an in-flight release before the post-release VERSION bump lands.'
     required: false
     default: 'fail'
+  bump-workflow-file:
+    description: 'Filename of the workflow that bumps VERSION (e.g. gh-auto-bump-patch.yml). When set and the version is already released, the error and job summary include a clickable link to run that workflow. Ignored when on-already-released=skip.'
+    required: false
+    default: ''
 
 outputs:
   already-released:
@@ -24,6 +28,7 @@ runs:
       env:
         TAG: ${{ inputs.version }}
         ON_ALREADY_RELEASED: ${{ inputs.on-already-released }}
+        BUMP_WORKFLOW_FILE: ${{ inputs.bump-workflow-file }}
       run: |
         if [[ "$ON_ALREADY_RELEASED" != "fail" && "$ON_ALREADY_RELEASED" != "skip" ]]; then
           echo "::error::Invalid on-already-released value '$ON_ALREADY_RELEASED'. Must be 'fail' or 'skip'."
@@ -36,7 +41,19 @@ runs:
             echo "::notice::Version $TAG is already released — caller opted to skip instead of fail."
             exit 0
           fi
-          echo "::error::Version $TAG is already released. Cannot re-release. Bump the VERSION file and create a new RC."
+          if [[ -n "$BUMP_WORKFLOW_FILE" ]]; then
+            BUMP_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/${BUMP_WORKFLOW_FILE}"
+            {
+              echo "## Version already released"
+              echo ""
+              echo "\`$TAG\` already exists as a final release."
+              echo ""
+              echo "Run the [\`${BUMP_WORKFLOW_FILE}\` workflow](${BUMP_URL}) to bump the VERSION file, then re-run this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Version $TAG is already released. Bump VERSION and create a new RC: ${BUMP_URL}"
+          else
+            echo "::error::Version $TAG is already released. Cannot re-release. Bump the VERSION file and create a new RC."
+          fi
           exit 1
         fi
         echo "already-released=false" >> "$GITHUB_OUTPUT"
