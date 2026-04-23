@@ -46,6 +46,7 @@ Two lint checks enforce the conventions:
 | [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
 | [create-component-tags](#create-component-tags) | • `components`<br>• `repository`<br>• `git-host`<br>• `token` | • `created-tags`<br>• `skipped-tags` |
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | • `service-urls` |
+| [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
 | [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
@@ -405,6 +406,23 @@ Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working
 | Name | Description |
 |---|---|
 | `service-urls` | JSON array of deployed service URLs. Empty array for Compose deployments — callers know the URLs from their compose file and local port bindings. Present for symmetry with `deploy-to-cloud-run` so callers can consume a uniform `service-urls` contract across deploy backends. |
+
+### evaluate-run-gate
+
+Aggregates multiple skip signals into a single go/no-go decision for a pipeline stage. Evaluates `skip-conditions` in priority order; the first entry whose `when` is true wins and yields `should-run=false` plus its `reason`. If none match, `should-run=true` and `skip-reason` is empty. Generic — use for any stage that composes multiple skip signals (release race, stale artifacts, missing inputs, etc.).
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `skip-conditions` | yes | — | JSON array of `{"when": boolean, "reason": string}` entries, evaluated in priority order. Caller composes each `when` from GitHub Actions expressions (e.g. `${{ steps.x.outputs.y == 'true' }}`) so the boolean is already resolved before the action runs. |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `should-run` | `"true"` when no skip-condition matched, `"false"` when one did. |
+| `skip-reason` | The reason from the first matching skip-condition, or empty string when `should-run=true`. |
 
 ### format-artifact-list
 
