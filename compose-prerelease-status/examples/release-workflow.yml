@@ -42,12 +42,10 @@ jobs:
           status: ${{ steps.tests.outputs.status }}
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.version }}
-          release_name: Release ${{ steps.status-tag.outputs.tag }}
+          name: Release ${{ steps.status-tag.outputs.tag }}
           body: |
             Release Notes for ${{ steps.status-tag.outputs.tag }}
 

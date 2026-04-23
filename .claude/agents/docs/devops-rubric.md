@@ -1,6 +1,6 @@
 # DevOps rubric for auditing GitHub Actions
 
-**Rubric version: 8** (updated 2026-04-22). See [§ Version history](#version-history) at the end of this file for what changed in each version. When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
+**Rubric version: 9** (updated 2026-04-23). See [§ Version history](#version-history) at the end of this file for what changed in each version. When a re-audit produces a finding that was not previously produced against the same action, tag the finding `[RUBRIC-CHANGE v<N>]` in the report so the author can distinguish "always existed, now flagged" from "genuinely drifted" — bump this version any time §1–§8 change materially.
 
 This is the reference rubric used by the `actions-auditor` agent (and any sibling agent that wants DevOps-aligned reviews). It defines "what correct looks like" so the agent file can stay focused on process and output schema.
 
@@ -194,6 +194,56 @@ What they share: a single atomic step that fuses build + tag + push + (where sup
 
 Where useful, link a finding to the DORA metric it moves: composite opacity → MTTR; missing idempotence → change-failure rate; missing primitive-level reusability → lead time; rebuilding downstream of commit stage → change-failure rate and lead time; unbounded retries → MTTR (see §1.3 bounded-retry rule for the specific amplification argument). Source: *Accelerate* (Forsgren, Humble, Kim); DORA State of DevOps reports.
 
+## 1.8 Thin wrappers around mainstream actions — delete in favour of direct use
+
+A custom composite that exists only to forward inputs to one or two mainstream actions (no retry, no cross-host handling, no org-specific composition, no material shared logic) is a private dialect and must be replaced by calling the mainstream action directly from the workflow. Generalises §1.6 — what the docker trio rule is for build/tag/push, this rule is for setup, release, and deploy.
+
+**Detection — a wrapper is "thin" when its `runs.steps:` reduces to one of these shapes:**
+
+- A single `uses:` step that forwards inputs 1:1 to a mainstream action (pure pass-through).
+- Two `uses:` steps that compose a mainstream pair (e.g. `actions/setup-java` + `gradle/actions/setup-gradle`) with no added customisation beyond forwarding the caller's `*-version` input.
+- A `uses:` step plus a trivial follow-on `run:` block (e.g. `setup-node` + `npm ci`) where the follow-on is a project build concern that belongs in the caller, not in a "setup" wrapper.
+
+**Material logic that justifies a custom wrapper — NOT thin:**
+
+- Retry / rate-limit handling (`gh_retry`, bounded backoff) that the mainstream action does not provide.
+- Cross-host or cross-tool composition (e.g. an action that drives multiple registries, multiple CI platforms, or multiple package managers from one input).
+- Org-specific composition of outputs (e.g. non-SemVer tag shape, component-tag prefix, idempotent no-op on matching SHA).
+- Race-safe writes (e.g. Contents API with SHA preconditions, optimistic-concurrency retry).
+- Org-specific retention / cleanup policy that expresses a repo-level decision (e.g. prerelease cleanup window).
+- Post-hoc verification tightly coupled to the mainstream step (e.g. digest pinning, attestation extraction) that is not expressible through the mainstream action's inputs.
+
+If a wrapper fails the "thin" test and passes the "material logic" test, keep it. If it fails "thin" AND fails "material logic", delete it — but add an `Additional findings` note naming which material-logic category was missing, in case the author meant to add it.
+
+**Concrete replacement table — setup, release, and cloud deploy.**
+
+Version pins below are current as of rubric v9 (2026-04-23). Re-validate against the latest Marketplace release before citing in an audit report — major tags roll and stale pins in a rubric don't invalidate the pattern but can mislead authors following the table literally. When in doubt, run the §1.9 currency check first and cite that result.
+
+| Thin wrapper pattern | Mainstream replacement | Version pin | Migration notes |
+|---|---|---|---|
+| `setup-dotnet` (1:1 pass-through) | `actions/setup-dotnet` | `@v5` | Direct call; single `dotnet-version` input maps identically. |
+| `setup-java-gradle` (two-step composite, hardcoded distribution) | `actions/setup-java` + `gradle/actions/setup-gradle` | `@v5` + `@v6` | Inline both steps in the workflow; `distribution: temurin` becomes a caller-visible choice. |
+| `setup-node` (setup + `npm ci` conflated) | `actions/setup-node` + `npm ci` | `@v6` | Keep `cache: 'npm'` + `cache-dependency-path` on `setup-node`; move `npm ci` to a separate caller step. Separates "setup" from "build". |
+| `create-github-release` (thin `gh release create/edit`) | `softprops/action-gh-release` | `@v3` | Idempotent by default when `tag_name` exists; preserves existing assets unless `files:` is set. Input mapping: `tag`→`tag_name`, `title`→`name`, `notes-file`→`body_path`, `is-prerelease`→`prerelease`. Output: consume `steps.<id>.outputs.url`. |
+| `deploy-to-cloud-run` (thin `gcloud run deploy`) | `google-github-actions/deploy-cloudrun` | `@v3` | Google's official action covers all current inputs 1:1 (`service`, `image`, `region`, `project_id`, `env_vars`, `secrets`, sizing flags, `--allow-unauthenticated` via `flags`). Lift the embedded readiness poll (`wait-for-endpoints`) into a separate caller step. |
+
+When auditing, apply this lens to any custom wrapper: does it forward inputs to a mainstream action without adding material logic? If yes, delete. Extend the table above when new mainstream actions subsume further custom wrappers in this repo.
+
+**Don't mistake orchestration for a wrapper.** A composite that chains `docker/login-action` + `docker/metadata-action` + `docker/build-push-action` + a post-push verify step (e.g. digest extraction, attestation assertion) may look like "four `uses:` steps" but passes the material-logic test because the post-push verify is not expressible through any single mainstream action. §1.6 governs that case; do not flag it under §1.8.
+
+**Flag as DevOps alignment finding → "Separation of concerns" or "Other":**
+
+- Any custom action whose `runs.steps:` match a "thin" shape and has a mainstream replacement. Cite this section, the specific replacement action, and the version pin.
+- Any new wrapper being proposed in a PR that would re-introduce a thin shape (pre-emptive flag — don't wait for it to land).
+
+**Does NOT apply to:**
+
+- Concerns with no maintained mainstream action (e.g. `wait-for-endpoints`, `commit-files` via Contents API with SHA preconditions, org-specific prerelease-retention actions). Pass the "material logic" test → keep.
+- Wrappers that exist for a documented, time-bounded reason (migration bridge, deprecation shim). Flag these with an expected removal date and revisit on each audit.
+- Unmaintained "alternatives" (last release >18 months old, open security advisories, single-maintainer with no backup). `convictional/trigger-workflow-and-wait` is the canonical example — do not recommend migration to unmaintained actions (see the "no deprecated tools" rule in repo policy).
+
+**Source:** §1.6 precedent; Mainstream-first principle at top of file; `actions/setup-*` README examples; [`softprops/action-gh-release` README](https://github.com/softprops/action-gh-release); [`google-github-actions/deploy-cloudrun` README](https://github.com/google-github-actions/deploy-cloudrun).
+
 ## 1.9 Marketplace-action version currency — pin to the latest major
 
 Every `uses: <owner>/<repo>@<ref>` reference to a marketplace (non-local, non-first-party-internal) action inside an `action.yml` `runs.steps:` block or inside a consumer workflow must pin to the **latest major tag** published upstream. Stale majors silently miss security fixes, bug fixes, Node-runtime upgrades, and (when the ecosystem moves) eventual forced migration under time pressure. The rubric's "no deprecated tools" stance (see repo policy) applies here as a positive duty, not just an avoidance rule.
@@ -228,56 +278,6 @@ Every `uses: <owner>/<repo>@<ref>` reference to a marketplace (non-local, non-fi
 **Filing guide.** File findings under the DevOps alignment section's **Other** subsection in the auditor reports, tagged `§1.9`. External-scope (because the fix changes a surface-visible `uses:` ref that consumers can see in reviews, and on a major bump may require synchronised consumer updates when inputs changed). Classify **breaking** when the upstream major changelog documents removed or renamed inputs, **non-breaking** when the major bump is input-compatible (common for `actions/checkout` major bumps). When in doubt, classify as **breaking** per the external-file tie-breaker.
 
 **Source:** repo policy "no deprecated tools"; `workflow-auditor.md` §2 (shares this rubric dimension); workspace audit on 2026-04-23 that surfaced ~170 stale `actions/checkout@v5` refs alongside multiple other behind-latest actions.
-
-## 1.8 Thin wrappers around mainstream actions — delete in favour of direct use
-
-A custom composite that exists only to forward inputs to one or two mainstream actions (no retry, no cross-host handling, no org-specific composition, no material shared logic) is a private dialect and must be replaced by calling the mainstream action directly from the workflow. Generalises §1.6 — what the docker trio rule is for build/tag/push, this rule is for setup, release, and deploy.
-
-**Detection — a wrapper is "thin" when its `runs.steps:` reduces to one of these shapes:**
-
-- A single `uses:` step that forwards inputs 1:1 to a mainstream action (pure pass-through).
-- Two `uses:` steps that compose a mainstream pair (e.g. `actions/setup-java` + `gradle/actions/setup-gradle`) with no added customisation beyond forwarding the caller's `*-version` input.
-- A `uses:` step plus a trivial follow-on `run:` block (e.g. `setup-node` + `npm ci`) where the follow-on is a project build concern that belongs in the caller, not in a "setup" wrapper.
-
-**Material logic that justifies a custom wrapper — NOT thin:**
-
-- Retry / rate-limit handling (`gh_retry`, bounded backoff) that the mainstream action does not provide.
-- Cross-host or cross-tool composition (e.g. an action that drives multiple registries, multiple CI platforms, or multiple package managers from one input).
-- Org-specific composition of outputs (e.g. non-SemVer tag shape, component-tag prefix, idempotent no-op on matching SHA).
-- Race-safe writes (e.g. Contents API with SHA preconditions, optimistic-concurrency retry).
-- Org-specific retention / cleanup policy that expresses a repo-level decision (e.g. prerelease cleanup window).
-- Post-hoc verification tightly coupled to the mainstream step (e.g. digest pinning, attestation extraction) that is not expressible through the mainstream action's inputs.
-
-If a wrapper fails the "thin" test and passes the "material logic" test, keep it. If it fails "thin" AND fails "material logic", delete it — but add an `Additional findings` note naming which material-logic category was missing, in case the author meant to add it.
-
-**Concrete replacement table — setup, release, and cloud deploy.**
-
-Version pins below are current as of rubric v8 (2026-04-22). Re-validate against the latest Marketplace release before citing in an audit report — major tags roll (e.g. `actions/setup-node@v5` → `@v6`) and stale pins in a rubric don't invalidate the pattern but can mislead authors following the table literally.
-
-| Thin wrapper pattern | Mainstream replacement | Version pin | Migration notes |
-|---|---|---|---|
-| `setup-dotnet` (1:1 pass-through) | `actions/setup-dotnet` | `@v5` | Direct call; single `dotnet-version` input maps identically. |
-| `setup-java-gradle` (two-step composite, hardcoded distribution) | `actions/setup-java` + `gradle/actions/setup-gradle` | `@v5` + `@v5` | Inline both steps in the workflow; `distribution: temurin` becomes a caller-visible choice. |
-| `setup-node` (setup + `npm ci` conflated) | `actions/setup-node` + `npm ci` | `@v5` | Keep `cache: 'npm'` + `cache-dependency-path` on `setup-node`; move `npm ci` to a separate caller step. Separates "setup" from "build". |
-| `create-github-release` (thin `gh release create/edit`) | `softprops/action-gh-release` | `@v2` | Idempotent by default when `tag_name` exists; preserves existing assets unless `files:` is set. Input mapping: `tag`→`tag_name`, `title`→`name`, `notes-file`→`body_path`, `is-prerelease`→`prerelease`. Output: consume `steps.<id>.outputs.url`. |
-| `deploy-to-cloud-run` (thin `gcloud run deploy`) | `google-github-actions/deploy-cloudrun` | `@v2` | Google's official action covers all current inputs 1:1 (`service`, `image`, `region`, `project_id`, `env_vars`, `secrets`, sizing flags, `--allow-unauthenticated` via `flags`). Lift the embedded readiness poll (`wait-for-endpoints`) into a separate caller step. |
-
-When auditing, apply this lens to any custom wrapper: does it forward inputs to a mainstream action without adding material logic? If yes, delete. Extend the table above when new mainstream actions subsume further custom wrappers in this repo.
-
-**Don't mistake orchestration for a wrapper.** A composite that chains `docker/login-action` + `docker/metadata-action` + `docker/build-push-action` + a post-push verify step (e.g. digest extraction, attestation assertion) may look like "four `uses:` steps" but passes the material-logic test because the post-push verify is not expressible through any single mainstream action. §1.6 governs that case; do not flag it under §1.8.
-
-**Flag as DevOps alignment finding → "Separation of concerns" or "Other":**
-
-- Any custom action whose `runs.steps:` match a "thin" shape and has a mainstream replacement. Cite this section, the specific replacement action, and the version pin.
-- Any new wrapper being proposed in a PR that would re-introduce a thin shape (pre-emptive flag — don't wait for it to land).
-
-**Does NOT apply to:**
-
-- Concerns with no maintained mainstream action (e.g. `wait-for-endpoints`, `commit-files` via Contents API with SHA preconditions, org-specific prerelease-retention actions). Pass the "material logic" test → keep.
-- Wrappers that exist for a documented, time-bounded reason (migration bridge, deprecation shim). Flag these with an expected removal date and revisit on each audit.
-- Unmaintained "alternatives" (last release >18 months old, open security advisories, single-maintainer with no backup). `convictional/trigger-workflow-and-wait` is the canonical example — do not recommend migration to unmaintained actions (see the "no deprecated tools" rule in repo policy).
-
-**Source:** §1.6 precedent; Mainstream-first principle at top of file; `actions/setup-*` README examples; [`softprops/action-gh-release` README](https://github.com/softprops/action-gh-release); [`google-github-actions/deploy-cloudrun` README](https://github.com/google-github-actions/deploy-cloudrun).
 
 ---
 
@@ -649,6 +649,7 @@ A thin composite wrapper that runs these four steps in this order is acceptable 
 
 Newest first. Bump `Rubric version:` at the top of this file whenever §1–§8 change materially, and tag any re-audit findings that exist only because of the bump as `[RUBRIC-CHANGE v<N>]`.
 
+- **v9 (2026-04-23)** — added §1.9 "Marketplace-action version currency — pin to the latest major", defining categories D (behind latest major), E (mixed majors within the workspace), and F (deprecated / archived upstream — migrate, don't bump). Shares rule surface with `workflow-auditor` §2. Refreshed §1.8 replacement-table version pins to 2026-04-23 snapshot (`setup-node@v6`, `gradle/actions/setup-gradle@v6`, `softprops/action-gh-release@v3`, `google-github-actions/deploy-cloudrun@v3`) and noted to run §1.9 currency check first when citing.
 - **v8 (2026-04-22)** — added §1.8 "Thin wrappers around mainstream actions — delete in favour of direct use", generalising §1.6 to cover setup/release/deploy wrappers with a concrete replacement table (`setup-dotnet`/`setup-java-gradle`/`setup-node` → official `actions/setup-*`; `create-github-release` → `softprops/action-gh-release`; `deploy-to-cloud-run` → `google-github-actions/deploy-cloudrun`). Refreshed §3.1 Tier 1 examples to cross-reference §1.8. Reframed §1.6 as a platform-agnostic "BuildKit-capability" rule with per-platform expressions (Jenkins/GitLab/Azure/CircleCI/Buildkite alongside the GitHub Actions Marketplace trio). Added §1.3 "Fast-feedback sizing" rule for blocking actions (Farley 5-minute commit-stage budget). Appended DORA/MTTR linkage to the §1.3 bounded-retry rule. Tightened §1.4 supply-chain rule with a default pin-strategy ladder (mainstream major-tag / untrusted SHA / SLSA-L3 everything-SHA). Carved out the `branding:` rule for internal-only publication intent. Appended a Twelve-Factor III linkage to the §1.4 bridge-via-env example. Added §4 canonical-semantics table for the spot-check verbs (`resolve-*`, `compose-*`, `ensure-*`, `get-*`, `read-*`, etc.) so verb judgments are mechanical. Extracted this version-history section.
 - **v7 (2026-04-22)** — **posture shift: this repo is production infra, not a teaching vehicle.** Rewrote §2 "Forward-looking context" to drop the teaching-vehicle framing and the "teaching-clarity override" (real-world best practice is now the default, not a tie-breaker). Added §1.6 "Container image build/tag/push — use mainstream composite actions" requiring `docker/build-push-action` + `docker/metadata-action` over hand-rolled build/tag/push splits, with supply-chain flags (SLSA provenance, SBOM, digest-pinned deploys). Renumbered DORA linkage to §1.7.
 - **v6 (2026-04-22)** — added §1.5 "Version-handling actions — follow SemVer": any action that composes, parses, or validates a version string must use SemVer 2.0.0 vocabulary and shape, with concrete input-name guidance (`base-version`, `suffix`, `build-number`) and explicit guidance against using SemVer build metadata for CI counters.

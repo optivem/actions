@@ -34,17 +34,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.hotfix_version }}
-          release_name: 'Hotfix ${{ github.event.inputs.hotfix_version }}'
+          name: 'Hotfix ${{ github.event.inputs.hotfix_version }}'
           body: |
             🚨 **Hotfix Release**
-            
+
             This is a hotfix release containing critical bug fixes.
-            
+
             **Docker Images:**
             - `ghcr.io/myorg/app:${{ github.event.inputs.hotfix_version }}`
             - `ghcr.io/myorg/api:${{ github.event.inputs.hotfix_version }}`
