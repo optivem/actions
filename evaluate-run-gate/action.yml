@@ -25,7 +25,7 @@ runs:
       run: |
         set -euo pipefail
 
-        if ! echo "$SKIP_CONDITIONS" | jq -e empty >/dev/null 2>&1; then
+        if ! echo "$SKIP_CONDITIONS" | jq empty >/dev/null 2>&1; then
           echo "::error::skip-conditions is not valid JSON. Got: $SKIP_CONDITIONS"
           exit 1
         fi
