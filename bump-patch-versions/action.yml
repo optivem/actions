@@ -1,26 +1,25 @@
 name: 'Bump Patch Versions'
-description: 'Computes patch-version bumps for VERSION files whose matching release tag already exists on the remote. Reads files from the checked-out workspace; writes nothing. Tool-agnostic — uses git ls-remote, no platform API dependency. Pair with commit-files (or an equivalent for your platform) to persist the bumps.'
+description: 'Computes patch-version bumps for VERSION files whose matching release signal already exists. Each VERSION file declares a signal source (github-release or ghcr-image) and a value — the bump fires when the corresponding artifact exists for the current version. Reads files from the checked-out workspace; writes nothing. Pair with commit-files to persist the bumps.'
 
 inputs:
   version-files:
-    description: 'Newline-separated list of "path:tag-prefix1,tag-prefix2,..." entries. Each VERSION file is bumped if ANY tag "{prefix}{current-version}" exists on the remote. Example: "VERSION:meta-v,monolith-java-v"'
+    description: |
+      JSON array of {"path": string, "signal": "github-release"|"ghcr-image", "value": string} objects.
+        - signal="github-release": bump if a Release exists at tag "{value}{current-version}" (e.g. value="meta-v" + version="1.0.40" -> probes "meta-v1.0.40").
+        - signal="ghcr-image": bump if a GHCR image exists at "{value}:v{current-version}" (e.g. value="ghcr.io/optivem/shop/multitier-backend-java" + version="1.5.24" -> probes that image:v1.5.24).
     required: true
   repository:
-    description: 'Repository in owner/repo format. Defaults to the current repository.'
+    description: 'Repository in owner/repo format (used for Releases API lookups). Defaults to the current repository.'
     required: false
     default: ${{ github.repository }}
-  git-host:
-    description: 'Git host to query (e.g. github.com, gitlab.com, codeberg.org). Defaults to github.com.'
-    required: false
-    default: 'github.com'
   token:
-    description: 'Token for authenticating to the remote. Defaults to github.token.'
+    description: 'Token for Releases API and GHCR auth. Defaults to github.token.'
     required: false
     default: ${{ github.token }}
 
 outputs:
   bumps:
-    description: 'JSON array of {path, old-version, new-version, release-tag} for files that need bumping'
+    description: 'JSON array of {path, old-version, new-version, release-signal} for files that need bumping. release-signal is the concrete artifact reference (tag name or image:tag).'
     value: ${{ steps.bump.outputs.bumps }}
   bumped:
     description: 'true if at least one file needs bumping'
@@ -37,70 +36,152 @@ runs:
       shell: bash
       env:
         VERSION_FILES: ${{ inputs.version-files }}
-        REPO: ${{ inputs.repository }}
-        GIT_HOST: ${{ inputs.git-host }}
-        TOKEN: ${{ inputs.token }}
+        REPOSITORY: ${{ inputs.repository }}
+        GH_TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
 
-        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
-        remote_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
+        if ! jq -e 'type == "array"' >/dev/null <<<"$VERSION_FILES"; then
+          echo "::error::version-files must be a JSON array of {path, signal, value} objects"
+          exit 1
+        fi
+
+        # --- signal probes -----------------------------------------------------
+
+        probe_github_release() {
+          local tag=$1
+          local stderr_file
+          stderr_file=$(mktemp)
+          if gh_retry api "repos/${REPOSITORY}/releases/tags/${tag}" --silent 2>"$stderr_file"; then
+            rm -f "$stderr_file"; echo "true"; return
+          fi
+          local code=$?
+          local stderr_content
+          stderr_content=$(cat "$stderr_file"); rm -f "$stderr_file"
+          if grep -q "HTTP 404" <<<"$stderr_content"; then
+            echo "false"; return
+          fi
+          echo "::error::Unexpected failure probing release ${REPOSITORY}@${tag} (exit $code): $stderr_content" >&2
+          exit 1
+        }
+
+        fetch_ghcr_token() {
+          local scope_path=$1
+          local url="https://ghcr.io/token?service=ghcr.io&scope=repository:${scope_path}:pull"
+          if [ -n "$GH_TOKEN" ]; then
+            curl -sS -u "x-access-token:${GH_TOKEN}" "$url" | jq -r '.token // empty'
+          else
+            curl -sS "$url" | jq -r '.token // empty'
+          fi
+        }
+
+        probe_ghcr_image() {
+          local image_url=$1
+          local tag=$2
+          local path=${image_url#ghcr.io/}
+          local manifest_url="https://ghcr.io/v2/${path}/manifests/${tag}"
+          local bearer
+          bearer=$(fetch_ghcr_token "$path" || true)
+          if [ -z "$bearer" ]; then
+            echo "::error::Failed to obtain GHCR token for $path" >&2
+            exit 1
+          fi
+          local attempt=1
+          local max_attempts=4
+          local delays=(5 15 45)
+          local code
+          while (( attempt <= max_attempts )); do
+            code=$(curl -sS -L -I -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $bearer" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+              "$manifest_url" || echo "000")
+            case "$code" in
+              200) echo "true"; return ;;
+              404) echo "false"; return ;;
+              401|403)
+                echo "::error::Authentication failed probing ${image_url}:${tag} (HTTP $code)" >&2
+                exit 1
+                ;;
+            esac
+            if (( attempt < max_attempts )); then
+              local delay_idx=$(( attempt - 1 ))
+              (( delay_idx >= ${#delays[@]} )) && delay_idx=$(( ${#delays[@]} - 1 ))
+              echo "::notice::[ghcr-probe] attempt $attempt got HTTP $code for $manifest_url -- retrying in ${delays[$delay_idx]}s" >&2
+              sleep "${delays[$delay_idx]}"
+            fi
+            (( attempt++ ))
+          done
+          echo "::error::Unexpected HTTP $code probing ${image_url}:${tag} after retries" >&2
+          exit 1
+        }
+
+        # --- main loop ---------------------------------------------------------
 
         bumps='[]'
         bumped=false
         summary=""
 
         while IFS= read -r entry; do
-          [[ -z "$entry" ]] && continue
+          path=$(jq -r '.path // empty' <<<"$entry")
+          signal=$(jq -r '.signal // empty' <<<"$entry")
+          value=$(jq -r '.value // empty' <<<"$entry")
 
-          if [[ "$entry" != *:* ]]; then
-            echo "::error::Invalid version-files entry: '$entry'. Expected 'path:tag-prefix[,tag-prefix...]' format (e.g. 'VERSION:meta-v,monolith-java-v')."
+          if [ -z "$path" ] || [ -z "$signal" ] || [ -z "$value" ]; then
+            echo "::error::Each entry must have non-empty 'path', 'signal', and 'value' fields. Got: $entry"
             exit 1
           fi
-          file="${entry%%:*}"
-          tag_prefixes_csv="${entry#*:}"
-          if [[ -z "$file" || -z "$tag_prefixes_csv" ]]; then
-            echo "::error::Invalid version-files entry: '$entry'. Both path and at least one tag-prefix are required."
-            exit 1
-          fi
-          IFS=',' read -ra tag_prefixes <<< "$tag_prefixes_csv"
 
-          if [[ ! -f "$file" ]]; then
-            echo "::warning::VERSION file not found: $file"
+          if [[ ! -f "$path" ]]; then
+            echo "::warning::VERSION file not found: $path"
             continue
           fi
-          current_version=$(cat "$file" | tr -d '[:space:]')
-
-          matched_tag=""
-          for prefix in "${tag_prefixes[@]}"; do
-            candidate="${prefix}${current_version}"
-            if git ls-remote --tags --exit-code "$remote_url" "refs/tags/${candidate}" >/dev/null 2>&1; then
-              matched_tag="$candidate"
-              break
-            fi
-          done
-          if [[ -z "$matched_tag" ]]; then
-            echo "Skipped $file: $current_version (no matching release tag exists on remote for prefixes: ${tag_prefixes_csv})"
-            summary="${summary}${file}: skipped (no matching release tag for $current_version)\n"
+          current_version=$(tr -d '[:space:]' < "$path")
+          if [[ -z "$current_version" ]]; then
+            echo "::warning::VERSION file is empty: $path"
             continue
           fi
 
-          major=$(echo "$current_version" | cut -d. -f1)
-          minor=$(echo "$current_version" | cut -d. -f2)
-          patch=$(echo "$current_version" | cut -d. -f3)
+          case "$signal" in
+            github-release)
+              release_signal="${value}${current_version}"
+              exists=$(probe_github_release "$release_signal")
+              ;;
+            ghcr-image)
+              image_tag="v${current_version}"
+              release_signal="${value}:${image_tag}"
+              exists=$(probe_ghcr_image "$value" "$image_tag")
+              ;;
+            *)
+              echo "::error::Unknown signal '$signal' for $path. Expected 'github-release' or 'ghcr-image'."
+              exit 1
+              ;;
+          esac
+
+          if [[ "$exists" != "true" ]]; then
+            echo "Skipped $path: $current_version (no artifact at $release_signal)"
+            summary="${summary}${path}: skipped (no artifact for $current_version)\n"
+            continue
+          fi
+
+          major=$(cut -d. -f1 <<<"$current_version")
+          minor=$(cut -d. -f2 <<<"$current_version")
+          patch=$(cut -d. -f3 <<<"$current_version")
           new_version="${major}.${minor}.$((patch + 1))"
 
-          bumps=$(jq -c --arg p "$file" --arg ov "$current_version" --arg nv "$new_version" --arg rt "$matched_tag" \
-            '. + [{path: $p, "old-version": $ov, "new-version": $nv, "release-tag": $rt}]' <<< "$bumps")
+          bumps=$(jq -c --arg p "$path" --arg ov "$current_version" --arg nv "$new_version" --arg rs "$release_signal" \
+            '. + [{path: $p, "old-version": $ov, "new-version": $nv, "release-signal": $rs}]' <<<"$bumps")
 
-          echo "Planned bump: $file $current_version -> $new_version (release $matched_tag)"
-          summary="${summary}${file}: ${current_version} -> ${new_version}\n"
+          echo "Planned bump: $path $current_version -> $new_version (artifact $release_signal)"
+          summary="${summary}${path}: ${current_version} -> ${new_version}\n"
           bumped=true
-        done <<< "$VERSION_FILES"
+        done < <(jq -c '.[]' <<<"$VERSION_FILES")
 
-        echo "bumps=$bumps" >> "$GITHUB_OUTPUT"
-        echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
-        echo "summary<<EOF" >> "$GITHUB_OUTPUT"
-        echo -e "$summary" >> "$GITHUB_OUTPUT"
-        echo "EOF" >> "$GITHUB_OUTPUT"
+        {
+          echo "bumps=$bumps"
+          echo "bumped=$bumped"
+          echo "summary<<EOF"
+          echo -e "$summary"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
