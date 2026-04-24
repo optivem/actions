@@ -40,55 +40,7 @@ runs:
       run: |
         set -euo pipefail
 
-        # GHCR OCI reads use a two-step token exchange:
-        #   GET /token?scope=repository:<path>:pull  (with Basic auth if token provided) -> bearer token
-        #   HEAD /v2/<path>/manifests/<tag>          (with Bearer)
-        # This works uniformly for public and private images, and for user- and
-        # org-owned repos. Unlike the GitHub Packages REST API (which has
-        # path-shape differences between /orgs/{org}/packages and
-        # /users/{user}/packages and no repo-scoped list endpoint), the OCI
-        # registry treats all three the same way.
-        fetch_registry_token() {
-          local scope_path=$1
-          local url="https://ghcr.io/token?service=ghcr.io&scope=repository:${scope_path}:pull"
-          local body
-          if [ -n "$GH_TOKEN" ]; then
-            body=$(curl -sS -u "x-access-token:${GH_TOKEN}" "$url") || return 1
-          else
-            body=$(curl -sS "$url") || return 1
-          fi
-          jq -r '.token // empty' <<<"$body"
-        }
-
-        probe_manifest() {
-          local url=$1
-          local bearer=$2
-          local attempt=1
-          local max_attempts=4
-          local delays=(5 15 45)
-          local code
-
-          while (( attempt <= max_attempts )); do
-            code=$(curl -sS -L -I -o /dev/null -w '%{http_code}' \
-              -H "Authorization: Bearer $bearer" \
-              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
-              "$url" || echo "000")
-
-            case "$code" in
-              200|404|401|403) echo "$code"; return 0 ;;
-            esac
-
-            if (( attempt < max_attempts )); then
-              local delay_idx=$(( attempt - 1 ))
-              (( delay_idx >= ${#delays[@]} )) && delay_idx=$(( ${#delays[@]} - 1 ))
-              echo "::notice::[ghcr-probe] attempt $attempt got HTTP $code for $url -- retrying in ${delays[$delay_idx]}s" >&2
-              sleep "${delays[$delay_idx]}"
-            fi
-            (( attempt++ ))
-          done
-
-          echo "$code"
-        }
+        source "$GITHUB_ACTION_PATH/../shared/ghcr-probe.sh"
 
         any_exist=false
         checked=0
@@ -120,7 +72,7 @@ runs:
 
           exists=false
 
-          bearer=$(fetch_registry_token "$path" || true)
+          bearer=$(ghcr_bearer_for "$path" "$GH_TOKEN" || true)
           if [ -z "$bearer" ]; then
             if [ "$FAIL_ON_ERROR" = "true" ]; then
               echo "::error::Failed to obtain GHCR registry token for $path. Check token value and that the package path is correct."
@@ -131,7 +83,7 @@ runs:
             continue
           fi
 
-          code=$(probe_manifest "$manifest_url" "$bearer")
+          code=$(ghcr_probe_manifest "$manifest_url" "$bearer")
           case "$code" in
             200)
               echo "Exists: ${image_url}:${effective_tag}"

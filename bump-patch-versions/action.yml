@@ -42,6 +42,7 @@ runs:
         set -euo pipefail
 
         source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+        source "$GITHUB_ACTION_PATH/../shared/ghcr-probe.sh"
 
         if ! jq -e 'type == "array"' >/dev/null <<<"$VERSION_FILES"; then
           echo "::error::version-files must be a JSON array of {path, signal, value} objects"
@@ -66,52 +67,27 @@ runs:
           fi
         }
 
-        fetch_ghcr_token() {
-          local scope_path=$1
-          local url="https://ghcr.io/token?service=ghcr.io&scope=repository:${scope_path}:pull"
-          if [ -n "$GH_TOKEN" ]; then
-            curl -sS -u "x-access-token:${GH_TOKEN}" "$url" | jq -r '.token // empty'
-          else
-            curl -sS "$url" | jq -r '.token // empty'
-          fi
-        }
-
         probe_ghcr_image() {
           local image_url=$1
           local tag=$2
           local path=${image_url#ghcr.io/}
           local manifest_url="https://ghcr.io/v2/${path}/manifests/${tag}"
           local bearer
-          bearer=$(fetch_ghcr_token "$path" || true)
+          bearer=$(ghcr_bearer_for "$path" "$GH_TOKEN" || true)
           if [ -z "$bearer" ]; then
             echo "::error::Failed to obtain GHCR token for $path" >&2
             exit 1
           fi
-          local attempt=1
-          local max_attempts=4
-          local delays=(5 15 45)
           local code
-          while (( attempt <= max_attempts )); do
-            code=$(curl -sS -L -I -o /dev/null -w '%{http_code}' \
-              -H "Authorization: Bearer $bearer" \
-              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
-              "$manifest_url" || echo "000")
-            case "$code" in
-              200) echo "true"; return ;;
-              404) echo "false"; return ;;
-              401|403)
-                echo "::error::Authentication failed probing ${image_url}:${tag} (HTTP $code)" >&2
-                exit 1
-                ;;
-            esac
-            if (( attempt < max_attempts )); then
-              local delay_idx=$(( attempt - 1 ))
-              (( delay_idx >= ${#delays[@]} )) && delay_idx=$(( ${#delays[@]} - 1 ))
-              echo "::notice::[ghcr-probe] attempt $attempt got HTTP $code for $manifest_url -- retrying in ${delays[$delay_idx]}s" >&2
-              sleep "${delays[$delay_idx]}"
-            fi
-            (( attempt++ ))
-          done
+          code=$(ghcr_probe_manifest "$manifest_url" "$bearer")
+          case "$code" in
+            200) echo "true"; return ;;
+            404) echo "false"; return ;;
+            401|403)
+              echo "::error::Authentication failed probing ${image_url}:${tag} (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
           echo "::error::Unexpected HTTP $code probing ${image_url}:${tag} after retries" >&2
           exit 1
         }
