@@ -29,7 +29,7 @@ Two lint checks enforce the conventions:
 
 | Action | Inputs | Outputs |
 |---|---|---|
-| [bump-patch-versions](#bump-patch-versions) | • `version-files`<br>• `repository`<br>• `git-host`<br>• `token` | • `bumps`<br>• `bumped`<br>• `summary` |
+| [bump-patch-versions](#bump-patch-versions) | • `version-files`<br>• `repository`<br>• `token` | • `bumps`<br>• `bumped`<br>• `summary` |
 | [check-changes-since-tag](#check-changes-since-tag) | • `tag-patterns`<br>• `paths` | • `changed`<br>• `baseline-tag`<br>• `baseline-sha`<br>• `changed-files` |
 | [check-commit-status-exists](#check-commit-status-exists) | • `commit-sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
 | [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `repository`<br>• `token` | • `exist` |
@@ -69,22 +69,21 @@ Two lint checks enforce the conventions:
 
 ### bump-patch-versions
 
-For each `path:tag-prefix1,tag-prefix2,...` entry, reads the VERSION file and — if any `{prefix}{current-version}` tag exists on the remote (`git ls-remote`) — computes a patch bump. Reads only; writes nothing to disk. Pair with `commit-files` to persist the bumps. Tool-agnostic — no platform API dependency.
+For each `{path, signal, value}` entry, reads the VERSION file and — if the matching artifact already exists — computes a patch bump. Each entry picks one signal source: `git-tag` probes a tag on the remote via `git ls-remote`; `ghcr-image` probes a GHCR image manifest. Reads only; writes nothing to disk. Pair with `commit-files` to persist the bumps.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `version-files` | yes | — | Newline-separated list of `"path:tag-prefix1,tag-prefix2,..."` entries. Each VERSION file is bumped if ANY tag `{prefix}{current-version}` exists on the remote. Example: `"VERSION:meta-v,monolith-java-v"` |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
-| `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
-| `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
+| `version-files` | yes | — | JSON array of `{"path": string, "signal": "git-tag"\|"ghcr-image", "value": string}` objects. `git-tag`: bump if tag `{value}{current-version}` exists on the remote (e.g. `value="meta-v"` + version `1.0.40` probes tag `meta-v1.0.40`). `ghcr-image`: bump if GHCR image `{value}:v{current-version}` exists (e.g. `value="ghcr.io/optivem/shop/multitier-backend-java"` + version `1.5.24` probes that image at `:v1.5.24`). |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format (used for `git-tag` probes) |
+| `token` | no | `${{ github.token }}` | Token for git remote auth and GHCR auth |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `bumps` | JSON array of `{path, old-version, new-version, release-tag}` for files that need bumping |
+| `bumps` | JSON array of `{path, old-version, new-version, release-signal}` for files that need bumping. `release-signal` is the concrete artifact reference (tag name or `image:tag`). |
 | `bumped` | `true` if at least one file needs bumping |
 | `summary` | Human-readable summary (one line per file, bumped or skipped) |
 

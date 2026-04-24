@@ -1,19 +1,19 @@
 name: 'Bump Patch Versions'
-description: 'Computes patch-version bumps for VERSION files whose matching release signal already exists. Each VERSION file declares a signal source (github-release or ghcr-image) and a value — the bump fires when the corresponding artifact exists for the current version. Reads files from the checked-out workspace; writes nothing. Pair with commit-files to persist the bumps.'
+description: 'Computes patch-version bumps for VERSION files whose matching release signal already exists. Each VERSION file declares a signal source (git-tag or ghcr-image) and a value — the bump fires when the corresponding artifact exists for the current version. Reads files from the checked-out workspace; writes nothing. Pair with commit-files to persist the bumps.'
 
 inputs:
   version-files:
     description: |
-      JSON array of {"path": string, "signal": "github-release"|"ghcr-image", "value": string} objects.
-        - signal="github-release": bump if a Release exists at tag "{value}{current-version}" (e.g. value="meta-v" + version="1.0.40" -> probes "meta-v1.0.40").
+      JSON array of {"path": string, "signal": "git-tag"|"ghcr-image", "value": string} objects.
+        - signal="git-tag": bump if a git tag exists at "{value}{current-version}" on the remote (e.g. value="meta-v" + version="1.0.40" -> probes tag "meta-v1.0.40" via `git ls-remote`).
         - signal="ghcr-image": bump if a GHCR image exists at "{value}:v{current-version}" (e.g. value="ghcr.io/optivem/shop/multitier-backend-java" + version="1.5.24" -> probes that image:v1.5.24).
     required: true
   repository:
-    description: 'Repository in owner/repo format (used for Releases API lookups). Defaults to the current repository.'
+    description: 'Repository in owner/repo format (used for git-tag probes). Defaults to the current repository.'
     required: false
     default: ${{ github.repository }}
   token:
-    description: 'Token for Releases API and GHCR auth. Defaults to github.token.'
+    description: 'Token for git remote auth and GHCR auth. Defaults to github.token.'
     required: false
     default: ${{ github.token }}
 
@@ -41,7 +41,7 @@ runs:
       run: |
         set -euo pipefail
 
-        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
 
         if ! jq -e 'type == "array"' >/dev/null <<<"$VERSION_FILES"; then
           echo "::error::version-files must be a JSON array of {path, signal, value} objects"
@@ -50,21 +50,20 @@ runs:
 
         # --- signal probes -----------------------------------------------------
 
-        probe_github_release() {
+        probe_git_tag() {
           local tag=$1
-          local stderr_file
-          stderr_file=$(mktemp)
-          if gh_retry api "repos/${REPOSITORY}/releases/tags/${tag}" --silent 2>"$stderr_file"; then
-            rm -f "$stderr_file"; echo "true"; return
+          local remote_url
+          remote_url=$(remote_query_url "$GH_TOKEN" "github.com" "$REPOSITORY")
+          local output
+          if ! output=$(git ls-remote --tags "$remote_url" "refs/tags/${tag}" 2>/dev/null); then
+            echo "::error::Failed to query tags from ${REPOSITORY}" >&2
+            exit 1
           fi
-          local code=$?
-          local stderr_content
-          stderr_content=$(cat "$stderr_file"); rm -f "$stderr_file"
-          if grep -q "HTTP 404" <<<"$stderr_content"; then
-            echo "false"; return
+          if [ -n "$output" ]; then
+            echo "true"
+          else
+            echo "false"
           fi
-          echo "::error::Unexpected failure probing release ${REPOSITORY}@${tag} (exit $code): $stderr_content" >&2
-          exit 1
         }
 
         fetch_ghcr_token() {
@@ -144,9 +143,9 @@ runs:
           fi
 
           case "$signal" in
-            github-release)
+            git-tag)
               release_signal="${value}${current_version}"
-              exists=$(probe_github_release "$release_signal")
+              exists=$(probe_git_tag "$release_signal")
               ;;
             ghcr-image)
               image_tag="v${current_version}"
@@ -154,7 +153,7 @@ runs:
               exists=$(probe_ghcr_image "$value" "$image_tag")
               ;;
             *)
-              echo "::error::Unknown signal '$signal' for $path. Expected 'github-release' or 'ghcr-image'."
+              echo "::error::Unknown signal '$signal' for $path. Expected 'git-tag' or 'ghcr-image'."
               exit 1
               ;;
           esac
