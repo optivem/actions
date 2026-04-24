@@ -1,16 +1,11 @@
 name: 'Resolve Docker Image Digests'
-description: 'Finds Docker images and resolves their digests from any container registry. Accepts either fully-qualified URLs (image-urls) or base URLs plus an optional commit-sha (base-image-urls + commit-sha). With base-image-urls, an empty commit-sha resolves to the :latest tag; a set commit-sha resolves to the :sha-<commit-sha> tag — matching docker/metadata-action''s type=sha,format=long convention used by the commit stage.'
+description: 'Finds Docker images and resolves their digests from any container registry. Takes base image URLs plus an optional commit SHA — an empty commit-sha resolves to the :latest tag; a set commit-sha resolves to the :sha-<commit-sha> tag, matching docker/metadata-action''s type=sha,format=long convention used by the commit stage.'
 inputs:
-  image-urls:
-    description: 'Fully-qualified image URLs (with :tag or @digest). Mutually exclusive with base-image-urls. Supports newline-separated list or JSON array format.'
-    required: false
-    default: ''
   base-image-urls:
-    description: 'Base image URLs (no :tag). Combined with commit-sha to produce the image tag. Mutually exclusive with image-urls. Supports newline-separated list or JSON array format.'
-    required: false
-    default: ''
+    description: 'Base image URLs (no :tag). Combined with commit-sha to produce the image tag. Supports newline-separated list or JSON array format.'
+    required: true
   commit-sha:
-    description: 'Git commit SHA. When set with base-image-urls, tag is :sha-<commit-sha>; when empty, tag is :latest. Ignored when image-urls is used.'
+    description: 'Git commit SHA. When set, the resolved tag is :sha-<commit-sha>; when empty, the resolved tag is :latest.'
     required: false
     default: ''
 outputs:
@@ -27,7 +22,6 @@ runs:
       id: get-digests
       shell: bash
       env:
-        IMAGE_URLS: ${{ inputs.image-urls }}
         BASE_IMAGE_URLS: ${{ inputs.base-image-urls }}
         COMMIT_SHA: ${{ inputs.commit-sha }}
       run: bash "${{ github.action_path }}/resolve-docker-image-digests.sh"

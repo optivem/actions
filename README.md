@@ -34,7 +34,7 @@ Two lint checks enforce the conventions:
 | [check-commit-status-exists](#check-commit-status-exists) | • `commit-sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
 | [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `repository`<br>• `token` | • `exist` |
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
-| [check-tag-pattern-exists](#check-tag-pattern-exists) | • `tag-pattern`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
+| [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `subject`<br>• `baseline` | • `newer` |
 | [cleanup-github-deployments](#cleanup-github-deployments) | • `keep-count`<br>• `retention-days`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [cleanup-github-prereleases](#cleanup-github-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
@@ -45,26 +45,24 @@ Two lint checks enforce the conventions:
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
 | [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
 | [create-component-tags](#create-component-tags) | • `components`<br>• `repository`<br>• `git-host`<br>• `token` | • `created-tags`<br>• `skipped-tags` |
-| [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | • `service-urls` |
+| [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
 | [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
 | [get-last-successful-github-workflow-run-timestamp](#get-last-successful-github-workflow-run-timestamp) | • `workflow-name`<br>• `repository`<br>• `token` | • `timestamp` |
-| [map-signoff-to-stage-result](#map-signoff-to-stage-result) | • `result` | • `stage-result` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
 | [read-base-version](#read-base-version) | • `file` | • `base-version` |
 | [render-stage-summary](#render-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `stage-content`<br>• `stage-success-content`<br>• `stage-skipped-content` | — |
 | [render-system-stage-summary](#render-system-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `environment`<br>• `success-version`<br>• `success-artifact-ids`<br>• `skipped-reason`<br>• `latest-artifact-ids`<br>• `latest-updated-at`<br>• `last-run-at` | — |
 | [resolve-commit](#resolve-commit) | • `repository`<br>• `ref`<br>• `token`<br>• `git-host` | • `sha`<br>• `timestamp` |
-| [resolve-docker-image-digests](#resolve-docker-image-digests) | • `image-urls`<br>• `base-image-urls`<br>• `commit-sha` | • `image-digest-urls`<br>• `latest-updated-at` |
+| [resolve-docker-image-digests](#resolve-docker-image-digests) | • `base-image-urls`<br>• `commit-sha` | • `image-digest-urls`<br>• `latest-updated-at` |
 | [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
 | [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
 | [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
 | [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 | [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
 | [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
-| [validate-version-unreleased](#validate-version-unreleased) | • `version`<br>• `on-already-released`<br>• `bump-workflow-file`<br>• `rc-workflow-file` | • `already-released` |
 | [wait-for-endpoints](#wait-for-endpoints) | • `endpoints`<br>• `compose-file`<br>• `working-directory`<br>• `max-attempts`<br>• `wait-seconds`<br>• `timeout-seconds` | — |
 | [wait-for-github-workflow](#wait-for-github-workflow) | • `workflow`<br>• `commit-sha`<br>• `repository`<br>• `poll-interval`<br>• `watch-interval`<br>• `max-discovery-attempts`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 
@@ -168,15 +166,15 @@ Fetches the base branch from origin and runs `git merge-base --is-ancestor <sha>
 
 **Notes:** Use to guard downstream steps against `workflow_dispatch` inputs pointing at commits not in the base branch.
 
-### check-tag-pattern-exists
+### check-tag-exists
 
-Queries a remote git repository with `git ls-remote --tags "refs/tags/<pattern>"` and reports whether at least one tag matches. Tool-agnostic — no platform API dependency.
+Queries a remote git repository with `git ls-remote --tags "refs/tags/<tag>"` and reports whether at least one tag matches. Accepts either an exact tag or a glob pattern. Tool-agnostic — no platform API dependency.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `tag-pattern` | yes | — | Tag pattern to match (e.g., `meta-v*`) |
+| `tag` | yes | — | Exact tag or glob pattern to match (e.g., `monolith-java-v1.0.0` or `meta-v*`) |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
 | `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
 | `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
@@ -401,12 +399,6 @@ Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working
 | `compose-file` | no | `` | Docker Compose file to use (e.g., `docker-compose.yml`) |
 | `working-directory` | yes | — | Working directory containing the Docker Compose file |
 
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `service-urls` | JSON array of deployed service URLs. Empty array for Compose deployments — callers know the URLs from their compose file and local port bindings. Present for symmetry with `deploy-to-cloud-run` so callers can consume a uniform `service-urls` contract across deploy backends. |
-
 ### evaluate-run-gate
 
 Aggregates multiple skip signals into a single go/no-go decision for a pipeline stage. Evaluates `skip-conditions` in priority order; the first entry whose `when` is true wins and yields `should-run=false` plus its `reason`. If none match, `should-run=true` and `skip-reason` is empty. Generic — use for any stage that composes multiple skip signals (release race, stale artifacts, missing inputs, etc.).
@@ -499,22 +491,6 @@ Returns the `createdAt` timestamp of the most recent successful run of a given w
 |---|---|
 | `timestamp` | ISO 8601 `createdAt` of the last successful run. Empty if no previous successful run exists. |
 
-### map-signoff-to-stage-result
-
-Pure string mapping. Emits `stage-result=success` if `result == approved`, otherwise `stage-result=failure`. No git, no platform dependency.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `result` | yes | — | Signoff decision: `approved` or anything else (treated as rejection) |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `stage-result` | `success` if `result` is `approved`, `failure` otherwise |
-
 ### publish-tag
 
 Publishes a git tag to origin at a given commit SHA (or current HEAD) using the `github-actions[bot]` identity. Idempotent — no-ops if the tag already exists at the same commit, tolerates concurrent creation, fails hard only if the remote tag points at a different commit.
@@ -599,15 +575,14 @@ Resolves a remote git ref (branch, tag, or SHA) to its 40-char commit SHA + comm
 
 ### resolve-docker-image-digests
 
-Finds Docker images and resolves their `sha256:` digests from any container registry. Accepts either fully-qualified URLs (`image-urls`) or base URLs plus an optional commit SHA (`base-image-urls` + `commit-sha`). With `base-image-urls`, an empty `commit-sha` resolves to the `:latest` tag; a set `commit-sha` resolves to the `:sha-<commit-sha>` tag — matching `docker/metadata-action`'s `type=sha,format=long` convention used by the commit stage. Emits a JSON array of digest URLs (same order as input) and the most recent image creation timestamp across all processed images. Delegates to `resolve-docker-image-digests.sh`.
+Finds Docker images and resolves their `sha256:` digests from any container registry. Takes base image URLs plus an optional commit SHA — an empty `commit-sha` resolves to the `:latest` tag; a set `commit-sha` resolves to the `:sha-<commit-sha>` tag, matching `docker/metadata-action`'s `type=sha,format=long` convention used by the commit stage. Emits a JSON array of digest URLs (same order as input) and the most recent image creation timestamp across all processed images. Delegates to `resolve-docker-image-digests.sh`.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `image-urls` | no | `` | Fully-qualified image URLs (with `:tag` or `@digest`). Mutually exclusive with `base-image-urls`. Supports newline-separated list or JSON array format. |
-| `base-image-urls` | no | `` | Base image URLs (no `:tag`). Combined with `commit-sha` to produce the image tag. Mutually exclusive with `image-urls`. Supports newline-separated list or JSON array format. |
-| `commit-sha` | no | `` | Git commit SHA. When set with `base-image-urls`, tag is `:sha-<commit-sha>`; when empty, tag is `:latest`. Ignored when `image-urls` is used. |
+| `base-image-urls` | yes | — | Base image URLs (no `:tag`). Combined with `commit-sha` to produce the image tag. Supports newline-separated list or JSON array format. |
+| `commit-sha` | no | `` | Git commit SHA. When set, the resolved tag is `:sha-<commit-sha>`; when empty, the resolved tag is `:latest`. |
 
 **Outputs**
 
@@ -718,7 +693,7 @@ Iterates the newline-separated `names` list and uses `printenv` to confirm each 
 
 ### validate-tag-exists
 
-Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<tag>"`. Fails the step if missing. Inverse of `validate-version-unreleased`.
+Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<tag>"`. Fails the step if missing. For the inverse (assert a tag does NOT exist) or for soft-predicate usage, use `check-tag-exists` and gate on its `exists` output.
 
 **Inputs**
 
@@ -728,25 +703,6 @@ Asserts that a git tag exists on a remote via `git ls-remote --tags "refs/tags/<
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
 | `token` | no | `${{ github.token }}` | Token for authenticating to the remote |
 | `git-host` | no | `github.com` | Git host to query (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
-
-### validate-version-unreleased
-
-Asserts that a fully-composed version tag does NOT yet exist locally via `git tag -l`. By default fails the step if the tag exists; with `on-already-released: skip`, sets the `already-released` output so the caller can short-circuit downstream jobs instead. Under `fail` mode, when `bump-workflow-file` and/or `rc-workflow-file` are set, the error and `$GITHUB_STEP_SUMMARY` include clickable links to those workflows so the operator can recover in one click — recovering from an already-released version usually needs two steps (bump VERSION, then create a new RC), so pass both when applicable. Caller is responsible for composing the full tag (prefix + version). Works against the local workspace only.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `version` | yes | — | Fully composed version tag to check (e.g., `v1.0.0`, `monolith-java-v1.0.0`, `meta-v1.0.0-rc.1-qa-approved`) |
-| `on-already-released` | no | `fail` | Behavior when the tag exists. `fail` exits with an error. `skip` exits successfully and sets `already-released=true` — useful for scheduled acceptance-stage runs that race with an in-flight release before the post-release VERSION bump lands. |
-| `bump-workflow-file` | no | `` | Filename of the workflow that bumps VERSION (e.g. `gh-auto-bump-patch.yml`). When set and the version is already released, the error and job summary include a clickable link to run that workflow. Ignored when `on-already-released=skip`. |
-| `rc-workflow-file` | no | `` | Filename of the workflow that creates a new RC prerelease (e.g. `gh-acceptance-stage.yml`). When set and the version is already released, the error and job summary include a clickable link to run that workflow after the VERSION bump. Recovering from an already-released version usually needs two steps — bump VERSION, then create a new RC — so pass both workflow inputs when applicable. Ignored when `on-already-released=skip`. |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `already-released` | `true` if the version tag already exists (only possible when `on-already-released=skip`; otherwise the step fails). `false` when the tag does not exist. |
 
 ### wait-for-endpoints
 
