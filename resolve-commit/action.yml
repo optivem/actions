@@ -39,15 +39,13 @@ runs:
       run: |
         set -euo pipefail
 
+        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+
         if [ -z "$REF" ]; then
           REF="main"
         fi
 
-        if [ -n "$TOKEN" ]; then
-          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
-        else
-          remote_url="https://${GIT_HOST}/${REPO}.git"
-        fi
+        remote_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
 
         # Shallow-fetch just the target ref into a throwaway repo. Works for branches,
         # tags, and SHAs (GitHub has uploadpack.allowReachableSHA1InWant enabled).

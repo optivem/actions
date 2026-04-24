@@ -35,13 +35,11 @@ runs:
         TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
+        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+
         echo "Checking for tag '$TAG' in $REPO..."
 
-        if [ -n "$TOKEN" ]; then
-          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
-        else
-          remote_url="https://${GIT_HOST}/${REPO}.git"
-        fi
+        remote_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
 
         if ! output=$(git ls-remote --tags "$remote_url" "refs/tags/${TAG}" 2>/dev/null); then
           echo "::error::Failed to query tags from $REPO"

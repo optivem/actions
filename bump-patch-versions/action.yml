@@ -43,11 +43,9 @@ runs:
       run: |
         set -euo pipefail
 
-        if [ -n "$TOKEN" ]; then
-          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
-        else
-          remote_url="https://${GIT_HOST}/${REPO}.git"
-        fi
+        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+
+        remote_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
 
         bumps='[]'
         bumped=false

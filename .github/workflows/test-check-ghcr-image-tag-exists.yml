@@ -1,0 +1,81 @@
+name: test-check-ghcr-image-tag-exists
+
+# Manual smoke test for the check-ghcr-image-tag-exists action.
+# Probes one known-existing image:tag and one known-missing tag,
+# then prints the outputs so you can eyeball the results.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-url:
+        description: 'GHCR image URL to probe (e.g. ghcr.io/optivem/shop/multitier-backend-java). No ":tag" suffix.'
+        required: true
+        type: string
+        default: 'ghcr.io/optivem/shop/multitier-backend-java'
+      existing-tag:
+        description: 'Tag that should exist in the registry.'
+        required: true
+        type: string
+      missing-tag:
+        description: 'Tag that should NOT exist in the registry.'
+        required: false
+        type: string
+        default: 'v0.0.0-never-released'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Probe images
+        id: probe
+        uses: ./check-ghcr-image-tag-exists
+        with:
+          images: |
+            [
+              {"key": "existing", "image-url": "${{ inputs.image-url }}", "tag": "${{ inputs.existing-tag }}"},
+              {"key": "missing",  "image-url": "${{ inputs.image-url }}", "tag": "${{ inputs.missing-tag }}"}
+            ]
+
+      - name: Show outputs
+        env:
+          RESULTS: ${{ steps.probe.outputs.results }}
+          ANY_EXIST: ${{ steps.probe.outputs.any-exist }}
+        run: |
+          set -euo pipefail
+          echo "results:"
+          jq . <<<"$RESULTS"
+          echo "any-exist: $ANY_EXIST"
+
+      - name: Assert expectations
+        env:
+          RESULTS: ${{ steps.probe.outputs.results }}
+          ANY_EXIST: ${{ steps.probe.outputs.any-exist }}
+        run: |
+          set -euo pipefail
+
+          existing=$(jq -r '.[] | select(.key=="existing") | .exists' <<<"$RESULTS")
+          missing=$(jq -r '.[] | select(.key=="missing") | .exists' <<<"$RESULTS")
+
+          fail=0
+          if [[ "$existing" != "true" ]]; then
+            echo "::error::Expected existing-tag to be exists=true, got $existing"
+            fail=1
+          fi
+          if [[ "$missing" != "false" ]]; then
+            echo "::error::Expected missing-tag to be exists=false, got $missing"
+            fail=1
+          fi
+          if [[ "$ANY_EXIST" != "true" ]]; then
+            echo "::error::Expected any-exist=true (one input exists), got $ANY_EXIST"
+            fail=1
+          fi
+
+          if (( fail == 0 )); then
+            echo "All assertions passed."
+          else
+            exit 1
+          fi

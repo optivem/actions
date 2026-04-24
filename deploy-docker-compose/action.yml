@@ -3,10 +3,10 @@ description: 'Deploys (brings up) a Docker Compose stack in detached mode — th
 
 inputs:
   environment:
-    description: 'Label used in logs to identify the target (e.g., acceptance, qa, production) — display only'
+    description: 'Display-only label shown in step logs (e.g., acceptance, qa, production). Required — every run must announce its target. The action does not route based on this value.'
     required: true
   version:
-    description: 'Version label used in logs (e.g., v1.0.0-rc.1) — display only'
+    description: 'Display-only version label shown in step logs (e.g., v1.0.0-rc.1). Required — every run must announce the version being deployed. The action does not select artifacts based on this value.'
     required: true
   image-urls:
     description: 'Docker image URLs being run (JSON array format) — surfaced in logs'

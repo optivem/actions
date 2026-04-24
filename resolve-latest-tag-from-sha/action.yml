@@ -39,14 +39,12 @@ runs:
         TOKEN: ${{ inputs.token }}
         GIT_HOST: ${{ inputs.git-host }}
       run: |
+        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+
         # TODO(scale): git ls-remote --tags fetches the full tag list and filters client-side.
         # For repos with thousands of tags this is slower than a paginated `gh api /repos/.../tags`.
         # At this repo's scale (dozens of tags) it is fine. Revisit when tag counts grow.
-        if [ -n "$TOKEN" ]; then
-          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
-        else
-          remote_url="https://${GIT_HOST}/${REPO}.git"
-        fi
+        remote_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
 
         # git ls-remote --tags prints: "<sha>\t<ref>".
         # Annotated tags appear twice: once for the tag-object SHA (refs/tags/X) and once

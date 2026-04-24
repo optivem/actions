@@ -1,5 +1,7 @@
 # Component Docker Tagging in Production Stage
 
+🤖 **Picked up by agent** — `ValentinaLaptop` at `2026-04-24T09:09:31Z`
+
 ## Context
 
 Adds component-level Docker tagging to prod-stage workflows in `shop/`. The existing `create-component-tags` step stays in place (it's load-bearing for the patch-version auto-bump mechanism, see Follow-up). Both coexist until the bump mechanism is migrated in a separate project.

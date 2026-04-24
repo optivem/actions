@@ -44,16 +44,14 @@ runs:
       run: |
         set -euo pipefail
 
+        source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
+
         if [ -z "$PREFIX" ]; then
           echo "::error::tag-prefix is required."
           exit 1
         fi
 
-        if [ -n "$TOKEN" ]; then
-          remote_url="https://x-access-token:${TOKEN}@${GIT_HOST}/${REPO}.git"
-        else
-          remote_url="https://${GIT_HOST}/${REPO}.git"
-        fi
+        remote_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
 
         if [ -n "$SUFFIX" ]; then
           pattern="refs/tags/${PREFIX}*${SUFFIX}"

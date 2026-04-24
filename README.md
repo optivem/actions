@@ -412,8 +412,8 @@ Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `environment` | yes | — | Label used in logs to identify the target (e.g., acceptance, qa, production) — display only |
-| `version` | yes | — | Version label used in logs (e.g., `v1.0.0-rc.1`) — display only |
+| `environment` | yes | — | Display-only label shown in step logs (e.g., acceptance, qa, production). Required — every run must announce its target. The action does not route based on this value. |
+| `version` | yes | — | Display-only version label shown in step logs (e.g., `v1.0.0-rc.1`). Required — every run must announce the version being deployed. The action does not select artifacts based on this value. |
 | `image-urls` | yes | — | Docker image URLs being run (JSON array format) — surfaced in logs |
 | `compose-file` | no | `` | Docker Compose file to use (e.g., `docker-compose.yml`) |
 | `working-directory` | yes | — | Working directory containing the Docker Compose file |
