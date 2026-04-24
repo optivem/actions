@@ -32,7 +32,7 @@ Two lint checks enforce the conventions:
 | [bump-patch-versions](#bump-patch-versions) | • `version-files`<br>• `repository`<br>• `token` | • `bumps`<br>• `bumped`<br>• `summary` |
 | [check-changes-since-tag](#check-changes-since-tag) | • `tag-patterns`<br>• `paths` | • `changed`<br>• `baseline-tag`<br>• `baseline-sha`<br>• `changed-files` |
 | [check-commit-status-exists](#check-commit-status-exists) | • `commit-sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
-| [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `repository`<br>• `token` | • `exist` |
+| [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `image-urls`<br>• `tag`<br>• `token`<br>• `fail-on-error` | • `exist`<br>• `results` |
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `subject`<br>• `baseline` | • `newer` |
@@ -132,21 +132,23 @@ Boolean existence check for a success commit-status on `head-sha` matching `(con
 
 ### check-ghcr-packages-exist
 
-Probes each of the given GHCR image URLs for the probe tag (default `latest`) via OCI `HEAD /v2/{path}/manifests/{tag}` and sets `exist=true` if at least one exists, `false` otherwise. Uses the OCI registry rather than the GitHub Packages REST API, so it works uniformly for user- and org-owned repos and for public and private packages. Useful for skipping pipeline stages when no artifacts have been built yet. Silently resolves to `false` on token/auth errors so callers don't block on unrelated registry glitches; downstream image resolution emits the actionable error.
+Probes GHCR packages to determine whether a tag exists for each, via OCI `HEAD /v2/{path}/manifests/{tag}`. Each input line is either a plain `ghcr.io/{owner}/{repo}/{image}` path (probed with the default `tag` input) or `ghcr.io/{owner}/{repo}/{image}:{tag}` (per-line tag override). Works uniformly for user- and org-owned repos and for public/private packages. Two usage shapes: preflight gate — read the any-of `exist` output; per-image probe — read the keyed `results` output. Auth/unexpected-HTTP errors are soft by default (treated as missing); set `fail-on-error=true` for strict mode.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `image-urls` | yes | — | Newline-separated list of `ghcr.io/{owner}/{repo}/{image}` paths (omit `:tag` suffix). `exist=true` if at least one has the probe tag. |
-| `tag` | no | `latest` | Image tag to probe. `latest` is the reliable "any artifact built" signal since the commit stage always publishes it. |
-| `token` | no | `${{ github.token }}` | GitHub token used to exchange for a GHCR registry bearer. |
+| `image-urls` | yes | — | Newline-separated list of GHCR packages to probe. Each line is either `ghcr.io/{owner}/{repo}/{image}` (uses the default `tag` input) or `ghcr.io/{owner}/{repo}/{image}:{tag}` (per-line tag override). OCI image paths contain no `:` so the tag separator is unambiguous. |
+| `tag` | no | `latest` | Default tag to probe when a line omits its own `:tag` suffix. `latest` is the reliable "any artifact has been built" signal since the commit stage always publishes it alongside versioned tags. |
+| `token` | no | `${{ github.token }}` | Token used for GHCR authentication. |
+| `fail-on-error` | no | `false` | If `true`, fail the step on authentication errors, unexpected HTTP codes, or token-exchange failures. If `false` (default), those conditions emit a warning and the affected entry is reported as `exists=false`. Strict mode is appropriate for release-gate checks where an auth error must not be silently swallowed. |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `exist` | `true` if any probed image has the tag published, `false` otherwise. |
+| `exist` | Whether any of the probed packages have the probed tag published (`true`/`false`). In soft-fail mode (the default), authentication errors resolve this to `false` — the downstream stage will surface a clearer error if packages are genuinely missing vs. unauthorized. |
+| `results` | JSON array of `{"image": string, "tag": string, "exists": boolean}` objects, one entry per input line. `image` is the URL without any `:tag` suffix; `tag` is the effective tag probed (per-line override if given, else the `tag` input default). Preserves input order. |
 
 ### check-sha-on-branch
 
@@ -451,7 +453,7 @@ Generates a production-release title and a markdown notes file (written to a `mk
 
 ### get-commit-status
 
-Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selects the first match by context (and optionally state). Fails the step if no match is found. Writes description/state/target-url to outputs and appends a line to `$GITHUB_STEP_SUMMARY`.
+Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selects the first match by context (and optionally state). Returns empty outputs if no match is found (caller-side check required). Writes description/state/target-url to outputs and appends a line to `$GITHUB_STEP_SUMMARY`.
 
 **Inputs**
 

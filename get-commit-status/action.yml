@@ -1,5 +1,5 @@
 name: 'Get Commit Status'
-description: 'Reads the most recent commit status with a given context (and optionally a required state) from a commit. Fails if no matching status is found.'
+description: 'Reads the most recent commit status with a given context (and optionally a required state) from a commit. Returns empty outputs if no matching status is found.'
 inputs:
   commit-sha:
     description: 'Commit SHA to read the status from'
@@ -49,8 +49,11 @@ runs:
         fi
         STATUS_JSON=$(gh_retry api "repos/$REPO/commits/$SHA/statuses" --jq "$JQ")
         if [ -z "$STATUS_JSON" ] || [ "$STATUS_JSON" = "null" ]; then
-          echo "::error::No ${STATE_FILTER:+$STATE_FILTER }commit status with context '$CONTEXT' found on $REPO commit $SHA"
-          exit 1
+          echo "description=" >> "$GITHUB_OUTPUT"
+          echo "state=" >> "$GITHUB_OUTPUT"
+          echo "target-url=" >> "$GITHUB_OUTPUT"
+          echo "No ${STATE_FILTER:+$STATE_FILTER }commit status with context '$CONTEXT' found on $REPO commit $SHA" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
         fi
         DESCRIPTION=$(echo "$STATUS_JSON" | jq -r '.description // ""')
         STATE=$(echo "$STATUS_JSON" | jq -r '.state // ""')

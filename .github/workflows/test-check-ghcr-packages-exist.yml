@@ -1,0 +1,110 @@
+name: test-check-ghcr-packages-exist
+
+# Manual smoke test for the check-ghcr-packages-exist action.
+# Probes three entries in one call:
+#   1. URL-only line  — uses the default 'tag' input (existing)
+#   2. URL:missing    — per-line override (should be missing)
+#   3. URL:existing   — per-line override (explicit, should match #1)
+# Asserts the 'exist' and 'results' outputs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image-url:
+        description: 'GHCR image URL to probe (e.g. ghcr.io/optivem/shop/multitier-backend-java). No ":tag" suffix.'
+        required: true
+        type: string
+        default: 'ghcr.io/optivem/shop/multitier-backend-java'
+      existing-tag:
+        description: 'Tag that should exist in the registry.'
+        required: true
+        type: string
+      missing-tag:
+        description: 'Tag that should NOT exist in the registry.'
+        required: false
+        type: string
+        default: 'v0.0.0-never-released'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Probe packages (mixed default-tag and per-line override)
+        id: probe
+        uses: ./check-ghcr-packages-exist
+        with:
+          tag: ${{ inputs.existing-tag }}
+          fail-on-error: 'true'
+          image-urls: |
+            ${{ inputs.image-url }}
+            ${{ inputs.image-url }}:${{ inputs.missing-tag }}
+            ${{ inputs.image-url }}:${{ inputs.existing-tag }}
+
+      - name: Show outputs
+        env:
+          EXIST: ${{ steps.probe.outputs.exist }}
+          RESULTS: ${{ steps.probe.outputs.results }}
+        run: |
+          set -euo pipefail
+          echo "exist: $EXIST"
+          echo "results:"
+          jq . <<<"$RESULTS"
+
+      - name: Assert expectations
+        env:
+          EXIST: ${{ steps.probe.outputs.exist }}
+          RESULTS: ${{ steps.probe.outputs.results }}
+          IMAGE_URL: ${{ inputs.image-url }}
+          EXISTING_TAG: ${{ inputs.existing-tag }}
+          MISSING_TAG: ${{ inputs.missing-tag }}
+        run: |
+          set -euo pipefail
+
+          fail=0
+
+          # 1. exist should be true (two of three entries exist).
+          if [[ "$EXIST" != "true" ]]; then
+            echo "::error::Expected exist=true, got $EXIST"
+            fail=1
+          fi
+
+          # 2. results should have exactly 3 entries, in input order.
+          len=$(jq 'length' <<<"$RESULTS")
+          if [[ "$len" != "3" ]]; then
+            echo "::error::Expected results length=3, got $len"
+            fail=1
+          fi
+
+          # 3. Entry 0 — URL-only line, uses default tag (existing).
+          got=$(jq -c '.[0]' <<<"$RESULTS")
+          want=$(jq -cn --arg i "$IMAGE_URL" --arg t "$EXISTING_TAG" '{image: $i, tag: $t, exists: true}')
+          if [[ "$got" != "$want" ]]; then
+            echo "::error::Entry 0 mismatch (default-tag fallback). got=$got want=$want"
+            fail=1
+          fi
+
+          # 4. Entry 1 — per-line override with missing tag.
+          got=$(jq -c '.[1]' <<<"$RESULTS")
+          want=$(jq -cn --arg i "$IMAGE_URL" --arg t "$MISSING_TAG" '{image: $i, tag: $t, exists: false}')
+          if [[ "$got" != "$want" ]]; then
+            echo "::error::Entry 1 mismatch (per-line override, missing). got=$got want=$want"
+            fail=1
+          fi
+
+          # 5. Entry 2 — per-line override with existing tag.
+          got=$(jq -c '.[2]' <<<"$RESULTS")
+          want=$(jq -cn --arg i "$IMAGE_URL" --arg t "$EXISTING_TAG" '{image: $i, tag: $t, exists: true}')
+          if [[ "$got" != "$want" ]]; then
+            echo "::error::Entry 2 mismatch (per-line override, existing). got=$got want=$want"
+            fail=1
+          fi
+
+          if (( fail == 0 )); then
+            echo "All assertions passed."
+          else
+            exit 1
+          fi

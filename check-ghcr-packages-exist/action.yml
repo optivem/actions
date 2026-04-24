@@ -1,23 +1,30 @@
 name: 'Check GHCR Packages Exist'
-description: 'Checks whether ANY of the given GHCR images have a tag published at the probe tag (default "latest"). Uses OCI HEAD /manifests/{tag} rather than the GitHub Packages API, so it works uniformly for user- and org-owned repos and for public and private packages. Useful as a preflight gate to skip pipeline stages when no commit-stage artifacts have been built yet.'
+description: 'Probes GHCR packages to determine whether a tag exists for each. Uses OCI HEAD /manifests/{tag} — works uniformly for user- and org-owned repos and for public and private packages. Two usage shapes: (1) preflight gate — pass URL-only lines and read the any-of "exist" output; (2) per-image probe — pass "image:tag" lines (mixed per-line tags allowed) and read the keyed "results" output. Auth/unexpected-HTTP errors are soft by default (treated as missing); set fail-on-error=true for strict mode.'
 
 inputs:
   image-urls:
-    description: 'Newline-separated list of ghcr.io/{owner}/{repo}/{image} paths (omit the ":tag" suffix). Output exist=true if at least one of these images has the probe tag published.'
+    description: 'Newline-separated list of GHCR packages to probe. Each line is either "ghcr.io/{owner}/{repo}/{image}" (uses the default "tag" input) or "ghcr.io/{owner}/{repo}/{image}:{tag}" (per-line tag override). OCI image paths contain no ":" so the tag separator is unambiguous.'
     required: true
   tag:
-    description: 'Image tag to probe for. Defaults to "latest" — the commit stage always publishes this alongside versioned tags, so "latest" is the reliable "any artifact has been built" signal.'
+    description: 'Default tag to probe when a line omits its own ":tag" suffix. Defaults to "latest" — the commit stage always publishes this alongside versioned tags, so "latest" is the reliable "any artifact has been built" signal.'
     required: false
     default: 'latest'
   token:
     description: 'Token used for GHCR authentication. Defaults to github.token.'
     required: false
     default: ${{ github.token }}
+  fail-on-error:
+    description: 'If "true", fail the step on authentication errors, unexpected HTTP codes, or token-exchange failures. If "false" (default), those conditions emit a warning and the affected entry is reported as exists=false. Strict mode is appropriate for release-gate checks where an auth error must not be silently swallowed.'
+    required: false
+    default: 'false'
 
 outputs:
   exist:
-    description: 'Whether any of the probed images have the tag published (true/false). Silently resolves to false on authentication errors — the downstream stage will surface a clearer error if images are genuinely missing vs. unauthorized.'
+    description: 'Whether any of the probed packages have the probed tag published (true/false). In soft-fail mode (the default), authentication errors resolve this to false — the downstream stage will surface a clearer error if packages are genuinely missing vs. unauthorized.'
     value: ${{ steps.check.outputs.exist }}
+  results:
+    description: 'JSON array of {"image": string, "tag": string, "exists": boolean} objects, one entry per input line. "image" is the URL without any ":tag" suffix; "tag" is the effective tag probed (per-line override if given, else the "tag" input default). Preserves input order.'
+    value: ${{ steps.check.outputs.results }}
 
 runs:
   using: 'composite'
@@ -29,6 +36,7 @@ runs:
         IMAGE_URLS: ${{ inputs.image-urls }}
         TAG: ${{ inputs.tag }}
         GH_TOKEN: ${{ inputs.token }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
       run: |
         set -euo pipefail
 
@@ -84,48 +92,72 @@ runs:
 
         any_exist=false
         checked=0
+        results='[]'
 
-        while IFS= read -r image_url; do
+        while IFS= read -r line; do
           # Trim whitespace and skip blanks.
-          image_url=$(printf '%s' "$image_url" | tr -d '[:space:]')
-          [ -z "$image_url" ] && continue
+          line=$(printf '%s' "$line" | tr -d '[:space:]')
+          [ -z "$line" ] && continue
 
-          if [[ "$image_url" != ghcr.io/* ]]; then
-            echo "::error::image-urls entries must begin with 'ghcr.io/'. Got: $image_url"
+          if [[ "$line" != ghcr.io/* ]]; then
+            echo "::error::image-urls entries must begin with 'ghcr.io/'. Got: $line"
             exit 1
           fi
 
-          if [[ "$image_url" == *:* ]]; then
-            echo "::error::image-urls entries must omit the ':tag' suffix. Got: $image_url"
-            exit 1
+          # Parse optional ":tag" suffix. OCI image paths contain no ":", so
+          # splitting on the last ":" is unambiguous.
+          if [[ "$line" == *:* ]]; then
+            image_url=${line%:*}
+            effective_tag=${line##*:}
+          else
+            image_url=$line
+            effective_tag=$TAG
           fi
 
           checked=$((checked + 1))
           path=${image_url#ghcr.io/}
-          manifest_url="https://ghcr.io/v2/${path}/manifests/${TAG}"
+          manifest_url="https://ghcr.io/v2/${path}/manifests/${effective_tag}"
+
+          exists=false
 
           bearer=$(fetch_registry_token "$path" || true)
           if [ -z "$bearer" ]; then
+            if [ "$FAIL_ON_ERROR" = "true" ]; then
+              echo "::error::Failed to obtain GHCR registry token for $path. Check token value and that the package path is correct."
+              exit 1
+            fi
             echo "::warning::Failed to obtain GHCR registry token for $path — treating as missing."
+            results=$(jq -c --arg image "$image_url" --arg tag "$effective_tag" --argjson exists false '. + [{image: $image, tag: $tag, exists: $exists}]' <<<"$results")
             continue
           fi
 
           code=$(probe_manifest "$manifest_url" "$bearer")
           case "$code" in
             200)
-              echo "Exists: ${image_url}:${TAG}"
+              echo "Exists: ${image_url}:${effective_tag}"
+              exists=true
               any_exist=true
               ;;
             404)
-              echo "Missing: ${image_url}:${TAG}"
+              echo "Missing: ${image_url}:${effective_tag}"
               ;;
             401|403)
-              echo "::warning::Authentication failed probing ${image_url}:${TAG} (HTTP $code). Treating as missing — check token scope (needs read:packages) if images should exist."
+              if [ "$FAIL_ON_ERROR" = "true" ]; then
+                echo "::error::Authentication failed probing ${image_url}:${effective_tag} (HTTP $code). Check token scope (needs read:packages)."
+                exit 1
+              fi
+              echo "::warning::Authentication failed probing ${image_url}:${effective_tag} (HTTP $code). Treating as missing — check token scope (needs read:packages) if images should exist."
               ;;
             *)
-              echo "::warning::Unexpected HTTP $code probing ${image_url}:${TAG} after retries — treating as missing."
+              if [ "$FAIL_ON_ERROR" = "true" ]; then
+                echo "::error::Unexpected HTTP $code probing ${image_url}:${effective_tag} after retries."
+                exit 1
+              fi
+              echo "::warning::Unexpected HTTP $code probing ${image_url}:${effective_tag} after retries — treating as missing."
               ;;
           esac
+
+          results=$(jq -c --arg image "$image_url" --arg tag "$effective_tag" --argjson exists "$exists" '. + [{image: $image, tag: $tag, exists: $exists}]' <<<"$results")
         done <<< "$IMAGE_URLS"
 
         if [ "$checked" = "0" ]; then
@@ -133,9 +165,11 @@ runs:
           exit 1
         fi
 
-        if [ "$any_exist" = "true" ]; then
-          echo "exist=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "::notice::No ${TAG} tag found on any of the $checked probed images. Commit stage has not produced artifacts yet — skipping."
-          echo "exist=false" >> "$GITHUB_OUTPUT"
+        if [ "$any_exist" != "true" ]; then
+          echo "::notice::No tag found on any of the $checked probed packages. Commit stage has not produced artifacts yet — skipping."
         fi
+
+        {
+          echo "exist=$any_exist"
+          echo "results=$results"
+        } >> "$GITHUB_OUTPUT"

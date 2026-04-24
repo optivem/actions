@@ -12,3 +12,4 @@ Items with no consumer-visible surface change. Safe to land independently of con
   - Affects: `check-ghcr-image-tag-exists`, `check-ghcr-packages-exist`, `bump-patch-versions`
   - Consumers to update: none (internal shell refactor; action input/output contracts unchanged)
   - Category: devops-alignment
+VJ: why is tha tbetter comapred to currenr
