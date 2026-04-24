@@ -45,7 +45,6 @@ Two lint checks enforce the conventions:
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
 | [compose-tags](#compose-tags) | • `versions`<br>• `template` | • `tags` |
 | [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
-| [create-component-tags](#create-component-tags) | • `components`<br>• `repository`<br>• `git-host`<br>• `token` | • `created-tags`<br>• `skipped-tags` |
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
@@ -383,26 +382,6 @@ Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit sta
 | `description` | no | `` | Short human-readable description (often the subject identifier, e.g. the verified upstream SHA) |
 | `target-url` | no | `` | URL the status links to. Empty = link to the current workflow run. |
 | `token` | no | `${{ github.token }}` | GitHub token used for API calls |
-
-### create-component-tags
-
-For each `component-name:version-file-path` entry, reads the VERSION file and creates + pushes a git tag `{component-name}-v{version}` using the `github-actions[bot]` identity. Idempotent: skips tags already on the remote, tolerates concurrent creation at the same commit. Tool-agnostic — uses git commands only.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `components` | yes | — | Newline-separated list of `component-name:version-file-path` entries (e.g., `monolith-system-java:system/monolith/java/VERSION`) |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
-| `git-host` | no | `github.com` | Git host to push to (e.g. `github.com`, `gitlab.com`, `codeberg.org`) |
-| `token` | no | `${{ github.token }}` | Token used to push tags. Pass a PAT or GitHub App token with `workflows:write` when the tagged commit contains workflow file changes that differ from the default branch — `GITHUB_TOKEN` cannot push such refs. |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `created-tags` | JSON array of tag names newly pushed by this run (includes tags created by concurrent runs pointing to the same commit) |
-| `skipped-tags` | JSON array of tag names that already existed on the remote and were skipped |
 
 ### deploy-docker-compose
 
