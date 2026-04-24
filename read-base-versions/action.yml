@@ -1,0 +1,55 @@
+name: 'Read Base Versions'
+description: 'Reads the base semantic version (MAJOR.MINOR.PATCH) from each VERSION file in a keyed list. Batched form of read-base-version. The caller-supplied key is opaque and preserved in the output — use it to pair versions with anything downstream (image URLs, component names, etc).'
+
+inputs:
+  entries:
+    description: 'JSON array of {"key": string, "file": string} objects. The key is opaque; the file is the path to a VERSION file relative to the workspace.'
+    required: true
+
+outputs:
+  versions:
+    description: 'JSON array of {"key": string, "version": string} objects. Keys preserved from input; versions are the trimmed first line of each file.'
+    value: ${{ steps.read.outputs.versions }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read Base Versions
+      id: read
+      shell: bash
+      env:
+        ENTRIES: ${{ inputs.entries }}
+      run: |
+        set -euo pipefail
+
+        if ! echo "$ENTRIES" | jq -e 'type == "array"' >/dev/null; then
+          echo "::error::entries must be a JSON array of {key, file} objects"
+          exit 1
+        fi
+
+        output='[]'
+        while IFS= read -r entry; do
+          key=$(jq -r '.key // empty' <<<"$entry")
+          file=$(jq -r '.file // empty' <<<"$entry")
+
+          if [ -z "$key" ] || [ -z "$file" ]; then
+            echo "::error::Each entry must have non-empty 'key' and 'file' fields. Got: $entry"
+            exit 1
+          fi
+
+          if [ ! -f "$file" ]; then
+            echo "::error::VERSION file not found: $file (key: $key)"
+            exit 1
+          fi
+
+          version=$(head -n 1 "$file" | tr -d '[:space:]')
+
+          if [ -z "$version" ]; then
+            echo "::error::VERSION file is empty: $file (key: $key)"
+            exit 1
+          fi
+
+          output=$(jq -c --arg key "$key" --arg version "$version" '. + [{key: $key, version: $version}]' <<<"$output")
+        done < <(jq -c '.[]' <<<"$ENTRIES")
+
+        echo "versions=$output" >> "$GITHUB_OUTPUT"

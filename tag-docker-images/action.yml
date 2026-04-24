@@ -1,13 +1,19 @@
 name: 'Tag Docker Images'
-description: 'Applies a new tag to existing Docker images via server-side manifest operation (`docker buildx imagetools create`) for each source image. Preserves multi-arch manifest lists; zero image data crosses the runner. Same registry throughout — only a tag is added, no image content moves. Useful for pipeline-stage promotions that are expressed purely as a tag change.'
+description: 'Applies a new tag to existing Docker images via server-side manifest operation (`docker buildx imagetools create`) for each source image. Preserves multi-arch manifest lists; zero image data crosses the runner. Same registry throughout — only a tag is added, no image content moves. Useful for pipeline-stage promotions that are expressed purely as a tag change. Two mutually exclusive modes: broadcast (image-urls + tag — one tag to all images) or map (image-tags — per-image tag).'
 
 inputs:
   image-urls:
-    description: 'JSON array of source Docker image URLs with existing tags'
-    required: true
+    description: 'Broadcast mode: JSON array of source Docker image URLs with existing tags. Requires `tag`. Mutually exclusive with `image-tags`.'
+    required: false
+    default: ''
   tag:
-    description: 'Target tag to apply to images (e.g., v1.0.5, latest, production)'
-    required: true
+    description: 'Broadcast mode: target tag applied uniformly to every image in `image-urls` (e.g., v1.0.5, latest, production). Mutually exclusive with `image-tags`.'
+    required: false
+    default: ''
+  image-tags:
+    description: 'Map mode: JSON array of {"key": string, "tag": string} objects where `key` is the source Docker image URL to re-tag and `tag` is the tag to apply to it. The `key` field name is chosen so output of `compose-tags` can be fed in directly without a rename step. Mutually exclusive with `image-urls` + `tag`.'
+    required: false
+    default: ''
   registry:
     description: 'Container registry URL (e.g., ghcr.io, docker.io, gcr.io). Defaults to ghcr.io.'
     required: false
@@ -42,4 +48,5 @@ runs:
       env:
         IMAGE_URLS: ${{ inputs.image-urls }}
         TARGET_TAG: ${{ inputs.tag }}
+        IMAGE_TAGS: ${{ inputs.image-tags }}
       run: bash "${{ github.action_path }}/tag-docker-images.sh"

@@ -1,0 +1,55 @@
+name: 'Compose Tags'
+description: 'Apply a template to each version in a keyed list, producing keyed tags. Pure string transform — no I/O, no domain knowledge. Key is opaque and preserved. Pairs with read-base-versions upstream and tag-docker-images (image-tags mode) downstream, but works for any caller that wants batched {version} → tag templating.'
+
+inputs:
+  versions:
+    description: 'JSON array of {"key": string, "version": string} objects.'
+    required: true
+  template:
+    description: 'Template string containing the placeholder {version}. Defaults to v{version} — matches repo-wide release tag convention.'
+    required: false
+    default: 'v{version}'
+
+outputs:
+  tags:
+    description: 'JSON array of {"key": string, "tag": string} objects. Keys preserved from input; tags produced by substituting {version} in the template.'
+    value: ${{ steps.compose.outputs.tags }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compose Tags
+      id: compose
+      shell: bash
+      env:
+        VERSIONS: ${{ inputs.versions }}
+        TEMPLATE: ${{ inputs.template }}
+      run: |
+        set -euo pipefail
+
+        if ! echo "$VERSIONS" | jq -e 'type == "array"' >/dev/null; then
+          echo "::error::versions must be a JSON array of {key, version} objects"
+          exit 1
+        fi
+
+        if [[ "$TEMPLATE" != *'{version}'* ]]; then
+          echo "::error::template must contain the {version} placeholder. Got: $TEMPLATE"
+          exit 1
+        fi
+
+        output='[]'
+        while IFS= read -r entry; do
+          key=$(jq -r '.key // empty' <<<"$entry")
+          version=$(jq -r '.version // empty' <<<"$entry")
+
+          if [ -z "$key" ] || [ -z "$version" ]; then
+            echo "::error::Each entry must have non-empty 'key' and 'version' fields. Got: $entry"
+            exit 1
+          fi
+
+          tag="${TEMPLATE//\{version\}/$version}"
+
+          output=$(jq -c --arg key "$key" --arg tag "$tag" '. + [{key: $key, tag: $tag}]' <<<"$output")
+        done < <(jq -c '.[]' <<<"$VERSIONS")
+
+        echo "tags=$output" >> "$GITHUB_OUTPUT"

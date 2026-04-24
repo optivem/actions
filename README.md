@@ -43,6 +43,7 @@ Two lint checks enforce the conventions:
 | [compose-prerelease-status](#compose-prerelease-status) | • `prerelease-version`<br>• `environment`<br>• `status` | • `status-tag` |
 | [compose-prerelease-version](#compose-prerelease-version) | • `base-version`<br>• `suffix`<br>• `build-number`<br>• `prefix` | • `version` |
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
+| [compose-tags](#compose-tags) | • `versions`<br>• `template` | • `tags` |
 | [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
 | [create-component-tags](#create-component-tags) | • `components`<br>• `repository`<br>• `git-host`<br>• `token` | • `created-tags`<br>• `skipped-tags` |
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | — |
@@ -53,13 +54,14 @@ Two lint checks enforce the conventions:
 | [get-last-successful-github-workflow-run-timestamp](#get-last-successful-github-workflow-run-timestamp) | • `workflow-name`<br>• `repository`<br>• `token` | • `timestamp` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
 | [read-base-version](#read-base-version) | • `file` | • `base-version` |
+| [read-base-versions](#read-base-versions) | • `entries` | • `versions` |
 | [render-stage-summary](#render-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `stage-content`<br>• `stage-success-content`<br>• `stage-skipped-content` | — |
 | [render-system-stage-summary](#render-system-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `environment`<br>• `success-version`<br>• `success-artifact-ids`<br>• `skipped-reason`<br>• `latest-artifact-ids`<br>• `latest-updated-at`<br>• `last-run-at` | — |
 | [resolve-commit](#resolve-commit) | • `repository`<br>• `ref`<br>• `token`<br>• `git-host` | • `sha`<br>• `timestamp` |
 | [resolve-docker-image-digests](#resolve-docker-image-digests) | • `base-image-urls`<br>• `commit-sha` | • `image-digest-urls`<br>• `latest-updated-at` |
 | [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
 | [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
-| [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
+| [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `image-tags`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
 | [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 | [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
 | [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
@@ -350,6 +352,23 @@ Pure string transform. Strips any SemVer prerelease identifier of the shape `-<w
 |---|---|
 | `version` | Release version with the prerelease identifier removed (e.g., `v1.0.0`) |
 
+### compose-tags
+
+Pure string transform over a keyed list. For each `{key, version}` entry, applies a template (default `v{version}`) and emits `{key, tag}`. Key is opaque and preserved — the action doesn't know or care what it represents. Pairs naturally with `read-base-versions` upstream and `tag-docker-images` (map mode) downstream, but works for any caller that wants batched version → tag templating.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `versions` | yes | — | JSON array of `{"key": string, "version": string}` objects |
+| `template` | no | `v{version}` | Template string containing the `{version}` placeholder |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `tags` | JSON array of `{"key": string, "tag": string}` objects. Keys preserved from input; tags produced by substituting `{version}` in the template. |
+
 ### create-commit-status
 
 Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit status with the given context, state, description, and target URL. Defaults `sha` to `github.sha` and `target-url` to the current workflow run URL.
@@ -521,6 +540,22 @@ Reads the first line of a VERSION file (stripping whitespace) and exposes it as 
 |---|---|
 | `base-version` | The base semantic version (e.g., `1.0.0`) |
 
+### read-base-versions
+
+Batched, keyed form of `read-base-version`. For each `{key, file}` entry, reads the first line of the VERSION file (stripping whitespace) and emits `{key, version}` preserving the original key. Key is opaque — use it to pair versions with whatever downstream needs them (image URLs, component names, etc.). Fails fast if any file is missing or empty.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `entries` | yes | — | JSON array of `{"key": string, "file": string}` objects. The key is opaque (caller-supplied); the file is the path to a VERSION file relative to the workspace. |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `versions` | JSON array of `{"key": string, "version": string}` objects. Keys preserved from input; versions are the trimmed first line of each file. |
+
 ### render-stage-summary
 
 Validates `stage-result` is one of `success`/`failure`/`cancelled`/`skipped`, then writes a markdown stage summary (with icons and per-result content blocks) to `$GITHUB_STEP_SUMMARY`. Used directly by commit-stage workflows and composed by `render-system-stage-summary` for richer system-stage rendering.
@@ -636,14 +671,22 @@ Calls `git ls-remote --tags` against the remote URL, filters by the given glob p
 
 ### tag-docker-images
 
-Promotes a JSON array of Docker images by issuing a server-side manifest retag (`docker buildx imagetools create --tag <new> <source>`) for each entry. Used for moving an already-built artifact through pipeline stages (Farley-style promotion: `build-once`, promote-many). No image data crosses the runner; multi-arch manifest lists are preserved. Same registry throughout — only a tag is added, no image content moves.
+Promotes existing Docker images by issuing a server-side manifest retag (`docker buildx imagetools create --tag <new> <source>`) for each entry. Used for moving already-built artifacts through pipeline stages (Farley-style promotion: `build-once`, promote-many). No image data crosses the runner; multi-arch manifest lists are preserved. Same registry throughout — only a tag is added, no image content moves.
+
+Two mutually exclusive input modes:
+
+- **Broadcast** — `image-urls` + `tag`: apply one uniform tag to every image in the list. Example: re-tag all system images with `v1.3.2`.
+- **Map** — `image-tags`: apply a per-image tag. Chains directly with `compose-tags` output (both use the `key` field for the source image URL). Example: re-tag each component image with its own `v{component-version}`.
+
+Exactly one mode must be used. Both modes set or neither set → fails fast with a clear error.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `image-urls` | yes | — | JSON array of source Docker image URLs with existing tags |
-| `tag` | yes | — | Target tag to apply to images (e.g., `v1.0.5`, `latest`, `production`) |
+| `image-urls` | no | `` | Broadcast mode: JSON array of source Docker image URLs with existing tags. Requires `tag`. Mutually exclusive with `image-tags`. |
+| `tag` | no | `` | Broadcast mode: target tag applied uniformly to every image in `image-urls` (e.g., `v1.0.5`, `latest`, `production`). Mutually exclusive with `image-tags`. |
+| `image-tags` | no | `` | Map mode: JSON array of `{"key": string, "tag": string}` objects where `key` is the source image URL and `tag` is the tag to apply to it. Mutually exclusive with `image-urls` + `tag`. |
 | `registry` | no | `ghcr.io` | Container registry URL (e.g., `ghcr.io`, `docker.io`, `gcr.io`) |
 | `registry-username` | no | `${{ github.actor }}` | Username for registry authentication |
 | `token` | no | `${{ github.token }}` | Token used to authenticate against the registry |
