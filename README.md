@@ -35,7 +35,7 @@ Two lint checks enforce the conventions:
 | [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `image-urls`<br>• `tag`<br>• `token`<br>• `fail-on-error` | • `exist`<br>• `results` |
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
-| [check-timestamp-newer](#check-timestamp-newer) | • `subject`<br>• `baseline` | • `newer` |
+| [check-timestamp-newer](#check-timestamp-newer) | • `latest`<br>• `since` | • `newer` |
 | [cleanup-github-deployments](#cleanup-github-deployments) | • `keep-count`<br>• `retention-days`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [cleanup-github-prereleases](#cleanup-github-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
@@ -57,7 +57,7 @@ Two lint checks enforce the conventions:
 | [render-stage-summary](#render-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `stage-content`<br>• `stage-success-content`<br>• `stage-skipped-content` | — |
 | [render-system-stage-summary](#render-system-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `environment`<br>• `success-version`<br>• `success-artifact-ids`<br>• `skipped-reason`<br>• `latest-artifact-ids`<br>• `latest-updated-at`<br>• `last-run-at` | — |
 | [resolve-commit](#resolve-commit) | • `repository`<br>• `ref`<br>• `token`<br>• `git-host` | • `sha`<br>• `timestamp` |
-| [resolve-docker-image-digests](#resolve-docker-image-digests) | • `base-image-urls`<br>• `commit-sha` | • `image-digest-urls`<br>• `latest-updated-at` |
+| [resolve-docker-image-digests](#resolve-docker-image-digests) | • `base-image-urls`<br>• `tag` | • `image-digest-urls`<br>• `latest-updated-at` |
 | [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
 | [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
 | [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `image-tags`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
@@ -190,22 +190,22 @@ Queries a remote git repository with `git ls-remote --tags "refs/tags/<tag>"` an
 
 ### check-timestamp-newer
 
-Pure ISO 8601 timestamp comparator. Lexicographically compares `subject` against `baseline` — outputs `newer=true` when `subject` is strictly newer, OR when `baseline` is empty (fail-open). Outputs `newer=false` when `baseline` is set and `subject` is not newer. No platform dependency.
+Pure ISO 8601 timestamp comparator. Lexicographically compares `latest` against `since` — outputs `newer=true` when `latest` is strictly newer, OR when `since` is empty (fail-open). Outputs `newer=false` when `since` is set and `latest` is not newer. No platform dependency.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `subject` | yes | — | ISO 8601 timestamp under observation (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). |
-| `baseline` | no | `` | ISO 8601 timestamp to compare against. When empty, the action returns `newer=true` (fail-open — useful for "first run" semantics). |
+| `latest` | yes | — | ISO 8601 timestamp under observation (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). |
+| `since` | no | `` | ISO 8601 timestamp to compare against (typically the last-run timestamp). When empty, the action returns `newer=true` (fail-open — useful for "first run" semantics). |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `newer` | `true` when `subject` is strictly newer than `baseline`, OR when `baseline` is empty (fail-open). `false` when `baseline` is set AND `subject` is not newer than it. |
+| `newer` | `true` when `latest` is strictly newer than `since`, OR when `since` is empty (fail-open). `false` when `since` is set AND `latest` is not newer than it. |
 
-**Notes:** ISO 8601 lexicographic comparison is only correct when both timestamps are UTC with the same format (both Z-suffixed). GitHub API and typical subject timestamps (docker push times, git commit times) satisfy this.
+**Notes:** ISO 8601 lexicographic comparison is only correct when both timestamps are UTC with the same format (both Z-suffixed). GitHub API and typical observed timestamps (docker push times, git commit times) satisfy this.
 
 ### cleanup-github-deployments
 
@@ -591,14 +591,14 @@ Resolves a remote git ref (branch, tag, or SHA) to its 40-char commit SHA + comm
 
 ### resolve-docker-image-digests
 
-Finds Docker images and resolves their `sha256:` digests from any container registry. Takes base image URLs plus an optional commit SHA — an empty `commit-sha` resolves to the `:latest` tag; a set `commit-sha` resolves to the `:sha-<commit-sha>` tag, matching `docker/metadata-action`'s `type=sha,format=long` convention used by the commit stage. Emits a JSON array of digest URLs (same order as input) and the most recent image creation timestamp across all processed images. Delegates to `resolve-docker-image-digests.sh`.
+Finds Docker images and resolves their `sha256:` digests from any container registry. Takes base image URLs plus a tag — appends `:tag` to each base URL and resolves the digest. Callers own the tag convention (e.g. `latest`, `sha-<sha>` for `docker/metadata-action`'s `type=sha,format=long` convention used by the commit stage, or `v1.2.3`). Emits a JSON array of digest URLs (same order as input) and the most recent image creation timestamp across all processed images. Delegates to `resolve-docker-image-digests.sh`.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `base-image-urls` | yes | — | Base image URLs (no `:tag`). Combined with `commit-sha` to produce the image tag. Supports newline-separated list or JSON array format. |
-| `commit-sha` | no | `` | Git commit SHA. When set, the resolved tag is `:sha-<commit-sha>`; when empty, the resolved tag is `:latest`. |
+| `base-image-urls` | yes | — | Base image URLs (no `:tag`). Combined with `tag` to produce the image reference. Supports newline-separated list or JSON array format. |
+| `tag` | no | `latest` | Image tag to resolve (e.g. `latest`, `sha-<sha>`, `v1.2.3`). Appended after `:` to each base URL. |
 
 **Outputs**
 

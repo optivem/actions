@@ -4,7 +4,7 @@ set -euo pipefail
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 
 BASE_IMAGE_URLS="${BASE_IMAGE_URLS:-}"
-COMMIT_SHA="${COMMIT_SHA:-}"
+TAG="${TAG:-latest}"
 
 echo "Starting batch Docker image digest resolution..."
 echo ""
@@ -14,13 +14,7 @@ if [[ -z "$BASE_IMAGE_URLS" ]]; then
   exit 1
 fi
 
-# Compose fully-qualified URLs with the computed tag.
-# Tag convention matches docker/metadata-action type=sha,format=long: sha-<commit-sha>.
-if [[ -n "$COMMIT_SHA" ]]; then
-  tag="sha-${COMMIT_SHA}"
-else
-  tag="latest"
-fi
+tag="$TAG"
 echo "Composing image URLs from base-image-urls with tag: $tag"
 
 base_trimmed="$(printf '%s' "$BASE_IMAGE_URLS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"

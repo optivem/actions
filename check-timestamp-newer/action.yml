@@ -1,59 +1,59 @@
 name: 'Check Timestamp Newer'
-description: 'Pure ISO 8601 timestamp comparator. Outputs newer=true when subject is strictly newer than baseline, OR when baseline is empty (fail-open). Outputs newer=false when baseline is set and subject is not newer.'
+description: 'Pure ISO 8601 timestamp comparator. Outputs newer=true when `latest` is strictly newer than `since`, OR when `since` is empty (fail-open). Outputs newer=false when `since` is set and `latest` is not newer.'
 
 inputs:
-  subject:
+  latest:
     description: 'ISO 8601 timestamp under observation (e.g. latest docker image push time, latest artifact build time, latest commit timestamp). Required.'
     required: true
-  baseline:
-    description: 'ISO 8601 timestamp to compare against. When empty, the action returns newer=true (fail-open — useful for "first run" semantics).'
+  since:
+    description: 'ISO 8601 timestamp to compare against (typically the last-run timestamp). When empty, the action returns newer=true (fail-open — useful for "first run" semantics).'
     required: false
     default: ''
 
 outputs:
   newer:
     description: |
-      'true' when subject is strictly newer than baseline,
-      OR when baseline is empty (fail-open).
-      'false' when baseline is set AND subject is not newer than it.
+      'true' when `latest` is strictly newer than `since`,
+      OR when `since` is empty (fail-open).
+      'false' when `since` is set AND `latest` is not newer than it.
     value: ${{ steps.check.outputs.newer }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Compare subject timestamp against baseline
+    - name: Compare latest timestamp against since
       id: check
       shell: bash
       env:
-        SUBJECT: ${{ inputs.subject }}
-        BASELINE: ${{ inputs.baseline }}
+        LATEST: ${{ inputs.latest }}
+        SINCE: ${{ inputs.since }}
       run: |
         set -euo pipefail
 
-        if [[ -z "$SUBJECT" ]]; then
-          echo "::error::subject is empty"
+        if [[ -z "$LATEST" ]]; then
+          echo "::error::latest is empty"
           exit 1
         fi
 
-        echo "Subject:  $SUBJECT"
+        echo "Latest: $LATEST"
 
-        if [[ -z "$BASELINE" ]]; then
-          echo "Baseline is empty — reporting newer=true (fail-open)."
+        if [[ -z "$SINCE" ]]; then
+          echo "Since is empty — reporting newer=true (fail-open)."
           echo "newer=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        echo "Baseline: $BASELINE"
+        echo "Since:  $SINCE"
 
         # ISO 8601 lexicographic comparison is correct when both timestamps are in UTC
         # with the same format (both include 'Z'). GitHub API returns UTC Z-suffixed;
-        # typical subject timestamps (docker push times, git commit times) are likewise
+        # typical latest timestamps (docker push times, git commit times) are likewise
         # UTC Z-suffixed.
-        if [[ "$SUBJECT" > "$BASELINE" ]]; then
-          echo "Subject is newer than baseline — newer=true"
+        if [[ "$LATEST" > "$SINCE" ]]; then
+          echo "Latest is newer than since — newer=true"
           newer=true
         else
-          echo "Subject is not newer than baseline — newer=false"
+          echo "Latest is not newer than since — newer=false"
           newer=false
         fi
 

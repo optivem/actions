@@ -1,13 +1,13 @@
 name: 'Resolve Docker Image Digests'
-description: 'Finds Docker images and resolves their digests from any container registry. Takes base image URLs plus an optional commit SHA — an empty commit-sha resolves to the :latest tag; a set commit-sha resolves to the :sha-<commit-sha> tag, matching docker/metadata-action''s type=sha,format=long convention used by the commit stage.'
+description: 'Finds Docker images and resolves their digests from any container registry. Takes base image URLs plus a tag — the action appends ":tag" to each base URL and resolves the digest. Callers own the tag convention (e.g. "latest", "sha-<sha>", "v1.2.3").'
 inputs:
   base-image-urls:
-    description: 'Base image URLs (no :tag). Combined with commit-sha to produce the image tag. Supports newline-separated list or JSON array format.'
+    description: 'Base image URLs (no :tag). Combined with tag to produce the image reference. Supports newline-separated list or JSON array format.'
     required: true
-  commit-sha:
-    description: 'Git commit SHA. When set, the resolved tag is :sha-<commit-sha>; when empty, the resolved tag is :latest.'
+  tag:
+    description: 'Image tag to resolve (e.g. "latest", "sha-<sha>", "v1.2.3"). Appended after ":" to each base URL.'
     required: false
-    default: ''
+    default: 'latest'
 outputs:
   image-digest-urls:
     description: 'JSON array of digest URLs in the same order as input'
@@ -23,5 +23,5 @@ runs:
       shell: bash
       env:
         BASE_IMAGE_URLS: ${{ inputs.base-image-urls }}
-        COMMIT_SHA: ${{ inputs.commit-sha }}
+        TAG: ${{ inputs.tag }}
       run: bash "${{ github.action_path }}/resolve-docker-image-digests.sh"
