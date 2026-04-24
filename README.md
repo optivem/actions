@@ -75,7 +75,7 @@ For each `{path, signal, value}` entry, reads the VERSION file and — if the ma
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `version-files` | yes | — | JSON array of `{"path": string, "signal": "git-tag"\|"ghcr-image", "value": string}` objects. `git-tag`: bump if tag `{value}{current-version}` exists on the remote (e.g. `value="meta-v"` + version `1.0.40` probes tag `meta-v1.0.40`). `ghcr-image`: bump if GHCR image `{value}:v{current-version}` exists (e.g. `value="ghcr.io/optivem/shop/multitier-backend-java"` + version `1.5.24` probes that image at `:v1.5.24`). |
+| `version-files` | yes | — | JSON array of `{"path": string, "signal": "git-tag"\|"ghcr-image", "value": string}` objects. `git-tag`: bump if tag `{value}{current-version}` exists on the remote (e.g. `value="meta-v"` + version `1.0.40` probes tag `meta-v1.0.40`). `ghcr-image`: bump if GHCR image `{value}:v{current-version}` exists (e.g. `value="ghcr.io/optivem/shop/backend-java"` + version `1.5.24` probes that image at `:v1.5.24`). |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format (used for `git-tag` probes) |
 | `token` | no | `${{ github.token }}` | Token for git remote auth and GHCR auth |
 

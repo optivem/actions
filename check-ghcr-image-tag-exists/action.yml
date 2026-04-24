@@ -1,0 +1,144 @@
+name: 'Check GHCR Image Tag Exists'
+description: 'Checks whether specific GHCR image tags exist via the OCI registry API. Batched, keyed input — paired with downstream callers that need a {version}-exists signal (e.g. bump-patch-versions). Uses OCI HEAD /manifests/{tag} rather than the GitHub Packages API: direct per-tag probe, no pagination, works for public and private images.'
+
+inputs:
+  images:
+    description: 'JSON array of {"key": string, "image-url": string, "tag": string} objects. image-url must begin with "ghcr.io/" and omit the ":tag" suffix (e.g. "ghcr.io/optivem/shop/backend-java"). tag is the image tag to probe (e.g. "v1.5.24"). key is opaque and preserved in output.'
+    required: true
+  token:
+    description: 'Token used for GHCR authentication. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  results:
+    description: 'JSON array of {"key": string, "exists": boolean} objects. Keys preserved from input.'
+    value: ${{ steps.check.outputs.results }}
+  any-exist:
+    description: '"true" if any input image:tag exists, "false" otherwise. Convenience flag for guard-style callers.'
+    value: ${{ steps.check.outputs.any-exist }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check GHCR Image Tags
+      id: check
+      shell: bash
+      env:
+        IMAGES: ${{ inputs.images }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        if ! jq -e 'type == "array"' >/dev/null <<<"$IMAGES"; then
+          echo "::error::images must be a JSON array of {key, image-url, tag} objects"
+          exit 1
+        fi
+
+        # GHCR OCI reads use a two-step token exchange:
+        #   GET /token?scope=repository:<path>:pull  (with Basic auth if token provided) -> bearer token
+        #   HEAD /v2/<path>/manifests/<tag>          (with Bearer)
+        # This works uniformly for public and private images; no reliance on the
+        # undocumented "base64-encoded GITHUB_TOKEN as Bearer" shortcut.
+        fetch_registry_token() {
+          local scope_path=$1
+          local url="https://ghcr.io/token?service=ghcr.io&scope=repository:${scope_path}:pull"
+          local body
+          if [ -n "$GH_TOKEN" ]; then
+            body=$(curl -sS -u "x-access-token:${GH_TOKEN}" "$url") || return 1
+          else
+            body=$(curl -sS "$url") || return 1
+          fi
+          jq -r '.token // empty' <<<"$body"
+        }
+
+        probe_manifest() {
+          local url=$1
+          local bearer=$2
+          local attempt=1
+          local max_attempts=4
+          local delays=(5 15 45)
+          local code
+
+          while (( attempt <= max_attempts )); do
+            code=$(curl -sS -L -I -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $bearer" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+              "$url" || echo "000")
+
+            case "$code" in
+              200|404|401|403) echo "$code"; return 0 ;;
+            esac
+
+            if (( attempt < max_attempts )); then
+              local delay_idx=$(( attempt - 1 ))
+              (( delay_idx >= ${#delays[@]} )) && delay_idx=$(( ${#delays[@]} - 1 ))
+              echo "::notice::[ghcr-probe] attempt $attempt got HTTP $code for $url -- retrying in ${delays[$delay_idx]}s" >&2
+              sleep "${delays[$delay_idx]}"
+            fi
+            (( attempt++ ))
+          done
+
+          echo "$code"
+        }
+
+        output='[]'
+        any_exist=false
+
+        while IFS= read -r entry; do
+          key=$(jq -r '.key // empty' <<<"$entry")
+          image_url=$(jq -r '."image-url" // empty' <<<"$entry")
+          tag=$(jq -r '.tag // empty' <<<"$entry")
+
+          if [ -z "$key" ] || [ -z "$image_url" ] || [ -z "$tag" ]; then
+            echo "::error::Each entry must have non-empty 'key', 'image-url', and 'tag' fields. Got: $entry"
+            exit 1
+          fi
+
+          if [[ "$image_url" != ghcr.io/* ]]; then
+            echo "::error::image-url must begin with 'ghcr.io/'. Got: $image_url (key: $key)"
+            exit 1
+          fi
+
+          if [[ "$image_url" == *:* ]]; then
+            echo "::error::image-url must omit the ':tag' suffix — pass the tag via the 'tag' field. Got: $image_url (key: $key)"
+            exit 1
+          fi
+
+          path=${image_url#ghcr.io/}
+          manifest_url="https://ghcr.io/v2/${path}/manifests/${tag}"
+
+          bearer=$(fetch_registry_token "$path" || true)
+          if [ -z "$bearer" ]; then
+            echo "::error::Failed to obtain GHCR registry token for $path (key: $key). Check token value and that the package path is correct."
+            exit 1
+          fi
+
+          code=$(probe_manifest "$manifest_url" "$bearer")
+          case "$code" in
+            200)
+              exists=true
+              any_exist=true
+              echo "Exists: ${image_url}:${tag}"
+              ;;
+            404)
+              exists=false
+              echo "Missing: ${image_url}:${tag}"
+              ;;
+            401|403)
+              echo "::error::Authentication failed probing ${image_url}:${tag} (HTTP $code). Check token scope (needs read:packages)."
+              exit 1
+              ;;
+            *)
+              echo "::error::Unexpected HTTP $code probing ${image_url}:${tag} after retries."
+              exit 1
+              ;;
+          esac
+
+          output=$(jq -c --arg key "$key" --argjson exists "$exists" '. + [{key: $key, exists: $exists}]' <<<"$output")
+        done < <(jq -c '.[]' <<<"$IMAGES")
+
+        {
+          echo "results=$output"
+          echo "any-exist=$any_exist"
+        } >> "$GITHUB_OUTPUT"

@@ -6,7 +6,7 @@ inputs:
     description: |
       JSON array of {"path": string, "signal": "git-tag"|"ghcr-image", "value": string} objects.
         - signal="git-tag": bump if a git tag exists at "{value}{current-version}" on the remote (e.g. value="meta-v" + version="1.0.40" -> probes tag "meta-v1.0.40" via `git ls-remote`).
-        - signal="ghcr-image": bump if a GHCR image exists at "{value}:v{current-version}" (e.g. value="ghcr.io/optivem/shop/multitier-backend-java" + version="1.5.24" -> probes that image:v1.5.24).
+        - signal="ghcr-image": bump if a GHCR image exists at "{value}:v{current-version}" (e.g. value="ghcr.io/optivem/shop/backend-java" + version="1.5.24" -> probes that image:v1.5.24).
     required: true
   repository:
     description: 'Repository in owner/repo format (used for git-tag probes). Defaults to the current repository.'

@@ -11,10 +11,10 @@ on:
   workflow_dispatch:
     inputs:
       image-url:
-        description: 'GHCR image URL to probe (e.g. ghcr.io/optivem/shop/multitier-backend-java). No ":tag" suffix.'
+        description: 'GHCR image URL to probe (e.g. ghcr.io/optivem/shop/backend-java). No ":tag" suffix.'
         required: true
         type: string
-        default: 'ghcr.io/optivem/shop/multitier-backend-java'
+        default: 'ghcr.io/optivem/shop/backend-java'
       existing-tag:
         description: 'Tag that should exist in the registry.'
         required: true
