@@ -1,47 +1,141 @@
 name: 'Check GHCR Packages Exist'
-description: 'Checks if container packages exist for the repository using the GitHub Packages API. Useful for skipping pipeline stages when no artifacts have been built yet.'
+description: 'Checks whether ANY of the given GHCR images have a tag published at the probe tag (default "latest"). Uses OCI HEAD /manifests/{tag} rather than the GitHub Packages API, so it works uniformly for user- and org-owned repos and for public and private packages. Useful as a preflight gate to skip pipeline stages when no commit-stage artifacts have been built yet.'
 
 inputs:
-  repository:
-    description: 'Repository in owner/repo format to check. Defaults to the current repository.'
+  image-urls:
+    description: 'Newline-separated list of ghcr.io/{owner}/{repo}/{image} paths (omit the ":tag" suffix). Output exist=true if at least one of these images has the probe tag published.'
+    required: true
+  tag:
+    description: 'Image tag to probe for. Defaults to "latest" — the commit stage always publishes this alongside versioned tags, so "latest" is the reliable "any artifact has been built" signal.'
     required: false
-    default: ${{ github.repository }}
+    default: 'latest'
   token:
-    description: 'GitHub token used for API calls. Defaults to github.token.'
+    description: 'Token used for GHCR authentication. Defaults to github.token.'
     required: false
     default: ${{ github.token }}
 
 outputs:
   exist:
-    description: 'Whether container artifacts exist for this repository (true/false)'
+    description: 'Whether any of the probed images have the tag published (true/false). Silently resolves to false on authentication errors — the downstream stage will surface a clearer error if images are genuinely missing vs. unauthorized.'
     value: ${{ steps.check.outputs.exist }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Check for container packages
+    - name: Probe GHCR for image existence
       id: check
       shell: bash
       env:
+        IMAGE_URLS: ${{ inputs.image-urls }}
+        TAG: ${{ inputs.tag }}
         GH_TOKEN: ${{ inputs.token }}
-        REPOSITORY: ${{ inputs.repository }}
       run: |
-        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-        # `gh api` writes 4xx response bodies to stdout and exits non-zero. A
-        # repo with zero container packages returns HTTP 404 — capturing that
-        # into `count` via `$(... || echo "0")` would concatenate the JSON
-        # error body with "0", producing a non-empty string that falsely
-        # signals "packages exist". Capture stdout first, then fall back to 0
-        # via a separate assignment so the error body is discarded on failure.
-        if response=$(gh_retry api "repos/${REPOSITORY}/packages?package_type=container" 2>/dev/null); then
-          count=$(jq 'if type == "array" then length else 0 end' <<<"$response" 2>/dev/null || echo 0)
-        else
-          count=0
+        set -euo pipefail
+
+        # GHCR OCI reads use a two-step token exchange:
+        #   GET /token?scope=repository:<path>:pull  (with Basic auth if token provided) -> bearer token
+        #   HEAD /v2/<path>/manifests/<tag>          (with Bearer)
+        # This works uniformly for public and private images, and for user- and
+        # org-owned repos. Unlike the GitHub Packages REST API (which has
+        # path-shape differences between /orgs/{org}/packages and
+        # /users/{user}/packages and no repo-scoped list endpoint), the OCI
+        # registry treats all three the same way.
+        fetch_registry_token() {
+          local scope_path=$1
+          local url="https://ghcr.io/token?service=ghcr.io&scope=repository:${scope_path}:pull"
+          local body
+          if [ -n "$GH_TOKEN" ]; then
+            body=$(curl -sS -u "x-access-token:${GH_TOKEN}" "$url") || return 1
+          else
+            body=$(curl -sS "$url") || return 1
+          fi
+          jq -r '.token // empty' <<<"$body"
+        }
+
+        probe_manifest() {
+          local url=$1
+          local bearer=$2
+          local attempt=1
+          local max_attempts=4
+          local delays=(5 15 45)
+          local code
+
+          while (( attempt <= max_attempts )); do
+            code=$(curl -sS -L -I -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $bearer" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+              "$url" || echo "000")
+
+            case "$code" in
+              200|404|401|403) echo "$code"; return 0 ;;
+            esac
+
+            if (( attempt < max_attempts )); then
+              local delay_idx=$(( attempt - 1 ))
+              (( delay_idx >= ${#delays[@]} )) && delay_idx=$(( ${#delays[@]} - 1 ))
+              echo "::notice::[ghcr-probe] attempt $attempt got HTTP $code for $url -- retrying in ${delays[$delay_idx]}s" >&2
+              sleep "${delays[$delay_idx]}"
+            fi
+            (( attempt++ ))
+          done
+
+          echo "$code"
+        }
+
+        any_exist=false
+        checked=0
+
+        while IFS= read -r image_url; do
+          # Trim whitespace and skip blanks.
+          image_url=$(printf '%s' "$image_url" | tr -d '[:space:]')
+          [ -z "$image_url" ] && continue
+
+          if [[ "$image_url" != ghcr.io/* ]]; then
+            echo "::error::image-urls entries must begin with 'ghcr.io/'. Got: $image_url"
+            exit 1
+          fi
+
+          if [[ "$image_url" == *:* ]]; then
+            echo "::error::image-urls entries must omit the ':tag' suffix. Got: $image_url"
+            exit 1
+          fi
+
+          checked=$((checked + 1))
+          path=${image_url#ghcr.io/}
+          manifest_url="https://ghcr.io/v2/${path}/manifests/${TAG}"
+
+          bearer=$(fetch_registry_token "$path" || true)
+          if [ -z "$bearer" ]; then
+            echo "::warning::Failed to obtain GHCR registry token for $path — treating as missing."
+            continue
+          fi
+
+          code=$(probe_manifest "$manifest_url" "$bearer")
+          case "$code" in
+            200)
+              echo "Exists: ${image_url}:${TAG}"
+              any_exist=true
+              ;;
+            404)
+              echo "Missing: ${image_url}:${TAG}"
+              ;;
+            401|403)
+              echo "::warning::Authentication failed probing ${image_url}:${TAG} (HTTP $code). Treating as missing — check token scope (needs read:packages) if images should exist."
+              ;;
+            *)
+              echo "::warning::Unexpected HTTP $code probing ${image_url}:${TAG} after retries — treating as missing."
+              ;;
+          esac
+        done <<< "$IMAGE_URLS"
+
+        if [ "$checked" = "0" ]; then
+          echo "::error::image-urls input was empty after trimming."
+          exit 1
         fi
-        if [ "$count" = "0" ] || [ -z "$count" ]; then
-          echo "::notice::No container packages found for $REPOSITORY. Commit stage has not produced artifacts yet — skipping."
-          echo "exist=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "Found $count container package(s) for $REPOSITORY."
+
+        if [ "$any_exist" = "true" ]; then
           echo "exist=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::notice::No ${TAG} tag found on any of the $checked probed images. Commit stage has not produced artifacts yet — skipping."
+          echo "exist=false" >> "$GITHUB_OUTPUT"
         fi

@@ -132,20 +132,21 @@ Boolean existence check for a success commit-status on `head-sha` matching `(con
 
 ### check-ghcr-packages-exist
 
-Calls `gh api repos/{repo}/packages?package_type=container` (via `gh_retry`) and sets `exist=true`/`false` based on whether the list is non-empty. Useful for skipping pipeline stages when no artifacts have been built yet.
+Probes each of the given GHCR image URLs for the probe tag (default `latest`) via OCI `HEAD /v2/{path}/manifests/{tag}` and sets `exist=true` if at least one exists, `false` otherwise. Uses the OCI registry rather than the GitHub Packages REST API, so it works uniformly for user- and org-owned repos and for public and private packages. Useful for skipping pipeline stages when no artifacts have been built yet. Silently resolves to `false` on token/auth errors so callers don't block on unrelated registry glitches; downstream image resolution emits the actionable error.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format to check |
-| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+| `image-urls` | yes | — | Newline-separated list of `ghcr.io/{owner}/{repo}/{image}` paths (omit `:tag` suffix). `exist=true` if at least one has the probe tag. |
+| `tag` | no | `latest` | Image tag to probe. `latest` is the reliable "any artifact built" signal since the commit stage always publishes it. |
+| `token` | no | `${{ github.token }}` | GitHub token used to exchange for a GHCR registry bearer. |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `exist` | Whether container artifacts exist for this repository (`true`/`false`) |
+| `exist` | `true` if any probed image has the tag published, `false` otherwise. |
 
 ### check-sha-on-branch
 
