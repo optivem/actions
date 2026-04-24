@@ -1,6 +1,6 @@
 # Component Docker Tagging in Production Stage
 
-🤖 **Picked up by agent** — `ValentinaLaptop` at `2026-04-24T09:09:31Z`
+> **Status (2026-04-24):** Main plan + bump-patch-versions migration follow-up are COMPLETE. Only deferred items remain below.
 
 ## Context
 
@@ -32,44 +32,23 @@ Adds component-level Docker tagging to prod-stage workflows in `shop/`. The exis
 
 ---
 
-# Follow-up: bump-patch-versions migration (deferred project)
+# ✅ Completed: bump-patch-versions migration (Option B — GitOps / Docker registry as source of truth)
 
-## Why this is deferred
+Decided 2026-04-24. Picked Option B (Docker registry) over C/X/Y for Farley-aligned artifact-is-source-of-truth semantics. One signal per VERSION file: components + monoliths → GHCR image probe, meta → GitHub Release probe.
 
-Per-component git tag patterns are load-bearing in three places:
+Delivered:
+- New primitive `check-ghcr-image-tag-exists` (OCI manifest probe).
+- New primitive `check-github-release-exists` (GitHub Releases API probe).
+- Rewrote `bump-patch-versions` to JSON-array input with `signal: github-release | ghcr-image` discriminator.
+- Migrated callers: `auto-bump-patch.yml`, `bump-versions.yml`, `gh-auto-bump-patch.yml`.
+- Migrated `_meta-prerelease-pipeline.yml` don't-double-release guard.
+- Migrated 6 acceptance-stage `check-tag-exists` callers → `check-github-release-exists`.
+- Removed `create-component-tags` step from all 12 prod-stage workflows.
+- System/Component step name clarity pass across prod + acceptance + meta-prerelease.
 
-1. **`bump-patch-versions` action** — reads per-component git tags to decide if a VERSION file needs auto-bumping. See [actions/bump-patch-versions/action.yml:6](../bump-patch-versions/action.yml#L6) and its usage in [shop/.github/workflows/bump-versions.yml:26-29](../../shop/.github/workflows/bump-versions.yml#L26-L29) and [auto-bump-patch.yml:36-39](../../shop/.github/workflows/auto-bump-patch.yml#L36-L39).
-2. **`_meta-prerelease-pipeline.yml` version-check** ([lines 109-143](../../shop/.github/workflows/_meta-prerelease-pipeline.yml#L109-L143)) — uses the same tag-probing logic as a "don't double-release" guard.
-3. **`check-tag-exists` in acceptance stages** — e.g., [monolith-java-acceptance-stage.yml:71](../../shop/.github/workflows/monolith-java-acceptance-stage.yml#L71) uses `monolith-java-v{version}` (system-level tag, not component-level — but same mechanism).
+Fixed en route: GHCR Accept-header bug — multiple `-H "Accept: ..."` headers were not being combined correctly, causing multi-arch image probes to 404. Switched to single comma-separated Accept header with OCI image index MIME type.
 
-The component-level tags (`multitier-backend-java-v*`, `multitier-frontend-react-v*`, `monolith-system-java-v*`) are the ones created by `create-component-tags`. Removing the action would silently break the bump mechanism because the system-level tags (`multitier-java-v*`, `meta-v*`) use a *different* version number than the component VERSION files, so they can't substitute.
-
-## What needs discussion
-
-Before `create-component-tags` can be safely removed, the bump mechanism needs to read component release information from somewhere other than git tags. Open questions:
-
-1. **Where should the "this component version has been released" signal live?**
-   - Option B: Docker registry — query GHCR / Docker Hub for tags like `multitier-backend-java:v1.5.24`. Requires cross-registry API logic in `bump-patch-versions`; auth per registry; pagination; rate limits.
-   - Option C: Release-ledger file — commit a `.releases.json` (or similar) at release time listing each released component version. `bump-patch-versions` reads the ledger. Simpler but introduces a new file-format and race conditions around concurrent releases.
-   - Option X: Use GitHub Releases API with component-scoped release names (not supported today — GitHub Releases are system-level).
-   - Option Y: Keep a small, purpose-scoped git tag (e.g. `released/{component}/{version}`) as a lightweight marker, distinct from the user-facing `{component}-v{version}` tag. Weakens the "never source-code tags" rule but with narrower scope.
-
-2. **How to migrate existing component git tags?**
-   - Leave them in place (historical) and populate the new signal going forward? Or backfill?
-   - If leave-in-place: need a cutover date — before that date, bump reads old git tags; after, new signal.
-
-3. **Impact on `_meta-prerelease-pipeline.yml` and the acceptance-stage `check-tag-exists` callers** — same mechanism, needs coherent migration.
-
-4. **Cost / effort estimate** — Option B is probably ~2–3 days of action work + registry-API testing. Option C is smaller (~1 day) but introduces a new artifact type. Worth evaluating side-by-side before committing.
-
-## Trigger for the follow-up project
-
-When ready to resume:
-1. Open a new plan file: `20260XXX-XXXXXX-bump-patch-versions-migration.md`.
-2. Pick an approach (B / C / X / Y).
-3. Sequence: build the new signal mechanism → migrate `bump-patch-versions` → migrate `_meta-prerelease-pipeline.yml` guard → migrate acceptance-stage `check-tag-exists` callers → remove `create-component-tags` from all prod-stage workflows → delete the action.
-
-Until then: `create-component-tags` continues to be called in every prod-stage workflow, creating per-component git tags in parallel with the new Docker tagging. No regression.
+Discovered but out-of-scope: remaining `check-tag-exists@v1` + `validate-tag-exists@v1` callers in prod-stage, qa-stage, qa-signoff, and `_prerelease-pipeline.yml`. Captured in a separate plan: `20260424-105713-system-release-signal-migration.md`.
 
 ---
 
@@ -103,3 +82,30 @@ Touches ~6–8 workflow files beyond the bump-patch-versions migration. Tangenti
 ## Trigger
 
 After Step 2c of the bump-patch-versions migration is verified in production.
+
+---
+
+# Deferred: Delete `create-component-tags` action
+
+## Why deferred
+
+After Step 5 removes the `create-component-tags` step from all 12 prod-stage workflows, the action becomes unused by live code. BUT three course-accelerator files teach `create-component-tags` as working example code:
+
+- `courses/01-pipeline/accelerator/course/05-production-stage/03-release-version-tag.md`
+- `courses/01-pipeline/accelerator/course/05-production-stage/04-multi-component.md`
+- `courses/01-pipeline/accelerator/course/08-architecture-reference/04-component-patterns.md`
+
+Plus mentions in `courses/plans/20260422-113736-01-pipeline-accelerator-summary.md`.
+
+Deleting the action would cause students following the course to hit `optivem/actions/create-component-tags@v1 not found`. The original "component Docker tagging" plan explicitly carved course-doc changes as out-of-scope; that exclusion stands here.
+
+## What needs to happen first
+
+1. Rewrite the three course lessons to teach the GitOps-Farley-aligned flow: component artifacts = Docker images in GHCR, system artifacts = GitHub Releases. The "component-level git tag" concept disappears from the teaching narrative.
+2. Update the course summary + architecture reference accordingly.
+3. Remove `create-component-tags` from `actions/README.md`.
+4. Delete the action.
+
+## Trigger
+
+When course content is ready to be updated to match the new signal model.
