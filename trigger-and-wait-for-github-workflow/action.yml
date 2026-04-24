@@ -71,20 +71,41 @@ runs:
         fi
 
         # --- Trigger workflow ---
-        gh_retry workflow run "$WORKFLOW" \
-          --repo "$REPOSITORY" \
-          --ref "$REF" \
-          $input_flags
-
-        echo "Triggered $WORKFLOW"
+        # Wrap dispatch in `timeout` so a hanging TCP/TLS call fails fast with a
+        # diagnostic instead of stalling silently up to the job timeout. The
+        # notice breadcrumbs bracket the call so a future silent exit has a
+        # traceable last-known-good point in the log.
+        echo "::notice::Dispatching $WORKFLOW to $REPOSITORY@$REF..."
+        set +e
+        timeout 60 bash -c '
+          source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+          gh_retry workflow run "$WORKFLOW" \
+            --repo "$REPOSITORY" \
+            --ref "$REF" \
+            '"$input_flags"'
+        '
+        code=$?
+        set -e
+        if [ "$code" -eq 124 ]; then
+          echo "::error::Dispatch of $WORKFLOW exceeded 60s — gh workflow run hung on network I/O. The run may still have been created server-side; check $REPOSITORY actions for a recent run."
+          exit "$code"
+        fi
+        if [ "$code" -ne 0 ]; then
+          echo "::error::Dispatch of $WORKFLOW failed (exit $code)."
+          exit "$code"
+        fi
+        echo "::notice::Dispatched $WORKFLOW"
         sleep 10
 
         # --- Capture run ID ---
-        run_id=$(gh_retry run list \
-          --workflow="$WORKFLOW" \
-          --repo "$REPOSITORY" \
-          --branch "$REF" \
-          --limit 1 --json databaseId --jq '.[0].databaseId')
+        run_id=$(timeout 60 bash -c '
+          source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+          gh_retry run list \
+            --workflow="$WORKFLOW" \
+            --repo "$REPOSITORY" \
+            --branch "$REF" \
+            --limit 1 --json databaseId --jq ".[0].databaseId"
+        ')
         echo "run_id=$run_id" >> $GITHUB_OUTPUT
 
     - name: Wait for ${{ inputs.workflow }}
