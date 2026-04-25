@@ -3,7 +3,7 @@ description: 'For each "component-name:version-file-path" entry, reads the VERSI
 
 inputs:
   components:
-    description: 'Newline-separated list of "component-name:version-file-path" entries (e.g., sysapp-java:system/monolith/java/VERSION)'
+    description: 'Newline-separated list of "component-name:version-file-path" entries (e.g., monolith-system-java:system/monolith/java/VERSION)'
     required: true
   repository:
     description: 'Repository in owner/repo format. Defaults to the current repository.'
