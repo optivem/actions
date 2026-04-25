@@ -1,5 +1,5 @@
-name: 'Get Last Successful GitHub Workflow Run Timestamp'
-description: 'Returns the createdAt timestamp of the most recent successful run of a given workflow, queried via gh run list. Empty when no previous successful run exists.'
+name: 'Get Last GitHub Workflow Run Timestamp'
+description: 'Returns the createdAt timestamp of the most recent completed run of a given workflow (any conclusion), queried via gh run list. Empty when no previous completed run exists.'
 
 inputs:
   workflow-name:
@@ -16,13 +16,13 @@ inputs:
 
 outputs:
   timestamp:
-    description: 'ISO 8601 createdAt of the last successful run. Empty if no previous successful run exists.'
+    description: 'ISO 8601 createdAt of the last completed run, regardless of conclusion. Empty if no previous completed run exists.'
     value: ${{ steps.get.outputs.timestamp }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Get last successful workflow run timestamp
+    - name: Get last workflow run timestamp
       id: get
       shell: bash
       env:
@@ -33,20 +33,19 @@ runs:
         set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
-        # Limit 50 to handle short bursts of failed/in-progress runs preceding the last success.
         timestamp=$(gh_retry run list \
           --repo "${REPOSITORY}" \
           --workflow "$WORKFLOW_NAME" \
           --status completed \
-          --limit 50 \
-          --json conclusion,createdAt \
+          --limit 1 \
+          --json createdAt \
           2>/dev/null \
-          | jq -r 'map(select(.conclusion == "success"))[0].createdAt // ""')
+          | jq -r '.[0].createdAt // ""')
 
         if [[ -z "$timestamp" ]]; then
-          echo "No previous successful run found for workflow '$WORKFLOW_NAME'."
+          echo "No previous completed run found for workflow '$WORKFLOW_NAME'."
         else
-          echo "Last successful run: $timestamp"
+          echo "Last completed run: $timestamp"
         fi
 
         echo "timestamp=$timestamp" >> "$GITHUB_OUTPUT"

@@ -50,7 +50,7 @@ Two lint checks enforce the conventions:
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
 | [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
-| [get-last-successful-github-workflow-run-timestamp](#get-last-successful-github-workflow-run-timestamp) | • `workflow-name`<br>• `repository`<br>• `token` | • `timestamp` |
+| [get-last-github-workflow-run-timestamp](#get-last-github-workflow-run-timestamp) | • `workflow-name`<br>• `repository`<br>• `token` | • `timestamp` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
 | [read-base-version](#read-base-version) | • `file` | • `base-version` |
 | [read-base-versions](#read-base-versions) | • `entries` | • `versions` |
@@ -473,9 +473,9 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 | `state` | The state of the matched status |
 | `target-url` | The `target_url` of the matched status |
 
-### get-last-successful-github-workflow-run-timestamp
+### get-last-github-workflow-run-timestamp
 
-Returns the `createdAt` timestamp of the most recent successful run of a given workflow, queried via `gh run list`. Empty when no previous successful run exists. Pair with `check-timestamp-newer` to skip stages when nothing has changed since the last successful run.
+Returns the `createdAt` timestamp of the most recent completed run of a given workflow (any conclusion), queried via `gh run list`. Empty when no previous completed run exists. Pair with `check-timestamp-newer` to skip stages when nothing has changed since the last run.
 
 **Inputs**
 
@@ -489,7 +489,7 @@ Returns the `createdAt` timestamp of the most recent successful run of a given w
 
 | Name | Description |
 |---|---|
-| `timestamp` | ISO 8601 `createdAt` of the last successful run. Empty if no previous successful run exists. |
+| `timestamp` | ISO 8601 `createdAt` of the last completed run, regardless of conclusion. Empty if no previous completed run exists. |
 
 ### publish-tag
 
