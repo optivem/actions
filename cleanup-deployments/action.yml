@@ -1,4 +1,4 @@
-name: 'Cleanup GitHub Deployments'
+name: 'Cleanup Deployments'
 description: 'Cleans up superseded GitHub deployments that are no longer needed'
 
 inputs:

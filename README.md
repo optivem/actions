@@ -36,8 +36,8 @@ Two lint checks enforce the conventions:
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `latest`<br>• `since` | • `newer` |
-| [cleanup-github-deployments](#cleanup-github-deployments) | • `keep-count`<br>• `retention-days`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
-| [cleanup-github-prereleases](#cleanup-github-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-deployments](#cleanup-deployments) | • `keep-count`<br>• `retention-days`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-prereleases](#cleanup-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
 | [compose-docker-image-urls](#compose-docker-image-urls) | • `tag`<br>• `base-image-urls` | • `image-urls` |
 | [compose-prerelease-status](#compose-prerelease-status) | • `prerelease-version`<br>• `environment`<br>• `status` | • `status-tag` |
@@ -50,7 +50,7 @@ Two lint checks enforce the conventions:
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
 | [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
-| [get-last-github-workflow-run-timestamp](#get-last-github-workflow-run-timestamp) | • `workflow-name`<br>• `repository`<br>• `token` | • `timestamp` |
+| [get-last-workflow-run](#get-last-workflow-run) | • `workflow-name`<br>• `repository`<br>• `exclude-run-id`<br>• `token` | • `timestamp`<br>• `status`<br>• `conclusion` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
 | [read-base-version](#read-base-version) | • `file` | • `base-version` |
 | [read-base-versions](#read-base-versions) | • `entries` | • `versions` |
@@ -61,11 +61,11 @@ Two lint checks enforce the conventions:
 | [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
 | [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
 | [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `image-tags`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
-| [trigger-and-wait-for-github-workflow](#trigger-and-wait-for-github-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
+| [trigger-and-wait-for-workflow](#trigger-and-wait-for-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 | [validate-env-vars-defined](#validate-env-vars-defined) | • `names` | — |
 | [validate-tag-exists](#validate-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | — |
 | [wait-for-endpoints](#wait-for-endpoints) | • `endpoints`<br>• `compose-file`<br>• `working-directory`<br>• `max-attempts`<br>• `wait-seconds`<br>• `timeout-seconds` | — |
-| [wait-for-github-workflow](#wait-for-github-workflow) | • `workflow`<br>• `commit-sha`<br>• `repository`<br>• `poll-interval`<br>• `watch-interval`<br>• `max-discovery-attempts`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
+| [wait-for-workflow](#wait-for-workflow) | • `workflow`<br>• `commit-sha`<br>• `repository`<br>• `poll-interval`<br>• `watch-interval`<br>• `max-discovery-attempts`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
 
 ### bump-patch-versions
 
@@ -207,7 +207,7 @@ Pure ISO 8601 timestamp comparator. Lexicographically compares `latest` against 
 
 **Notes:** ISO 8601 lexicographic comparison is only correct when both timestamps are UTC with the same format (both Z-suffixed). GitHub API and typical observed timestamps (docker push times, git commit times) satisfy this.
 
-### cleanup-github-deployments
+### cleanup-deployments
 
 Fetches all GitHub deployments and deletes superseded ones, subject to a per-environment count cap and a retention-days floor. Delegates to `cleanup-deployments.sh` in the action directory. Protects configured environments and RCs (via git tag lookup).
 
@@ -234,11 +234,11 @@ Fetches all GitHub deployments and deletes superseded ones, subject to a per-env
 - **Released-RC deployments** (final tag `vX.Y.Z` exists): immediately deletes any deployment whose SHA matches a `vX.Y.Z-rc.*` tag; bypasses both `keep-count` and `retention-days`.
 - **Superseded per environment** (count cap + retention floor): keeps the newest `keep-count` deployments per environment; anything beyond the cap is deleted only once older than `retention-days` (the floor prevents pruning fresh bursts during active debugging).
 - **Protected environments** are never touched by either scenario.
-- **Ordering:** run this action **before** `cleanup-github-prereleases` in the same workflow — the released-RC logic relies on RC git tags being present to resolve SHAs, and `cleanup-github-prereleases` deletes those tags immediately for released versions.
+- **Ordering:** run this action **before** `cleanup-prereleases` in the same workflow — the released-RC logic relies on RC git tags being present to resolve SHAs, and `cleanup-prereleases` deletes those tags immediately for released versions.
 
-### cleanup-github-prereleases
+### cleanup-prereleases
 
-Cleans up prerelease git tags, GitHub releases, and (optionally) Docker image tags that are no longer needed. Delegates to `cleanup-github-prereleases.sh` in the action directory. Rate-limit-aware.
+Cleans up prerelease git tags, GitHub releases, and (optionally) Docker image tags that are no longer needed. Delegates to `cleanup-prereleases.sh` in the action directory. Rate-limit-aware.
 
 **Inputs**
 
@@ -261,7 +261,7 @@ Cleans up prerelease git tags, GitHub releases, and (optionally) Docker image ta
 **Notes:**
 - **Released versions** (final tag `vX.Y.Z` exists): immediately deletes prerelease GitHub releases + git tags (`vX.Y.Z-rc.*`, `vX.Y.Z-rc.*-qa-*`); after the retention period, deletes prerelease Docker image tags.
 - **Superseded prereleases** (no final release yet): after the retention period, deletes older RCs + their status tags + Docker image tags; never deletes the latest RC.
-- **Ordering:** run `cleanup-github-deployments` first (see its Notes).
+- **Ordering:** run `cleanup-deployments` first (see its Notes).
 
 ### commit-files
 
@@ -473,9 +473,9 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 | `state` | The state of the matched status |
 | `target-url` | The `target_url` of the matched status |
 
-### get-last-github-workflow-run-timestamp
+### get-last-workflow-run
 
-Returns the `createdAt` timestamp of the most recent completed run of a given workflow (any conclusion), queried via `gh run list`. Empty when no previous completed run exists. Pair with `check-timestamp-newer` to skip stages when nothing has changed since the last run.
+Returns metadata of the most recent run of a given workflow (excluding the current run by default), queried via `gh run list`. Outputs `timestamp`, `status`, and `conclusion` — all empty when no previous run exists. Pair `timestamp` with `check-timestamp-newer` to skip stages when nothing has changed since the last run.
 
 **Inputs**
 
@@ -483,13 +483,16 @@ Returns the `createdAt` timestamp of the most recent completed run of a given wo
 |---|---|---|---|
 | `workflow-name` | yes | — | Workflow file name or display name to query (e.g. `github.workflow`) |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
+| `exclude-run-id` | no | `${{ github.run_id }}` | Run ID to exclude from results — typically the current run, so the action returns the previous run. Set to empty string to disable exclusion. |
 | `token` | no | `${{ github.token }}` | GitHub token used for API calls |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `timestamp` | ISO 8601 `createdAt` of the last completed run, regardless of conclusion. Empty if no previous completed run exists. |
+| `timestamp` | ISO 8601 `createdAt` of the last run. Empty if no previous run exists. |
+| `status` | Status of the last run (`queued`, `in_progress`, `completed`, etc.). Empty if no previous run exists. |
+| `conclusion` | Conclusion of the last run (`success`, `failure`, `cancelled`, `skipped`, etc.). Empty if the run has not completed, or if no previous run exists. |
 
 ### publish-tag
 
@@ -678,7 +681,7 @@ Exactly one mode must be used. Both modes set or neither set → fails fast with
 |---|---|
 | `tagged-image-urls` | JSON array of Docker image URLs with new tags applied |
 
-### trigger-and-wait-for-github-workflow
+### trigger-and-wait-for-workflow
 
 Probes the GitHub rate limit (and sleeps until reset if below threshold), dispatches a `workflow_dispatch` workflow via `gh workflow run` (through `gh_retry`), captures the triggered run's ID via `gh run list`, and then `gh run watch --exit-status`es the run to fail the step if the triggered run fails.
 
@@ -743,9 +746,9 @@ For each `{name, url}` in the input array, polls the URL with `curl -f` up to `m
 | `wait-seconds` | no | `10` | Base seconds to wait between attempts (doubled each attempt, capped at `wait-seconds * 16`, plus small jitter) |
 | `timeout-seconds` | no | `900` | Hard timeout on the total polling time across all endpoints. Action fails with exit code 124 if not all endpoints become ready within this ceiling. Default is 15 min — aligned with fast-feedback sizing. |
 
-### wait-for-github-workflow
+### wait-for-workflow
 
-Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `headSha == <commit-sha>` until a match is found, then `gh run watch --exit-status`es the run to fail the step if it fails. Sibling of `trigger-and-wait-for-github-workflow` — use that when you need to dispatch the workflow yourself; use this when a commit push has already triggered it.
+Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `headSha == <commit-sha>` until a match is found, then `gh run watch --exit-status`es the run to fail the step if it fails. Sibling of `trigger-and-wait-for-workflow` — use that when you need to dispatch the workflow yourself; use this when a commit push has already triggered it.
 
 **Inputs**
 

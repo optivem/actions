@@ -1,4 +1,4 @@
-name: 'Cleanup GitHub Prereleases'
+name: 'Cleanup Prereleases'
 description: 'Cleans up prerelease git tags, GitHub releases, and Docker image tags that are no longer needed'
 
 inputs:
@@ -53,4 +53,4 @@ runs:
         RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
         DRY_RUN: ${{ inputs.dry-run }}
         REPOSITORY: ${{ github.repository }}
-      run: bash "$GITHUB_ACTION_PATH/cleanup-github-prereleases.sh"
+      run: bash "$GITHUB_ACTION_PATH/cleanup-prereleases.sh"

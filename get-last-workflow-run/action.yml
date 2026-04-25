@@ -1,0 +1,72 @@
+name: 'Get Last Workflow Run'
+description: 'Returns metadata of the most recent run of a given workflow (excluding the current run), queried via gh run list. Outputs timestamp, status, and conclusion. All outputs empty when no previous run exists.'
+
+inputs:
+  workflow-name:
+    description: 'Workflow file name or display name to query (e.g. `github.workflow`).'
+    required: true
+  repository:
+    description: 'Repository in "owner/name" form. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
+  exclude-run-id:
+    description: 'Run ID to exclude from results — typically the current run, so the action returns the previous run. Set to empty string to disable exclusion. Defaults to github.run_id.'
+    required: false
+    default: ${{ github.run_id }}
+  token:
+    description: 'GitHub token used for API calls. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  timestamp:
+    description: 'ISO 8601 createdAt of the last run. Empty if no previous run exists.'
+    value: ${{ steps.get.outputs.timestamp }}
+  status:
+    description: 'Status of the last run (queued, in_progress, completed, etc.). Empty if no previous run exists.'
+    value: ${{ steps.get.outputs.status }}
+  conclusion:
+    description: 'Conclusion of the last run (success, failure, cancelled, skipped, etc.). Empty if the run has not completed, or if no previous run exists.'
+    value: ${{ steps.get.outputs.conclusion }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get last workflow run
+      id: get
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        WORKFLOW_NAME: ${{ inputs.workflow-name }}
+        REPOSITORY: ${{ inputs.repository }}
+        EXCLUDE_RUN_ID: ${{ inputs.exclude-run-id }}
+      run: |
+        set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+
+        # Limit 5 covers the case where the current run plus a small flurry of
+        # concurrent triggers all show up before the previous completed run.
+        data=$(gh_retry run list \
+          --repo "${REPOSITORY}" \
+          --workflow "$WORKFLOW_NAME" \
+          --limit 5 \
+          --json databaseId,createdAt,status,conclusion \
+          2>/dev/null \
+          | jq -c --arg cur "$EXCLUDE_RUN_ID" \
+               '[.[] | select(($cur == "") or (.databaseId != ($cur | tonumber)))][0] // {}')
+
+        timestamp=$(jq -r '.createdAt // ""' <<< "$data")
+        status=$(jq -r '.status // ""' <<< "$data")
+        conclusion=$(jq -r '.conclusion // ""' <<< "$data")
+
+        if [[ -z "$timestamp" ]]; then
+          echo "No previous run found for workflow '$WORKFLOW_NAME'."
+        else
+          echo "Last run: $timestamp (status=$status, conclusion=$conclusion)"
+        fi
+
+        {
+          echo "timestamp=$timestamp"
+          echo "status=$status"
+          echo "conclusion=$conclusion"
+        } >> "$GITHUB_OUTPUT"

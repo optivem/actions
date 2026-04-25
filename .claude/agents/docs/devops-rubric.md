@@ -58,8 +58,8 @@ Default recommendation for an output "unread today" is **keep**. An output's cos
 - **Build-once-promote-many.** Flag any action whose name or `runs:` block implies rebuilding an artifact past the commit stage (e.g. `build-image` called from a promote/deploy workflow, or a promote action that shells out to `docker build` or runs a compiler). Promote actions must consume an existing artifact reference (image digest, tag, URL), not rebuild from source. Source: Farley & Humble, *Continuous Delivery* ch. 5.
 - **Error handling / idempotence.** DevOps practice expects actions to be idempotent or fail-fast with clear errors. Flag actions that silently succeed on no-op, or that have ambiguous failure semantics.
 - **Fail-fast on cheap preconditions.** Input validation, format checks, and reachability probes must happen *before* any API call, docker build, or external side effect. Flag actions whose first side-effecting step can fail on a precondition the action could have validated in a prior, side-effect-free step. Source: Farley & Humble, *Continuous Delivery* ch. 4.
-- **Fast-feedback sizing.** Actions that block a job's progress (polling, waiting, retrying) must expose a `timeout-seconds` (or `max-attempts` + `poll-interval`) input with a default that respects the target commit-stage budget of roughly 5 minutes end-to-end (Farley & Humble ch. 4, *Implementing a Deployment Pipeline*). Applies to `wait-for-urls`, `wait-for-github-workflow`, `trigger-and-wait-for-github-workflow`, and any future blocker. Flag actions whose default wait-times could sum above ~5min under common caller compositions without the caller being able to cap them.
-- **Rate-limit awareness for `gh api` actions.** Flag any action that uses `gh api` in a loop (iterating over items, following pagination, or called repeatedly from a caller loop) and does not accept a `rate-limit-threshold` / `poll-interval` input or back off when approaching the limit. Reference pattern: `cleanup-github-prereleases` and `trigger-and-wait-for-github-workflow`. Point callers at `gh api rate_limit` for headroom checks.
+- **Fast-feedback sizing.** Actions that block a job's progress (polling, waiting, retrying) must expose a `timeout-seconds` (or `max-attempts` + `poll-interval`) input with a default that respects the target commit-stage budget of roughly 5 minutes end-to-end (Farley & Humble ch. 4, *Implementing a Deployment Pipeline*). Applies to `wait-for-urls`, `wait-for-workflow`, `trigger-and-wait-for-workflow`, and any future blocker. Flag actions whose default wait-times could sum above ~5min under common caller compositions without the caller being able to cap them.
+- **Rate-limit awareness for `gh api` actions.** Flag any action that uses `gh api` in a loop (iterating over items, following pagination, or called repeatedly from a caller loop) and does not accept a `rate-limit-threshold` / `poll-interval` input or back off when approaching the limit. Reference pattern: `cleanup-prereleases` and `trigger-and-wait-for-workflow`. Point callers at `gh api rate_limit` for headroom checks.
 - **Bounded retry with backoff.** Flag any action whose `runs:` block retries a transient-failure-prone operation (network call, API request, polling loop) without **(a)** an explicit maximum attempt count or deadline, and **(b)** exponential or jittered backoff between attempts. Unbounded `while true; do ... done` loops and flat-interval retries burn the caller's error budget and inflate MTTR during partial outages — a single wedged action can consume an entire pipeline's retry budget. A healthy retry loop has a ceiling (e.g. `max-attempts: 5` input, or a `timeout-seconds` input) and grows the sleep between attempts (e.g. 2s → 4s → 8s → 16s → 32s, optionally with jitter). **DORA linkage — MTTR.** Unbounded retries are an MTTR amplifier: a 30-second transient registry outage escalates into a 30-minute pipeline wedge under flat-interval retry, so the MTTR observed by the team is dominated by the retry policy rather than the underlying fault. Source: Google SRE book, ch. 22 "Addressing Cascading Failures" (retry amplification) and ch. 3 "Embracing Risk" (error-budget framing); *Accelerate* (Forsgren, Humble, Kim) on MTTR as a DORA metric.
 
 ## 1.4 Secrets, supply chain, observability, shell, branding
@@ -316,9 +316,9 @@ Three conceptual tiers. Only the third gets a prefix.
   | Core noun | Ambiguous bare? | Name |
   |---|---|---|
   | release | yes (product release, software release) | `create-github-release` † |
-  | deployment | yes (generic software deployments — k8s, Cloud Run) | `cleanup-github-deployments` |
-  | prerelease | yes (semver prerelease tag) | `cleanup-github-prereleases` |
-  | workflow, workflow-run | yes (business workflows, data workflows, ML workflows) | `wait-for-github-workflow`, `trigger-and-wait-for-github-workflow` |
+  | deployment | yes (generic software deployments — k8s, Cloud Run) | `cleanup-deployments` |
+  | prerelease | yes (semver prerelease tag) | `cleanup-prereleases` |
+  | workflow, workflow-run | yes (business workflows, data workflows, ML workflows) | `wait-for-workflow`, `trigger-and-wait-for-workflow` |
   | packages | yes (npm, OS, language packages) — use narrower `ghcr` | `check-ghcr-packages-exist` |
   | commit-status | no — compound noun, no collision in any dev domain | `create-commit-status`, `get-commit-status` |
 
@@ -396,7 +396,7 @@ Ask: **do downstream workflows need to *find* the thing by name, or just *check 
 | Can be the target of `on: push:` triggers? | Yes | No |
 | Visible in `git tag -l` / `gh release list`? | Yes | No (API-only) |
 | Cross-host portable? | Yes (works on GitLab, Bitbucket, self-hosted) | No (GitHub only; other hosts have similar but not identical concepts) |
-| Cleanup needed? | Yes — the tag namespace grows per-commit (`cleanup-github-prereleases` handles this) | No — statuses ride with the commit |
+| Cleanup needed? | Yes — the tag namespace grows per-commit (`cleanup-prereleases` handles this) | No — statuses ride with the commit |
 
 ### Naming convention consequences
 
