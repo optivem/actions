@@ -1,5 +1,5 @@
 name: 'Get Last Workflow Run'
-description: 'Returns metadata of the most recent run of a given workflow (excluding the current run), queried via gh run list. Outputs timestamp, status, and conclusion. All outputs empty when no previous run exists.'
+description: 'Returns the createdAt timestamp of the most recent completed run of a given workflow (excluding the current run), queried via gh run list. Queued and in-progress runs are filtered out so concurrent siblings cannot be returned as the "previous" run. Output is empty when no previous completed run exists.'
 
 inputs:
   workflow-name:
@@ -20,14 +20,8 @@ inputs:
 
 outputs:
   timestamp:
-    description: 'ISO 8601 createdAt of the last run. Empty if no previous run exists.'
+    description: 'ISO 8601 createdAt of the last completed run. Empty if no previous completed run exists.'
     value: ${{ steps.get.outputs.timestamp }}
-  status:
-    description: 'Status of the last run (queued, in_progress, completed, etc.). Empty if no previous run exists.'
-    value: ${{ steps.get.outputs.status }}
-  conclusion:
-    description: 'Conclusion of the last run (success, failure, cancelled, skipped, etc.). Empty if the run has not completed, or if no previous run exists.'
-    value: ${{ steps.get.outputs.conclusion }}
 
 runs:
   using: 'composite'
@@ -44,29 +38,29 @@ runs:
         set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
-        # Limit 5 covers the case where the current run plus a small flurry of
-        # concurrent triggers all show up before the previous completed run.
-        data=$(gh_retry run list \
+        # Limit 10 covers the case where the current run plus a flurry of
+        # concurrent triggers (push + schedule + dispatch) all show up before
+        # the previous completed run.
+        #
+        # Filter to status == "completed" so we never pick a sibling run that
+        # is still queued or in_progress as the "previous" run. Picking such a
+        # sibling makes its createdAt a future timestamp from the perspective
+        # of the artifact-freshness comparison, which would force a false skip
+        # when concurrent runs race (e.g. scheduled run + workflow_dispatch
+        # arriving within seconds of each other).
+        timestamp=$(gh_retry run list \
           --repo "${REPOSITORY}" \
           --workflow "$WORKFLOW_NAME" \
-          --limit 5 \
-          --json databaseId,createdAt,status,conclusion \
+          --limit 10 \
+          --json databaseId,createdAt,status \
           2>/dev/null \
-          | jq -c --arg cur "$EXCLUDE_RUN_ID" \
-               '[.[] | select(($cur == "") or (.databaseId != ($cur | tonumber)))][0] // {}')
-
-        timestamp=$(jq -r '.createdAt // ""' <<< "$data")
-        status=$(jq -r '.status // ""' <<< "$data")
-        conclusion=$(jq -r '.conclusion // ""' <<< "$data")
+          | jq -r --arg cur "$EXCLUDE_RUN_ID" \
+               '[.[] | select(.status == "completed") | select(($cur == "") or (.databaseId != ($cur | tonumber)))][0].createdAt // ""')
 
         if [[ -z "$timestamp" ]]; then
-          echo "No previous run found for workflow '$WORKFLOW_NAME'."
+          echo "No previous completed run found for workflow '$WORKFLOW_NAME'."
         else
-          echo "Last run: $timestamp (status=$status, conclusion=$conclusion)"
+          echo "Last completed run: $timestamp"
         fi
 
-        {
-          echo "timestamp=$timestamp"
-          echo "status=$status"
-          echo "conclusion=$conclusion"
-        } >> "$GITHUB_OUTPUT"
+        echo "timestamp=$timestamp" >> "$GITHUB_OUTPUT"
