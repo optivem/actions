@@ -46,7 +46,7 @@ Two lint checks enforce the conventions:
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
 | [compose-tags](#compose-tags) | • `versions`<br>• `template` | • `tags` |
 | [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
-| [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `compose-file`<br>• `working-directory` | — |
+| [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `service-names`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
 | [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
@@ -415,7 +415,7 @@ Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit sta
 
 ### deploy-docker-compose
 
-Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working directory — the local-deployment stepping stone from the Farley deploy vocabulary. The `environment`, `version`, and `image-urls` inputs are logged for operator visibility but do not alter behavior. Pair with `wait-for-endpoints` to verify readiness after deployment.
+Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working directory — the local-deployment stepping stone from the Farley deploy vocabulary. The `environment` and `version` inputs are logged for operator visibility. Each `(image-urls[i], service-names[i])` pair is exported as `SYSTEM_IMAGE_<UPPER(name)>=<url>` so compose files can SHA-pin via `${SYSTEM_IMAGE_<NAME>:-...}` substitution; counts must match exactly or the action fails loud. Pair with `wait-for-endpoints` to verify readiness after deployment.
 
 **Inputs**
 
@@ -423,7 +423,8 @@ Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working
 |---|---|---|---|
 | `environment` | yes | — | Display-only label shown in step logs (e.g., acceptance, qa, production). Required — every run must announce its target. The action does not route based on this value. |
 | `version` | yes | — | Display-only version label shown in step logs (e.g., `v1.0.0-rc.1`). Required — every run must announce the version being deployed. The action does not select artifacts based on this value. |
-| `image-urls` | yes | — | Docker image URLs being run (JSON array format) — surfaced in logs |
+| `image-urls` | yes | — | Docker image URLs being deployed (JSON array). Each entry is exported as `SYSTEM_IMAGE_<UPPER(service-name)>=<url>` for compose substitution; counts must match `service-names` exactly. |
+| `service-names` | yes | — | Newline-separated list of compose service names corresponding to `image-urls` (same order). Each `(url, name)` pair is exported as `SYSTEM_IMAGE_<UPPER(name)>=<url>`; compose files consume via `${SYSTEM_IMAGE_<NAME>:-...}` substitution. Counts must match `image-urls` exactly. |
 | `compose-file` | no | `` | Docker Compose file to use (e.g., `docker-compose.yml`) |
 | `working-directory` | yes | — | Working directory containing the Docker Compose file |
 

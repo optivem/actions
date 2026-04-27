@@ -9,7 +9,10 @@ inputs:
     description: 'Display-only version label shown in step logs (e.g., v1.0.0-rc.1). Required — every run must announce the version being deployed. The action does not select artifacts based on this value.'
     required: true
   image-urls:
-    description: 'Docker image URLs being run (JSON array format) — surfaced in logs'
+    description: 'Docker image URLs being deployed (JSON array). Each entry is exported as SYSTEM_IMAGE_<UPPER(service-name)>=<url> for compose substitution; counts must match service-names exactly.'
+    required: true
+  service-names:
+    description: 'Newline-separated list of compose service names corresponding to image-urls (same order). Each (url, name) pair is exported as SYSTEM_IMAGE_<UPPER(name)>=<url>; compose files consume via ${SYSTEM_IMAGE_<NAME>:-...} substitution. Counts must match image-urls exactly.'
     required: true
   compose-file:
     description: 'Docker Compose file to use (e.g., docker-compose.yml)'
@@ -22,6 +25,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Resolve image env vars
+      env:
+        IMAGE_URLS: ${{ inputs.image-urls }}
+        SERVICE_NAMES: ${{ inputs.service-names }}
+      run: bash "${{ github.action_path }}/deploy-docker-compose.sh"
+      shell: bash
+
     - name: Start Docker Compose
       env:
         ENVIRONMENT: ${{ inputs.environment }}
