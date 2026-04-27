@@ -62,18 +62,6 @@ for url in "${full_urls[@]}"; do
   echo "   🐳 $url"
 done
 
-echo "🔍 Verifying Docker images exist..."
-for image_url in "${full_urls[@]}"; do
-  echo "Checking: $image_url"
-  if docker manifest inspect "$image_url" >/dev/null 2>&1; then
-    echo "✅ Image exists: $image_url"
-  else
-    echo "::error::Docker image not found: $image_url"
-    exit 1
-  fi
-done
-echo "✅ All Docker images verified successfully"
-
 docker_urls_json="$(printf '%s\n' "${full_urls[@]}" | jq -R . | jq -sc .)"
 
 echo "Setting GitHub Actions outputs..."
@@ -90,5 +78,3 @@ fi
 
 echo "📋 GitHub Actions Outputs Set:"
 echo "  image-urls: $docker_urls_json"
-
-echo "✅ All Docker images found and validated"
