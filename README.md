@@ -714,7 +714,7 @@ Exactly one mode must be used. Both modes set or neither set → fails fast with
 
 ### trigger-and-wait-for-workflow
 
-Probes the GitHub rate limit (and sleeps until reset if below threshold), dispatches a `workflow_dispatch` workflow via `gh workflow run` (through `gh_retry`), captures the triggered run's ID via `gh run list`, and then `gh run watch --exit-status`es the run to fail the step if the triggered run fails.
+Probes the GitHub rate limit (and sleeps until reset if below threshold), dispatches a `workflow_dispatch` workflow via `gh workflow run` (through `gh_retry`), then captures the triggered run's ID by polling the workflow's runs endpoint and filtering client-side on `event=workflow_dispatch`, `head_sha` matching the resolved ref, and `created_at >= dispatch time` — robust against the API-indexing race and concurrent dispatches by other actors. Finally `gh run watch --exit-status`es the run to fail the step if the triggered run fails.
 
 **Inputs**
 
