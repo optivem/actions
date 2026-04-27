@@ -50,7 +50,7 @@ Two lint checks enforce the conventions:
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
 | [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
-| [get-last-workflow-run](#get-last-workflow-run) | • `workflow-name`<br>• `repository`<br>• `exclude-run-id`<br>• `token` | • `timestamp`<br>• `status`<br>• `conclusion` |
+| [get-last-workflow-run](#get-last-workflow-run) | • `workflow-name`<br>• `repository`<br>• `exclude-run-id`<br>• `status`<br>• `conclusion`<br>• `limit`<br>• `token` | • `timestamp` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
 | [read-base-version](#read-base-version) | • `file` | • `base-version` |
 | [read-base-versions](#read-base-versions) | • `entries`<br>• `token` | • `versions` |
@@ -474,7 +474,7 @@ Reads commit statuses via `gh api repos/{repo}/commits/{sha}/statuses` and selec
 
 ### get-last-workflow-run
 
-Returns metadata of the most recent run of a given workflow (excluding the current run by default), queried via `gh run list`. Outputs `timestamp`, `status`, and `conclusion` — all empty when no previous run exists. Pair `timestamp` with `check-timestamp-newer` to skip stages when nothing has changed since the last run.
+Returns the `createdAt` timestamp of the most recent run of a given workflow matching the given `status` and `conclusion` (defaults to `completed` + `success`), excluding the current run by default, queried via `gh run list`. Output is empty when no matching run exists. Pair `timestamp` with `check-timestamp-newer` to skip stages when nothing has changed since the last successful run — failed runs are ignored by default so the next trigger retries instead of skipping until artifacts change.
 
 **Inputs**
 
@@ -483,15 +483,16 @@ Returns metadata of the most recent run of a given workflow (excluding the curre
 | `workflow-name` | yes | — | Workflow file name or display name to query (e.g. `github.workflow`) |
 | `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
 | `exclude-run-id` | no | `${{ github.run_id }}` | Run ID to exclude from results — typically the current run, so the action returns the previous run. Set to empty string to disable exclusion. |
+| `status` | no | `completed` | Run status to filter on (e.g. `completed`, `in_progress`, `queued`). Set to empty string to disable the status filter. The default prevents picking a still-queued or in-progress sibling whose `createdAt` would be a future timestamp from the freshness gate's perspective. |
+| `conclusion` | no | `success` | Run conclusion to filter on (e.g. `success`, `failure`, `cancelled`, `skipped`). Set to empty string to disable the conclusion filter. The default makes freshness gates compare against the last *successful* verification — failed runs do not count as "last verified". |
+| `limit` | no | `20` | Maximum number of recent runs to fetch from `gh run list` before applying filters. Must cover concurrent triggers plus any recent runs filtered out by `status`/`conclusion`. Increase if recent failures or in-progress siblings can push the last matching run beyond the default window. |
 | `token` | no | `${{ github.token }}` | GitHub token used for API calls |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `timestamp` | ISO 8601 `createdAt` of the last run. Empty if no previous run exists. |
-| `status` | Status of the last run (`queued`, `in_progress`, `completed`, etc.). Empty if no previous run exists. |
-| `conclusion` | Conclusion of the last run (`success`, `failure`, `cancelled`, `skipped`, etc.). Empty if the run has not completed, or if no previous run exists. |
+| `timestamp` | ISO 8601 `createdAt` of the last matching run. Empty if no matching run exists. |
 
 ### publish-tag
 
