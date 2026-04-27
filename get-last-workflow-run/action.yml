@@ -1,5 +1,5 @@
 name: 'Get Last Workflow Run'
-description: 'Returns the createdAt timestamp of the most recent completed run of a given workflow (excluding the current run), queried via gh run list. Queued and in-progress runs are filtered out so concurrent siblings cannot be returned as the "previous" run. Output is empty when no previous completed run exists.'
+description: 'Returns the createdAt timestamp of the most recent run of a given workflow matching the given status and conclusion (defaults to completed + success), excluding the current run, queried via gh run list. Output is empty when no matching run exists.'
 
 inputs:
   workflow-name:
@@ -13,6 +13,18 @@ inputs:
     description: 'Run ID to exclude from results — typically the current run, so the action returns the previous run. Set to empty string to disable exclusion. Defaults to github.run_id.'
     required: false
     default: ${{ github.run_id }}
+  status:
+    description: 'Run status to filter on (e.g. `completed`, `in_progress`, `queued`). Set to empty string to disable the status filter. Defaults to `completed` so concurrent in-progress siblings cannot be returned as the "previous" run.'
+    required: false
+    default: 'completed'
+  conclusion:
+    description: 'Run conclusion to filter on (e.g. `success`, `failure`, `cancelled`, `skipped`). Set to empty string to disable the conclusion filter. Defaults to `success` so freshness gates compare against the last *successful* verification — failed runs do not count as "last verified", letting the next trigger retry.'
+    required: false
+    default: 'success'
+  limit:
+    description: 'Maximum number of recent runs to fetch from `gh run list` before applying filters. Must be large enough to cover concurrent triggers (push + schedule + dispatch arriving together) plus any recent runs filtered out by `status`/`conclusion`. Increase if recent failures or in-progress siblings can push the last matching run beyond the default window.'
+    required: false
+    default: '20'
   token:
     description: 'GitHub token used for API calls. Defaults to github.token.'
     required: false
@@ -20,7 +32,7 @@ inputs:
 
 outputs:
   timestamp:
-    description: 'ISO 8601 createdAt of the last completed run. Empty if no previous completed run exists.'
+    description: 'ISO 8601 createdAt of the last matching run. Empty if no matching run exists.'
     value: ${{ steps.get.outputs.timestamp }}
 
 runs:
@@ -34,33 +46,45 @@ runs:
         WORKFLOW_NAME: ${{ inputs.workflow-name }}
         REPOSITORY: ${{ inputs.repository }}
         EXCLUDE_RUN_ID: ${{ inputs.exclude-run-id }}
+        STATUS: ${{ inputs.status }}
+        CONCLUSION: ${{ inputs.conclusion }}
+        LIMIT: ${{ inputs.limit }}
       run: |
         set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 
-        # Limit 10 covers the case where the current run plus a flurry of
-        # concurrent triggers (push + schedule + dispatch) all show up before
-        # the previous completed run.
+        # The default status="completed" filter prevents picking a sibling run
+        # that is still queued or in_progress as the "previous" run — its
+        # createdAt would be a future timestamp from the perspective of the
+        # artifact-freshness comparison, forcing a false skip when concurrent
+        # runs race (e.g. scheduled run + workflow_dispatch arriving within
+        # seconds of each other).
         #
-        # Filter to status == "completed" so we never pick a sibling run that
-        # is still queued or in_progress as the "previous" run. Picking such a
-        # sibling makes its createdAt a future timestamp from the perspective
-        # of the artifact-freshness comparison, which would force a false skip
-        # when concurrent runs race (e.g. scheduled run + workflow_dispatch
-        # arriving within seconds of each other).
+        # The default conclusion="success" filter makes freshness gates
+        # compare against the last *successful* verification — failed runs do
+        # not count as "last verified", so the next trigger retries instead
+        # of skipping until artifacts change.
+        #
+        # The default limit covers concurrent triggers (push + schedule +
+        # dispatch arriving together) plus headroom for recent failures or
+        # in-progress siblings that get filtered out before the last match.
         timestamp=$(gh_retry run list \
           --repo "${REPOSITORY}" \
           --workflow "$WORKFLOW_NAME" \
-          --limit 10 \
-          --json databaseId,createdAt,status \
+          --limit "${LIMIT}" \
+          --json databaseId,createdAt,status,conclusion \
           2>/dev/null \
-          | jq -r --arg cur "$EXCLUDE_RUN_ID" \
-               '[.[] | select(.status == "completed") | select(($cur == "") or (.databaseId != ($cur | tonumber)))][0].createdAt // ""')
+          | jq -r --arg cur "$EXCLUDE_RUN_ID" --arg status "$STATUS" --arg conclusion "$CONCLUSION" \
+               '[.[]
+                 | select(($status == "") or (.status == $status))
+                 | select(($conclusion == "") or (.conclusion == $conclusion))
+                 | select(($cur == "") or (.databaseId != ($cur | tonumber)))
+                ][0].createdAt // ""')
 
         if [[ -z "$timestamp" ]]; then
-          echo "No previous completed run found for workflow '$WORKFLOW_NAME'."
+          echo "No previous run matching status='${STATUS}' conclusion='${CONCLUSION}' found for workflow '$WORKFLOW_NAME'."
         else
-          echo "Last completed run: $timestamp"
+          echo "Last matching run (status='${STATUS}' conclusion='${CONCLUSION}'): $timestamp"
         fi
 
         echo "timestamp=$timestamp" >> "$GITHUB_OUTPUT"
