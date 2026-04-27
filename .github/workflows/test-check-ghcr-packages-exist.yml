@@ -38,7 +38,6 @@ jobs:
         uses: ./check-ghcr-packages-exist
         with:
           tag: ${{ inputs.existing-tag }}
-          fail-on-error: 'true'
           image-urls: |
             ${{ inputs.image-url }}
             ${{ inputs.image-url }}:${{ inputs.missing-tag }}
