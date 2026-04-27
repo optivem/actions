@@ -42,7 +42,7 @@ Do NOT read:
 
 - any `*/action.yml` — the actions are out of scope.
 - the consumer repos (`../shop/`, `../gh-optivem/`, `../optivem-testing/`) — consumers are out of scope.
-- anything under `.plans/` — old plan files are ephemeral artefacts, not subjects.
+- anything under `plans/` — old plan files are ephemeral artefacts, not subjects.
 
 # Process
 
@@ -99,9 +99,9 @@ Do NOT read:
    - `backwards_compatible` option — defined in auditor input; does the reviewer reason about its effect on the auditor's output correctly?
    - Publication intent (internal-only) — declared in the auditor; does the reviewer's dimension 3 (Marketplace) respect this, or does it push back?
 
-9. **Plan-file convention pass.** Both agents write to `.plans/<timestamp>-*.md` with a documented format. Check:
+9. **Plan-file convention pass.** Both agents write to `plans/<timestamp>-*.md` with a documented format. Check:
    - both agents use the same timestamp command (`date -u +%Y%m%d-%H%M%S`).
-   - both follow the project-level rule in the root [CLAUDE.md](CLAUDE.md) about the `.plans/` directory lifecycle (remove items as executed, delete file when empty, delete `.plans/` when empty).
+   - both follow the project-level rule in the root [CLAUDE.md](CLAUDE.md) about the `plans/` directory lifecycle (remove items as executed, delete file when empty, delete `plans/` when empty).
    - neither agent accidentally produces a filename pattern the other would clobber.
 
 10. **Open-ended pass.** Re-read both files side-by-side looking for anything that doesn't fit the named passes above — subtle wording drift, duplicated paragraphs that have fallen out of sync, a dimension one file takes seriously that the other has silently dropped, a newer rule in one file that the other hasn't been updated to reference, a rule one file attributes to the other's domain. Anything that stands out belongs in **Additional findings**. Do not skip this step.
@@ -235,21 +235,21 @@ If none, write "None. The auditor/reviewer pair is mutually consistent as-is."
 Save the full report to:
 
 ```
-.plans/<YYYYMMDD-HHMMSS>-audit-auditor-reviewer-consistency.md
+plans/<YYYYMMDD-HHMMSS>-audit-auditor-reviewer-consistency.md
 ```
 
-Use the current UTC timestamp. Get it with `date -u +%Y%m%d-%H%M%S`. Create `.plans/` if missing.
+Use the current UTC timestamp. Get it with `date -u +%Y%m%d-%H%M%S`. Create `plans/` if missing.
 
 Return the full report as the agent's main text response AND write it to the file.
 
-**Do not silently clobber an in-progress plan.** Before writing, check `.plans/` for an existing `*-audit-auditor-reviewer-consistency.md`. If one exists with open (unchecked) items, surface this to the author rather than writing a new file that visually replaces it.
+**Do not silently clobber an in-progress plan.** Before writing, check `plans/` for an existing `*-audit-auditor-reviewer-consistency.md`. If one exists with open (unchecked) items, surface this to the author rather than writing a new file that visually replaces it.
 
 Per project convention, the plan file is removed once its recommendations are applied (or the author has decided to reject them).
 
 # Rules
 
 - Do not modify `.claude/agents/actions-auditor.md`, `.claude/agents/actions-auditor-reviewer.md`, `.claude/agents/docs/devops-rubric.md`, or `.claude/agents/docs/review-dimensions.md`. They are read-only subjects.
-- Do not modify any other repo file except the report file at `.plans/<timestamp>-audit-auditor-reviewer-consistency.md`.
+- Do not modify any other repo file except the report file at `plans/<timestamp>-audit-auditor-reviewer-consistency.md`.
 - Do not audit the actions themselves, and do not audit the rubric's alignment with Farley/DORA/portability — those are the auditor's and reviewer's jobs respectively. If you notice such an issue in passing, include it in Additional findings with a one-line note that it is out of scope for this agent.
 - Quote with file + line number. Vague references like "somewhere in the process section" are not acceptable.
 - Do not invent rules either agent doesn't have and then complain they're missing. If you believe a missing rule would resolve a conflict, propose it as an edit in Recommended edits, but do not flag its absence as a finding.

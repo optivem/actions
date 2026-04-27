@@ -9,7 +9,7 @@
 #     - `gh api rate_limit` (read-only, used by caller-side rate-limit checks)
 #
 # Scope: action.yml / action.yaml / *.sh under the repo root,
-# excluding shared/, .github/, .tmp/, .plans/, .claude/. Matches are
+# excluding shared/, .github/, .tmp/, plans/, .claude/. Matches are
 # filtered to ignore bash comments and YAML `description:`/`name:` prose.
 
 set -euo pipefail
@@ -20,7 +20,7 @@ errors=0
 mapfile -t files < <(
   git ls-files -- \
     '*.sh' '**/action.yml' '**/action.yaml' \
-    | grep -Ev '^(shared/|\.github/|\.tmp/|\.plans/|\.claude/)' \
+    | grep -Ev '^(shared/|\.github/|\.tmp/|plans/|\.claude/)' \
     || true
 )
 

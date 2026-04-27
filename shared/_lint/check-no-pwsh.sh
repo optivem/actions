@@ -14,7 +14,7 @@ errors=0
 
 mapfile -t ps1_files < <(
   git ls-files -- '*.ps1' \
-    | grep -Ev '^(shared/_test-|\.tmp/|\.claude/|\.plans/)' \
+    | grep -Ev '^(shared/_test-|\.tmp/|\.claude/|plans/)' \
     || true
 )
 
@@ -27,7 +27,7 @@ done
 
 mapfile -t yaml_files < <(
   git ls-files -- '**/action.yml' '**/action.yaml' \
-    | grep -Ev '^(\.tmp/|\.claude/|\.plans/)' \
+    | grep -Ev '^(\.tmp/|\.claude/|plans/)' \
     || true
 )
 
