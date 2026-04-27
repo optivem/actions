@@ -105,7 +105,7 @@ runs:
         fi
 
         if [ "$any_exist" != "true" ]; then
-          echo "::notice::No tag found on any of the $checked probed packages. Commit stage has not produced artifacts yet — skipping."
+          echo "::notice::No tag found on any of the $checked probed packages — all absent."
         fi
 
         {
