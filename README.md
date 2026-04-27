@@ -32,7 +32,7 @@ Two lint checks enforce the conventions:
 | [bump-patch-versions](#bump-patch-versions) | • `version-files`<br>• `repository`<br>• `token` | • `bumps`<br>• `bumped`<br>• `summary` |
 | [check-changes-since-tag](#check-changes-since-tag) | • `tag-patterns`<br>• `paths` | • `changed`<br>• `baseline-tag`<br>• `baseline-sha`<br>• `changed-files` |
 | [check-commit-status-exists](#check-commit-status-exists) | • `commit-sha`<br>• `status-context`<br>• `head-sha`<br>• `repository`<br>• `token` | • `exists`<br>• `created-at` |
-| [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `image-urls`<br>• `tag`<br>• `token`<br>• `fail-on-error` | • `exist`<br>• `results` |
+| [check-ghcr-packages-exist](#check-ghcr-packages-exist) | • `image-urls`<br>• `tag`<br>• `token` | • `exist`<br>• `results` |
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `latest`<br>• `since` | • `newer` |
@@ -111,7 +111,7 @@ Walks tag patterns in priority order, resolves the most recent matching tag as a
 
 ### check-commit-status-exists
 
-Boolean existence check for a success commit-status on `head-sha` matching `(context, description=commit-sha)`. Returns `exists=true` when the status is present, `false` otherwise. Caller-defined semantics — the caller picks the `status-context` label, the action only reports presence. Fails open to `exists=false` on transient API errors so callers never silently skip work. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
+Boolean existence check for a success commit-status on `head-sha` matching `(context, description=commit-sha)`. Returns `exists=true` when the status is present, `exists=false` when the API definitively reports no matching status. API failure (after `gh_retry` exhaustion) is indeterminate — the action exits 1 rather than coercing to a false answer (see the no-swallow rule in [claude/CLAUDE.md](../claude/CLAUDE.md)). Caller picks the `status-context` label; the action only reports presence. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
 
 **Inputs**
 
@@ -127,12 +127,12 @@ Boolean existence check for a success commit-status on `head-sha` matching `(con
 
 | Name | Description |
 |---|---|
-| `exists` | `true` when a success commit-status on head-sha matches the given context + description=commit-sha. `false` when none found. Fails open to `false` on transient API errors. |
+| `exists` | `true` when a success commit-status on head-sha matches the given context + description=commit-sha. `false` when the API definitively reports none. API failure after retries → action exits 1 (indeterminate, not coerced to `false`). |
 | `created-at` | ISO 8601 `createdAt` of the matching success status, if one was found. Empty otherwise. |
 
 ### check-ghcr-packages-exist
 
-Probes GHCR packages to determine whether a tag exists for each, via OCI `HEAD /v2/{path}/manifests/{tag}`. Each input line is either a plain `ghcr.io/{owner}/{repo}/{image}` path (probed with the default `tag` input) or `ghcr.io/{owner}/{repo}/{image}:{tag}` (per-line tag override). Works uniformly for user- and org-owned repos and for public/private packages. Two usage shapes: preflight gate — read the any-of `exist` output; per-image probe — read the keyed `results` output. Auth/unexpected-HTTP errors are soft by default (treated as missing); set `fail-on-error=true` for strict mode.
+Probes GHCR packages to determine whether a tag exists for each, via OCI `HEAD /v2/{path}/manifests/{tag}`. Each input line is either a plain `ghcr.io/{owner}/{repo}/{image}` path (probed with the default `tag` input) or `ghcr.io/{owner}/{repo}/{image}:{tag}` (per-line tag override). Works uniformly for user- and org-owned repos and for public/private packages. Two usage shapes: preflight gate — read the any-of `exist` output; per-image probe — read the keyed `results` output. Definitive only: HTTP 200 → `exists=true`, HTTP 404 → `exists=false`. Anything else (401/403, 5xx after retries, network failure, token-exchange failure) is indeterminate and the action exits 1 with an actionable error — see the no-swallow rule in [claude/CLAUDE.md](../claude/CLAUDE.md).
 
 **Inputs**
 
@@ -141,18 +141,17 @@ Probes GHCR packages to determine whether a tag exists for each, via OCI `HEAD /
 | `image-urls` | yes | — | Newline-separated list of GHCR packages to probe. Each line is either `ghcr.io/{owner}/{repo}/{image}` (uses the default `tag` input) or `ghcr.io/{owner}/{repo}/{image}:{tag}` (per-line tag override). OCI image paths contain no `:` so the tag separator is unambiguous. |
 | `tag` | no | `latest` | Default tag to probe when a line omits its own `:tag` suffix. `latest` is the reliable "any artifact has been built" signal since the commit stage always publishes it alongside versioned tags. |
 | `token` | no | `${{ github.token }}` | Token used for GHCR authentication. |
-| `fail-on-error` | no | `false` | If `true`, fail the step on authentication errors, unexpected HTTP codes, or token-exchange failures. If `false` (default), those conditions emit a warning and the affected entry is reported as `exists=false`. Strict mode is appropriate for release-gate checks where an auth error must not be silently swallowed. |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `exist` | Whether any of the probed packages have the probed tag published (`true`/`false`). In soft-fail mode (the default), authentication errors resolve this to `false` — the downstream stage will surface a clearer error if packages are genuinely missing vs. unauthorized. |
-| `results` | JSON array of `{"image": string, "tag": string, "exists": boolean}` objects, one entry per input line. `image` is the URL without any `:tag` suffix; `tag` is the effective tag probed (per-line override if given, else the `tag` input default). Preserves input order. |
+| `exist` | `true` if any probed package returned HTTP 200 for the probed tag (any-of-published signal); `false` if every probe returned HTTP 404. Indeterminate cases never reach this output — the action exits 1 instead. |
+| `results` | JSON array of `{"image": string, "tag": string, "exists": boolean}` objects, one entry per input line. `image` is the URL without any `:tag` suffix; `tag` is the effective tag probed (per-line override if given, else the `tag` input default). Preserves input order. Only emitted when every probe was definitive. |
 
 ### check-sha-on-branch
 
-Fetches the base branch from origin and runs `git merge-base --is-ancestor <sha> origin/<base-branch>` to determine whether the SHA is in the branch's history. Writes the result to `$GITHUB_STEP_SUMMARY`.
+Fetches the base branch from origin and runs `git merge-base --is-ancestor <sha> origin/<base-branch>` to determine whether the SHA is in the branch's history. Writes the result to `$GITHUB_STEP_SUMMARY`. Exit-1 from `git merge-base` (commit is not an ancestor) yields `on-branch=false`; any other non-zero exit (e.g. exit 128 — bad SHA, missing ref) is indeterminate and the action exits 1 rather than coercing to `on-branch=false` (see the no-swallow rule in [claude/CLAUDE.md](../claude/CLAUDE.md)).
 
 **Inputs**
 
@@ -165,7 +164,7 @@ Fetches the base branch from origin and runs `git merge-base --is-ancestor <sha>
 
 | Name | Description |
 |---|---|
-| `on-branch` | `true` if the SHA is an ancestor of the base branch, `false` otherwise |
+| `on-branch` | `true` if the SHA is an ancestor of the base branch; `false` if `git merge-base --is-ancestor` definitively returned exit 1 (not an ancestor). Any other non-zero exit → action exits 1 (indeterminate, not coerced to `false`). |
 
 **Notes:** Use to guard downstream steps against `workflow_dispatch` inputs pointing at commits not in the base branch.
 

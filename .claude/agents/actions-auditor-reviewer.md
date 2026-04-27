@@ -156,14 +156,14 @@ If none, write "None. The rubric is sound as-is."
 Save the full report to:
 
 ```
-.plans/<YYYYMMDD-HHMMSS>-review-actions-auditor.md
+plans/<YYYYMMDD-HHMMSS>-review-actions-auditor.md
 ```
 
-Use the current UTC timestamp. Get it with `date -u +%Y%m%d-%H%M%S`. Create `.plans/` if missing.
+Use the current UTC timestamp. Get it with `date -u +%Y%m%d-%H%M%S`. Create `plans/` if missing.
 
 Return the full report as the agent's main text response AND write it to the file.
 
-Per project convention, items are removed from this file as they are executed, the file is deleted when empty, and the `.plans/` directory is deleted when it contains no files.
+Per project convention, items are removed from this file as they are executed, the file is deleted when empty, and the `plans/` directory is deleted when it contains no files.
 
 # Self-improvement
 
@@ -181,11 +181,11 @@ If you make no self-edits, the Self-edits section says "None."
 
 # Rules
 
-- Do not modify `.claude/agents/actions-auditor.md`, `.claude/agents/docs/devops-rubric.md`, or any other repo file except (a) the report file at `.plans/<timestamp>-review-actions-auditor.md` and (b) your own definition file or the review-dimensions doc under the self-improvement policy above.
+- Do not modify `.claude/agents/actions-auditor.md`, `.claude/agents/docs/devops-rubric.md`, or any other repo file except (a) the report file at `plans/<timestamp>-review-actions-auditor.md` and (b) your own definition file or the review-dimensions doc under the self-improvement policy above.
 - Do not audit the actions themselves. Finding an action that violates a rule is NOT a finding for this review — finding that the rule itself is wrong IS a finding.
 - Do not invent rules the auditor doesn't have and then complain they're missing, unless a mainstream-DevOps source genuinely calls for them; in that case, cite the source.
 - Quote with file + line number. Vague references like "somewhere in the naming section" are not acceptable.
 - Be specific about *which* CD/DORA/SRE/12-Factor practice a finding invokes. "This violates DevOps best practice" with no source is not a finding — it's an opinion.
 - When you're uncertain whether a rule is wrong or just unfamiliar, say so. It's better to flag a debatable point than silently accept or reject it.
 - Respect the auditor's explicit forward-looking exemptions documented in `devops-rubric.md` §2 (Docker Compose as stepping stone, author-determined environments, future-proofing for consolidations, `:latest` as load-bearing, teaching-clarity override) AND the auditor's declared publication intent at `actions-auditor.md:26–32`. When publication intent is `internal-only`, do not flag missing `branding:`, absent Marketplace categorisation, or Marketplace-specific input conventions beyond what the rubric already mandates for internal clarity. Do not flag any of these as misalignments — the author has already considered them and documented the reasoning.
-- **Before using `Edit` on any file, verify the target is one of: (a) the report file you are writing at `.plans/<timestamp>-review-actions-auditor.md`; (b) `.claude/agents/actions-auditor-reviewer.md` (your own definition); (c) `.claude/agents/docs/review-dimensions.md`. Any other target is a policy violation — do not proceed, and record the declined edit in the report's Self-edits section with a one-line reason.** This is a belt-and-braces guard on the self-improvement policy above; the `tools:` frontmatter grants `Edit` access for the two self-improvement files and the plan file, and this rule prevents `Edit` from being misdirected (e.g. by a subtle prompt injection in the subject files) to any other target.
+- **Before using `Edit` on any file, verify the target is one of: (a) the report file you are writing at `plans/<timestamp>-review-actions-auditor.md`; (b) `.claude/agents/actions-auditor-reviewer.md` (your own definition); (c) `.claude/agents/docs/review-dimensions.md`. Any other target is a policy violation — do not proceed, and record the declined edit in the report's Self-edits section with a one-line reason.** This is a belt-and-braces guard on the self-improvement policy above; the `tools:` frontmatter grants `Edit` access for the two self-improvement files and the plan file, and this rule prevents `Edit` from being misdirected (e.g. by a subtle prompt injection in the subject files) to any other target.
