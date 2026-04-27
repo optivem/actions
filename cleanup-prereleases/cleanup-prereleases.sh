@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 # cleanup-prereleases.sh — delete prerelease git tags, GitHub releases, and
-# Docker image tags / orphan manifests that are no longer needed.
+# Docker image tags that are no longer needed.
 #
-# Four scenarios:
+# Three scenarios:
 #   1. Released versions (final tag vX.Y.Z exists):
 #        immediately delete prerelease GitHub releases and git tags;
 #        delete prerelease Docker image tags after retention period.
@@ -12,9 +12,9 @@
 #        (plus their status tags and Docker tags) are deleted.
 #   3. Orphaned prerelease GitHub releases (no git tag):
 #        unconditionally delete (drafts or abandoned records).
-#   4. Orphan untagged Docker manifests (when DELETE_ORPHAN_MANIFESTS=true):
-#        delete untagged GHCR versions older than retention that are NOT
-#        referenced by an active tagged manifest list / attestation index.
+#
+# Orphan untagged Docker manifests are handled by the dedicated
+# `cleanup-orphan-manifests` action, which should run after this one.
 
 set -euo pipefail
 
@@ -24,7 +24,6 @@ source "$SCRIPT_DIR/../shared/gh-retry.sh"
 
 : "${RETENTION_DAYS:=30}"
 : "${CONTAINER_PACKAGES:=}"
-: "${DELETE_ORPHAN_MANIFESTS:=true}"
 : "${DELETE_DELAY_SECONDS:=10}"
 : "${RATE_LIMIT_THRESHOLD:=50}"
 : "${DRY_RUN:=false}"
@@ -49,7 +48,6 @@ if [[ -n "$CONTAINER_PACKAGES" ]]; then
 else
   echo "Container Packages:   (none - Docker cleanup skipped)"
 fi
-echo "Orphan Manifests:     $DELETE_ORPHAN_MANIFESTS"
 echo "Delete Delay:         ${DELETE_DELAY_SECONDS}s"
 if (( RATE_LIMIT_THRESHOLD > 0 )); then
   echo "Rate-Limit Threshold: $RATE_LIMIT_THRESHOLD"
@@ -489,90 +487,6 @@ for tag_name in "${release_tag_names[@]}"; do
   fi
   sleep "$DELETE_DELAY_SECONDS"
 done
-
-# ── Scenario 4: Orphan untagged Docker manifests ────────────────────
-echo
-echo "--- Orphan Untagged Docker Manifests ---"
-
-if [[ "$DELETE_ORPHAN_MANIFESTS" != "true" ]]; then
-  echo "  Skipped (delete-orphan-manifests=false)"
-elif (( ${#package_list[@]} == 0 )); then
-  echo "  Skipped (no container-packages configured)"
-else
-  for package in "${package_list[@]}"; do
-    versions="${docker_versions_json[$package]:-[]}"
-    [[ "$versions" == "[]" ]] && continue
-
-    pkg_path="$owner/$package"
-    echo
-    echo "Package $package:"
-
-    # Exchange the GH token for a registry pull token (works for both public
-    # and private packages on GHCR).
-    reg_token=$(curl -fsS -u "$owner:$GH_TOKEN" \
-      "https://ghcr.io/token?scope=repository:$pkg_path:pull&service=ghcr.io" 2>/dev/null \
-      | jq -r '.token // empty')
-    if [[ -z "$reg_token" ]]; then
-      echo "  Warning: could not obtain registry token for $pkg_path; skipping orphan cleanup"
-      continue
-    fi
-
-    # For each tagged version, fetch its manifest. If the manifest is an
-    # OCI/Docker index (manifest list, used for multi-arch and for SBOM /
-    # provenance attestations), collect the children's digests — these are
-    # *referenced* by an active tag and MUST NOT be deleted.
-    declare -A protected_digests=()
-    tagged_count=0
-    while IFS= read -r tagged_digest; do
-      [[ -z "$tagged_digest" ]] && continue
-      tagged_count=$((tagged_count + 1))
-      while IFS= read -r child; do
-        [[ -n "$child" ]] && protected_digests["$child"]=1
-      done < <(curl -fsS \
-        -H "Authorization: Bearer $reg_token" \
-        -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
-        "https://ghcr.io/v2/$pkg_path/manifests/$tagged_digest" 2>/dev/null \
-        | jq -r '.manifests[]?.digest // empty' 2>/dev/null)
-    done < <(jq -r '.[] | select((.metadata.container.tags | length) > 0) | .name' <<<"$versions")
-
-    echo "  Tagged versions inspected: $tagged_count, protected child digests: ${#protected_digests[@]}"
-
-    candidates=0
-    while IFS=$'\t' read -r untagged_id untagged_digest untagged_created; do
-      [[ -z "$untagged_id" ]] && continue
-      if [[ -n "${protected_digests[$untagged_digest]:-}" ]]; then
-        continue
-      fi
-      created_epoch=$(date -u -d "$untagged_created" +%s 2>/dev/null || echo "")
-      if [[ -z "$created_epoch" ]] || (( created_epoch >= cutoff_epoch )); then
-        continue
-      fi
-      candidates=$((candidates + 1))
-
-      if [[ "$DRY_RUN" == "true" ]]; then
-        echo "  [DRY RUN] Would delete orphan manifest: $untagged_digest (id $untagged_id, created $untagged_created)"
-        dry_run_count=$((dry_run_count + 1))
-        continue
-      fi
-
-      wait_for_rate_limit_budget
-      if gh_retry api --method DELETE "/orgs/$owner/packages/container/$package/versions/$untagged_id" >/dev/null 2>&1; then
-        echo "  Deleted orphan manifest: $untagged_digest (id $untagged_id)"
-        deleted_count=$((deleted_count + 1))
-      else
-        echo "  Warning: Could not delete orphan manifest version $untagged_id"
-      fi
-      sleep "$DELETE_DELAY_SECONDS"
-    done < <(jq -r '.[] | select((.metadata.container.tags | length) == 0) | "\(.id)\t\(.name)\t\(.created_at)"' <<<"$versions")
-
-    if (( candidates == 0 )); then
-      echo "  No orphan manifests past retention."
-    fi
-
-    unset protected_digests
-    declare -A protected_digests=()
-  done
-fi
 
 # ── Summary ──────────────────────────────────────────────────────────
 echo

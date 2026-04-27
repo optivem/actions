@@ -37,7 +37,8 @@ Two lint checks enforce the conventions:
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `latest`<br>• `since` | • `newer` |
 | [cleanup-deployments](#cleanup-deployments) | • `keep-count`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
-| [cleanup-prereleases](#cleanup-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-orphan-manifests`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-orphan-manifests](#cleanup-orphan-manifests) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-prereleases](#cleanup-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
 | [compose-docker-image-urls](#compose-docker-image-urls) | • `tag`<br>• `base-image-urls` | • `image-urls` |
 | [compose-prerelease-status](#compose-prerelease-status) | • `prerelease-version`<br>• `environment`<br>• `status` | • `status-tag` |
@@ -235,9 +236,36 @@ Fetches all GitHub deployments and deletes superseded ones in non-protected envi
 - **Protected environments** are never touched by any scenario.
 - **Ordering:** run this action **before** `cleanup-prereleases` in the same workflow — the released-RC logic relies on RC git tags being present to resolve SHAs, and `cleanup-prereleases` deletes those tags immediately for released versions.
 
+### cleanup-orphan-manifests
+
+Deletes untagged GHCR Docker manifests older than `retention-days` that are not referenced by any active tagged manifest list or attestation index. Delegates to `cleanup-orphan-manifests.sh` in the action directory. Rate-limit-aware.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `retention-days` | no | `30` | Number of days to retain orphan untagged manifests before deletion |
+| `container-packages` | yes | — | Comma-separated list of container package names to scan (e.g., `"myapp,myapp-worker"`) |
+| `delete-delay-seconds` | no | `10` | Seconds to wait between each API delete call to avoid GitHub rate limiting |
+| `rate-limit-threshold` | no | `50` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) |
+| `dry-run` | no | `false` | If `true`, only log what would be deleted without actually deleting anything |
+| `token` | no | `${{ github.token }}` | GitHub token used for package API calls and GHCR registry-token exchange |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `deleted-count` | Number of orphan manifests actually deleted (real mode only; `0` in dry-run) |
+| `dry-run-count` | Number of orphan manifests that would be deleted (dry-run mode only; `0` in real mode) |
+
+**Notes:**
+- **Protection:** before deleting, fetches each tagged version's manifest from `ghcr.io`. Children of OCI/Docker manifest lists or attestation indexes (multi-arch images, `provenance: mode=max`, `sbom: true`) are collected and protected — only digests not referenced by any active tag are eligible.
+- **Common orphan sources:** re-pushed tags (the previous digest is left untagged), failed/aborted pushes, stale provenance/SBOM blobs.
+- **Ordering:** run *after* `cleanup-prereleases` in the same workflow, so manifests freshly orphaned by prerelease tag deletion are caught in the same pass.
+
 ### cleanup-prereleases
 
-Cleans up prerelease git tags, GitHub releases, Docker image tags, and orphan untagged Docker manifests that are no longer needed. Delegates to `cleanup-prereleases.sh` in the action directory. Rate-limit-aware.
+Cleans up prerelease git tags, GitHub releases, and Docker image tags that are no longer needed. Delegates to `cleanup-prereleases.sh` in the action directory. Rate-limit-aware.
 
 **Inputs**
 
@@ -245,7 +273,6 @@ Cleans up prerelease git tags, GitHub releases, Docker image tags, and orphan un
 |---|---|---|---|
 | `retention-days` | no | `30` | Number of days to retain prerelease Docker image tags after release, and superseded RC artifacts before release |
 | `container-packages` | no | `` | Comma-separated list of container package names for Docker image tag cleanup (e.g., `"myapp,myapp-worker"`). If empty, Docker cleanup is skipped. |
-| `delete-orphan-manifests` | no | `true` | If `true`, also delete untagged Docker manifests older than `retention-days` that are not referenced by any active tag. Children of active manifest lists / attestation indexes (SBOM, provenance) are preserved automatically. Requires `container-packages`. |
 | `delete-delay-seconds` | no | `10` | Seconds to wait between each API delete call to avoid GitHub rate limiting |
 | `rate-limit-threshold` | no | `50` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) |
 | `dry-run` | no | `false` | If `true`, only log what would be deleted without actually deleting anything |
@@ -255,13 +282,13 @@ Cleans up prerelease git tags, GitHub releases, Docker image tags, and orphan un
 
 | Name | Description |
 |---|---|
-| `deleted-count` | Number of items (git tags, GitHub releases, Docker image tags, orphan manifests) actually deleted (real mode only; `0` in dry-run) |
+| `deleted-count` | Number of items (git tags, GitHub releases, Docker image tags) actually deleted (real mode only; `0` in dry-run) |
 | `dry-run-count` | Number of items that would be deleted (dry-run mode only; `0` in real mode) |
 
 **Notes:**
 - **Released versions** (final tag `vX.Y.Z` exists): immediately deletes prerelease GitHub releases + git tags (`vX.Y.Z-rc.*`, `vX.Y.Z-rc.*-qa-*`); after the retention period, deletes prerelease Docker image tags.
 - **Superseded prereleases** (no final release yet): after the retention period, deletes older RCs + their status tags + Docker image tags; never deletes the latest RC.
-- **Orphan untagged manifests** (when `delete-orphan-manifests=true`): deletes untagged GHCR versions older than `retention-days`. Before deleting, fetches each tagged version's manifest from `ghcr.io` to identify children of OCI/Docker manifest lists or attestation indexes (multi-arch images, `provenance: mode=max`, `sbom: true`) and protects them from deletion.
+- **Orphan untagged manifests:** handled by the dedicated [cleanup-orphan-manifests](#cleanup-orphan-manifests) action. Run it after `cleanup-prereleases` to catch manifests freshly orphaned by tag deletion.
 - **Ordering:** run `cleanup-deployments` first (see its Notes).
 
 ### commit-files

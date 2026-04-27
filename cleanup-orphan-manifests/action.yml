@@ -1,15 +1,14 @@
-name: 'Cleanup Prereleases'
-description: 'Cleans up prerelease git tags, GitHub releases, and Docker image tags that are no longer needed'
+name: 'Cleanup Orphan Manifests'
+description: 'Deletes untagged GHCR Docker manifests older than a retention window that are not referenced by any active tag'
 
 inputs:
   retention-days:
-    description: 'Number of days to retain prerelease Docker image tags after release, and superseded RC artifacts before release'
+    description: 'Number of days to retain orphan untagged manifests before deletion'
     required: false
     default: '30'
   container-packages:
-    description: 'Comma-separated list of container package names for Docker image tag cleanup (e.g., "myapp,myapp-worker"). If empty, Docker cleanup is skipped.'
-    required: false
-    default: ''
+    description: 'Comma-separated list of container package names to scan (e.g., "myapp,myapp-worker"). Required.'
+    required: true
   delete-delay-seconds:
     description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
     required: false
@@ -23,26 +22,22 @@ inputs:
     required: false
     default: 'false'
   token:
-    description: 'GitHub token used for tag, release, and package API calls. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    description: 'GitHub token used for package API calls and GHCR registry-token exchange. Defaults to the workflow-scoped GITHUB_TOKEN.'
     required: false
     default: ${{ github.token }}
 
 outputs:
   deleted-count:
-    description: 'Number of items (git tags, GitHub releases, Docker image tags) actually deleted (real mode only; 0 in dry-run).'
+    description: 'Number of orphan manifests actually deleted (real mode only; 0 in dry-run).'
     value: ${{ steps.cleanup.outputs.deleted-count }}
   dry-run-count:
-    description: 'Number of items that would be deleted (dry-run mode only; 0 in real mode).'
+    description: 'Number of orphan manifests that would be deleted (dry-run mode only; 0 in real mode).'
     value: ${{ steps.cleanup.outputs.dry-run-count }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Fetch all tags
-      shell: bash
-      run: git fetch --tags --force
-
-    - name: Cleanup Prereleases
+    - name: Cleanup Orphan Manifests
       id: cleanup
       shell: bash
       env:
@@ -53,4 +48,4 @@ runs:
         RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
         DRY_RUN: ${{ inputs.dry-run }}
         REPOSITORY: ${{ github.repository }}
-      run: bash "$GITHUB_ACTION_PATH/cleanup-prereleases.sh"
+      run: bash "$GITHUB_ACTION_PATH/cleanup-orphan-manifests.sh"
