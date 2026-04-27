@@ -2,19 +2,24 @@
 #
 # cleanup-deployments.sh — delete superseded GitHub deployments.
 #
-# Mirrors cleanup-prereleases logic, adapted for deployments:
+# Three scenarios run in sequence on non-protected environments:
 #
 # Scenario 1 — Released versions (final tag vX.Y.Z exists):
 #   - Immediately delete deployments whose SHA corresponds to any
-#     vX.Y.Z-rc.* tag (bypassing keep-count and retention)
+#     vX.Y.Z-rc.* tag (bypassing keep-count)
 #   - Tag prefixes (meta-, <flavor>-, etc.) are supported; tags are
 #     keyed by version so a final at any prefix marks that version's
 #     RCs across all prefixes as eligible for deletion
 #
-# Scenario 2 — Superseded per environment (count cap + retention floor):
-#   - For each environment, keep the newest KEEP_COUNT deployments
-#   - Anything beyond the cap is deleted only if also older than
-#     RETENTION_DAYS
+# Scenario 1.5 — SHA already promoted to a protected environment:
+#   - Any deployment in a non-protected env whose SHA is also present
+#     in a protected (production) deployment is obsolete; the prod
+#     copy is the source of truth, so delete the pre-prod copy
+#     (bypassing keep-count)
+#
+# Scenario 2 — Superseded per environment (count cap):
+#   - For each remaining environment, keep the newest KEEP_COUNT
+#     deployments; anything beyond the cap is deleted
 #
 # GitHub requires a deployment to be inactive before deletion, so each
 # deployment gets a new "inactive" status created before the DELETE call.
@@ -30,7 +35,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 source "$SCRIPT_DIR/../shared/gh-retry.sh"
 
 : "${KEEP_COUNT:=3}"
-: "${RETENTION_DAYS:=30}"
 : "${PROTECTED_ENVIRONMENTS:=*-production,production}"
 : "${DELETE_DELAY_SECONDS:=10}"
 : "${RATE_LIMIT_THRESHOLD:=50}"
@@ -76,15 +80,12 @@ wait_for_rate_limit_budget() {
   sleep "$wait_secs"
 }
 
-cutoff_epoch=$(date -u -d "$RETENTION_DAYS days ago" +%s)
-
 echo "========================================"
 echo "  Deployment Cleanup"
 echo "========================================"
 echo
 echo "Repository:             $REPOSITORY"
 echo "Keep Count:             $KEEP_COUNT"
-echo "Retention Days:         $RETENTION_DAYS"
 if (( ${#protected_patterns[@]} > 0 )); then
   echo "Protected Environments: $(IFS=,; echo "${protected_patterns[*]}")"
 else
@@ -164,13 +165,17 @@ fi
 echo "  Found $total deployment(s)"
 
 # Filter out deployments in protected environments up-front (belt + suspenders;
-# remove_deployment also enforces this).
+# remove_deployment also enforces this). Track their SHAs for Scenario 1.5
+# (any non-prod deployment of a SHA already in production is obsolete).
+declare -A released_to_prod_shas=()
 protected_count=0
 filtered_json='[]'
 for (( i=0; i<total; i++ )); do
   env=$(jq -r ".[$i].environment" <<<"$deployments_json")
   if is_protected "$env"; then
     protected_count=$((protected_count + 1))
+    sha=$(jq -r ".[$i].sha" <<<"$deployments_json")
+    released_to_prod_shas[$sha]="$env"
   else
     filtered_json=$(jq ". + [$(jq ".[$i]" <<<"$deployments_json")]" <<<"$filtered_json")
   fi
@@ -178,6 +183,7 @@ done
 if (( protected_count > 0 )); then
   echo "  Excluded $protected_count deployment(s) in protected environment(s)"
 fi
+echo "  Protected SHAs (already in production): ${#released_to_prod_shas[@]}"
 echo
 
 deployments_json="$filtered_json"
@@ -248,6 +254,30 @@ if (( scenario1_deleted == 0 )); then
 fi
 echo
 
+# ── Step 4.5: Scenario 1.5 — SHA already deployed to a protected env ─
+echo "--- Scenario 1.5: SHA Already in Production ---"
+
+after_scenario15='[]'
+scenario15_deleted=0
+remaining_total=$(jq 'length' <<<"$remaining_json")
+for (( i=0; i<remaining_total; i++ )); do
+  dep=$(jq ".[$i]" <<<"$remaining_json")
+  dep_sha=$(jq -r '.sha' <<<"$dep")
+  prod_env="${released_to_prod_shas[$dep_sha]:-}"
+  if [[ -n "$prod_env" ]]; then
+    remove_deployment "$dep" "SHA already deployed to protected env $prod_env"
+    scenario15_deleted=$((scenario15_deleted + 1))
+  else
+    after_scenario15=$(jq ". + [$dep]" <<<"$after_scenario15")
+  fi
+done
+remaining_json="$after_scenario15"
+
+if (( scenario15_deleted == 0 )); then
+  echo "  No deployments matched"
+fi
+echo
+
 # ── Step 5: Scenario 2 — superseded per environment ─────────────────
 echo "--- Scenario 2: Superseded Per Environment ---"
 
@@ -273,14 +303,7 @@ for env in "${sorted_envs[@]}"; do
 
   for (( i=0; i<candidate_count; i++ )); do
     dep=$(jq ".[$i]" <<<"$candidates")
-    created_at=$(jq -r '.created_at' <<<"$dep")
-    id=$(jq -r '.id' <<<"$dep")
-    created_epoch=$(date -u -d "$created_at" +%s)
-    if (( created_epoch >= cutoff_epoch )); then
-      echo "  Retained $id (beyond keep-cap but within retention floor)"
-      continue
-    fi
-    remove_deployment "$dep" "superseded, beyond keep-count=$KEEP_COUNT and past retention"
+    remove_deployment "$dep" "superseded, beyond keep-count=$KEEP_COUNT"
   done
 done
 

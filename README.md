@@ -36,7 +36,7 @@ Two lint checks enforce the conventions:
 | [check-sha-on-branch](#check-sha-on-branch) | • `commit-sha`<br>• `base-branch` | • `on-branch` |
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `latest`<br>• `since` | • `newer` |
-| [cleanup-deployments](#cleanup-deployments) | • `keep-count`<br>• `retention-days`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-deployments](#cleanup-deployments) | • `keep-count`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [cleanup-prereleases](#cleanup-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-orphan-manifests`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
 | [compose-docker-image-urls](#compose-docker-image-urls) | • `tag`<br>• `base-image-urls` | • `image-urls` |
@@ -208,14 +208,13 @@ Pure ISO 8601 timestamp comparator. Lexicographically compares `latest` against 
 
 ### cleanup-deployments
 
-Fetches all GitHub deployments and deletes superseded ones, subject to a per-environment count cap and a retention-days floor. Delegates to `cleanup-deployments.sh` in the action directory. Protects configured environments and RCs (via git tag lookup).
+Fetches all GitHub deployments and deletes superseded ones in non-protected environments. Delegates to `cleanup-deployments.sh` in the action directory. Protects configured environments and RCs (via git tag lookup), and treats any SHA already deployed to a protected env as obsolete in pre-prod.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `keep-count` | no | `3` | Per-environment count cap: keep this many newest deployments; candidates beyond the cap are eligible for deletion if past `retention-days` |
-| `retention-days` | no | `30` | Retention floor in days. Deployments beyond `keep-count` are only deleted once older than this cutoff |
+| `keep-count` | no | `3` | Per-environment count cap: keep this many newest deployments; anything beyond the cap is deleted. Applies only to non-protected environments and to SHAs not already deployed to a protected env |
 | `protected-environments` | no | `*-production,production` | Comma-separated list of environment name patterns whose deployments must never be deleted. Supports `*` wildcards, case-insensitive |
 | `delete-delay-seconds` | no | `10` | Seconds to wait between each API delete call to avoid GitHub rate limiting |
 | `rate-limit-threshold` | no | `50` | Pause before each API delete when remaining core-rate-limit requests fall below this number (set `0` to disable) |
@@ -230,9 +229,10 @@ Fetches all GitHub deployments and deletes superseded ones, subject to a per-env
 | `dry-run-count` | Number of deployments that would be deleted (dry-run mode only; `0` in real mode) |
 
 **Notes:**
-- **Released-RC deployments** (final tag `vX.Y.Z` exists): immediately deletes any deployment whose SHA matches a `vX.Y.Z-rc.*` tag; bypasses both `keep-count` and `retention-days`.
-- **Superseded per environment** (count cap + retention floor): keeps the newest `keep-count` deployments per environment; anything beyond the cap is deleted only once older than `retention-days` (the floor prevents pruning fresh bursts during active debugging).
-- **Protected environments** are never touched by either scenario.
+- **Released-RC deployments** (final tag `vX.Y.Z` exists): immediately deletes any deployment whose SHA matches a `vX.Y.Z-rc.*` tag; bypasses `keep-count`.
+- **SHA already in production**: any non-protected deployment whose SHA is also present in a protected (production) deployment is deleted; the prod copy is the source of truth, so the pre-prod copy is obsolete. Bypasses `keep-count`.
+- **Superseded per environment** (count cap): for what remains, keeps the newest `keep-count` deployments per environment; anything beyond the cap is deleted.
+- **Protected environments** are never touched by any scenario.
 - **Ordering:** run this action **before** `cleanup-prereleases` in the same workflow — the released-RC logic relies on RC git tags being present to resolve SHAs, and `cleanup-prereleases` deletes those tags immediately for released versions.
 
 ### cleanup-prereleases
