@@ -53,7 +53,7 @@ Two lint checks enforce the conventions:
 | [get-last-workflow-run](#get-last-workflow-run) | • `workflow-name`<br>• `repository`<br>• `exclude-run-id`<br>• `token` | • `timestamp`<br>• `status`<br>• `conclusion` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
 | [read-base-version](#read-base-version) | • `file` | • `base-version` |
-| [read-base-versions](#read-base-versions) | • `entries` | • `versions` |
+| [read-base-versions](#read-base-versions) | • `entries`<br>• `token` | • `versions` |
 | [render-stage-summary](#render-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `stage-content`<br>• `stage-success-content`<br>• `stage-skipped-content` | — |
 | [render-system-stage-summary](#render-system-stage-summary) | • `stage-name`<br>• `stage-result`<br>• `environment`<br>• `success-version`<br>• `success-artifact-ids`<br>• `skipped-reason`<br>• `latest-artifact-ids`<br>• `latest-updated-at`<br>• `last-run-at` | — |
 | [resolve-commit](#resolve-commit) | • `repository`<br>• `ref`<br>• `token`<br>• `git-host` | • `sha`<br>• `timestamp` |
@@ -526,13 +526,14 @@ Reads the first line of a VERSION file (stripping whitespace) and exposes it as 
 
 ### read-base-versions
 
-Batched, keyed form of `read-base-version`. For each `{key, file}` entry, reads the first line of the VERSION file (stripping whitespace) and emits `{key, version}` preserving the original key. Key is opaque — use it to pair versions with whatever downstream needs them (image URLs, component names, etc.). Fails fast if any file is missing or empty.
+Batched, keyed form of `read-base-version`. For each `{key, file, repo?}` entry, reads the first line of the VERSION file (stripping whitespace) and emits `{key, version}` preserving the original key. Key is opaque — use it to pair versions with whatever downstream needs them (image URLs, component names, etc.). When `repo` is present, fetches the file via the GitHub API instead of from the local working tree — useful for system-level workflows that need to read VERSION files from sibling repos in a multirepo split. Fails fast if any file is missing or empty.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `entries` | yes | — | JSON array of `{"key": string, "file": string}` objects. The key is opaque (caller-supplied); the file is the path to a VERSION file relative to the workspace. |
+| `entries` | yes | — | JSON array of `{"key": string, "file": string, "repo": string?}` objects. The key is opaque (caller-supplied). The file is the path to a VERSION file — relative to the workspace when read locally, or relative to the target repo root when read via API. The optional `repo` (in `owner/repo` format) triggers cross-repo API fetch instead of local read. |
+| `token` | no | `${{ github.token }}` | GitHub token used for cross-repo API fetches when entries contain a `repo` field. Must have read access to the target repos. Defaults to `github.token` (sufficient for same-org public repos and the calling repo). Pass a PAT or app token for cross-org access or private repos in other orgs. |
 
 **Outputs**
 

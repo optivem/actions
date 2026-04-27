@@ -1,10 +1,14 @@
 name: 'Read Base Versions'
-description: 'Reads the base semantic version (MAJOR.MINOR.PATCH) from each VERSION file in a keyed list. Batched form of read-base-version. The caller-supplied key is opaque and preserved in the output — use it to pair versions with anything downstream (image URLs, component names, etc).'
+description: 'Reads the base semantic version (MAJOR.MINOR.PATCH) from each VERSION file in a keyed list. Batched form of read-base-version. Each entry can optionally specify a `repo` (owner/repo) for cross-repo fetch via the GitHub API — useful when the calling workflow needs VERSION files from sibling repositories (e.g., a system-level prod-stage in a multirepo split that reads each component repo''s VERSION). When `repo` is omitted, the file is read from the local working tree. The caller-supplied key is opaque and preserved in the output — use it to pair versions with anything downstream (image URLs, component names, etc).'
 
 inputs:
   entries:
-    description: 'JSON array of {"key": string, "file": string} objects. The key is opaque; the file is the path to a VERSION file relative to the workspace.'
+    description: 'JSON array of {"key": string, "file": string, "repo": string?} objects. The key is opaque. The file is the path to a VERSION file — relative to the workspace when read locally, or relative to the target repo root when read via API. The optional repo (owner/repo format) triggers cross-repo API fetch instead of local read.'
     required: true
+  token:
+    description: 'GitHub token used for cross-repo API fetches when entries contain a `repo` field. Must have read access to the target repos. Defaults to github.token (sufficient for same-org public repos and the calling repo). Pass a PAT or app token for cross-org access or private repos in other orgs.'
+    required: false
+    default: ${{ github.token }}
 
 outputs:
   versions:
@@ -19,11 +23,12 @@ runs:
       shell: bash
       env:
         ENTRIES: ${{ inputs.entries }}
+        GH_TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
 
         if ! echo "$ENTRIES" | jq -e 'type == "array"' >/dev/null; then
-          echo "::error::entries must be a JSON array of {key, file} objects"
+          echo "::error::entries must be a JSON array of {key, file, repo?} objects"
           exit 1
         fi
 
@@ -31,18 +36,28 @@ runs:
         while IFS= read -r entry; do
           key=$(jq -r '.key // empty' <<<"$entry")
           file=$(jq -r '.file // empty' <<<"$entry")
+          repo=$(jq -r '.repo // empty' <<<"$entry")
 
           if [ -z "$key" ] || [ -z "$file" ]; then
             echo "::error::Each entry must have non-empty 'key' and 'file' fields. Got: $entry"
             exit 1
           fi
 
-          if [ ! -f "$file" ]; then
-            echo "::error::VERSION file not found: $file (key: $key)"
-            exit 1
+          if [ -n "$repo" ]; then
+            # Cross-repo fetch via API
+            if ! api_response=$(gh api "repos/$repo/contents/$file" --jq '.content' 2>&1); then
+              echo "::error::Failed to fetch $file from $repo (key: $key): $api_response"
+              exit 1
+            fi
+            version=$(echo "$api_response" | base64 -d | head -n 1 | tr -d '[:space:]')
+          else
+            # Local read
+            if [ ! -f "$file" ]; then
+              echo "::error::VERSION file not found: $file (key: $key)"
+              exit 1
+            fi
+            version=$(head -n 1 "$file" | tr -d '[:space:]')
           fi
-
-          version=$(head -n 1 "$file" | tr -d '[:space:]')
 
           if [ -z "$version" ]; then
             echo "::error::VERSION file is empty: $file (key: $key)"
