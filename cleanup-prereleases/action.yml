@@ -1,5 +1,5 @@
 name: 'Cleanup Prereleases'
-description: 'Cleans up prerelease git tags, GitHub releases, and Docker image tags that are no longer needed'
+description: 'Cleans up prerelease git tags, GitHub releases, Docker image tags, and orphan untagged Docker manifests that are no longer needed'
 
 inputs:
   retention-days:
@@ -10,6 +10,10 @@ inputs:
     description: 'Comma-separated list of container package names for Docker image tag cleanup (e.g., "myapp,myapp-worker"). If empty, Docker cleanup is skipped.'
     required: false
     default: ''
+  delete-orphan-manifests:
+    description: 'If true, also delete untagged Docker manifests older than retention-days that are not referenced by any active tag (e.g. leftover digests from re-pushed tags). Children of active manifest lists / attestation indexes are preserved automatically. Requires container-packages.'
+    required: false
+    default: 'true'
   delete-delay-seconds:
     description: 'Seconds to wait between each API delete call to avoid GitHub rate limiting'
     required: false
@@ -29,7 +33,7 @@ inputs:
 
 outputs:
   deleted-count:
-    description: 'Number of items (git tags, GitHub releases, Docker image tags) actually deleted (real mode only; 0 in dry-run).'
+    description: 'Number of items (git tags, GitHub releases, Docker image tags, orphan manifests) actually deleted (real mode only; 0 in dry-run).'
     value: ${{ steps.cleanup.outputs.deleted-count }}
   dry-run-count:
     description: 'Number of items that would be deleted (dry-run mode only; 0 in real mode).'
@@ -49,6 +53,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         RETENTION_DAYS: ${{ inputs.retention-days }}
         CONTAINER_PACKAGES: ${{ inputs.container-packages }}
+        DELETE_ORPHAN_MANIFESTS: ${{ inputs.delete-orphan-manifests }}
         DELETE_DELAY_SECONDS: ${{ inputs.delete-delay-seconds }}
         RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
         DRY_RUN: ${{ inputs.dry-run }}

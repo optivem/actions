@@ -3,13 +3,9 @@ description: 'Cleans up superseded GitHub deployments that are no longer needed'
 
 inputs:
   keep-count:
-    description: 'Per-environment count cap: keep this many newest deployments, candidates beyond the cap are eligible for deletion if past retention-days.'
+    description: 'Per-environment count cap: keep this many newest deployments; anything beyond the cap is deleted. Applies only to non-protected environments and to SHAs not already deployed to a protected env.'
     required: false
     default: '3'
-  retention-days:
-    description: 'Retention floor in days. Deployments beyond keep-count are only deleted once older than this cutoff.'
-    required: false
-    default: '30'
   protected-environments:
     description: 'Comma-separated list of environment name patterns whose deployments must never be deleted. Supports `*` wildcards, case-insensitive (e.g. `*-production,production`).'
     required: false
@@ -48,7 +44,6 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
         KEEP_COUNT: ${{ inputs.keep-count }}
-        RETENTION_DAYS: ${{ inputs.retention-days }}
         PROTECTED_ENVIRONMENTS: ${{ inputs.protected-environments }}
         DELETE_DELAY_SECONDS: ${{ inputs.delete-delay-seconds }}
         RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
