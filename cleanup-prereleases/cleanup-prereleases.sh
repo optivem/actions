@@ -14,7 +14,7 @@
 #        unconditionally delete (drafts or abandoned records).
 #
 # Orphan untagged Docker manifests are handled by the dedicated
-# `cleanup-orphan-manifests` action, which should run after this one.
+# `cleanup-ghcr-orphan-manifests` action, which should run after this one.
 
 set -euo pipefail
 

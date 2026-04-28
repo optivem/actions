@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# cleanup-orphan-manifests.sh — delete untagged GHCR manifests older than
+# cleanup-ghcr-orphan-manifests.sh — delete untagged GHCR manifests older than
 # RETENTION_DAYS that are NOT referenced by any active tagged manifest list
 # or attestation index.
 #

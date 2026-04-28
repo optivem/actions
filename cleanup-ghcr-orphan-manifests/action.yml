@@ -1,4 +1,4 @@
-name: 'Cleanup Orphan Manifests'
+name: 'Cleanup GHCR Orphan Manifests'
 description: 'Deletes untagged GHCR Docker manifests older than a retention window that are not referenced by any active tag'
 
 inputs:
@@ -48,4 +48,4 @@ runs:
         RATE_LIMIT_THRESHOLD: ${{ inputs.rate-limit-threshold }}
         DRY_RUN: ${{ inputs.dry-run }}
         REPOSITORY: ${{ github.repository }}
-      run: bash "$GITHUB_ACTION_PATH/cleanup-orphan-manifests.sh"
+      run: bash "$GITHUB_ACTION_PATH/cleanup-ghcr-orphan-manifests.sh"

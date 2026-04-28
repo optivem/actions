@@ -37,7 +37,7 @@ Two lint checks enforce the conventions:
 | [check-tag-exists](#check-tag-exists) | • `tag`<br>• `repository`<br>• `token`<br>• `git-host` | • `exists` |
 | [check-timestamp-newer](#check-timestamp-newer) | • `latest`<br>• `since` | • `newer` |
 | [cleanup-deployments](#cleanup-deployments) | • `keep-count`<br>• `protected-environments`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
-| [cleanup-orphan-manifests](#cleanup-orphan-manifests) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
+| [cleanup-ghcr-orphan-manifests](#cleanup-ghcr-orphan-manifests) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [cleanup-prereleases](#cleanup-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
 | [compose-docker-image-urls](#compose-docker-image-urls) | • `tag`<br>• `base-image-urls` | • `image-urls` |
@@ -49,7 +49,7 @@ Two lint checks enforce the conventions:
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `service-names`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
-| [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
+| [generate-prod-release-notes](#generate-prod-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
 | [get-last-workflow-run](#get-last-workflow-run) | • `workflow-name`<br>• `repository`<br>• `exclude-run-id`<br>• `status`<br>• `conclusion`<br>• `limit`<br>• `token` | • `timestamp` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
@@ -236,9 +236,9 @@ Fetches all GitHub deployments and deletes superseded ones in non-protected envi
 - **Protected environments** are never touched by any scenario.
 - **Ordering:** run this action **before** `cleanup-prereleases` in the same workflow — the released-RC logic relies on RC git tags being present to resolve SHAs, and `cleanup-prereleases` deletes those tags immediately for released versions.
 
-### cleanup-orphan-manifests
+### cleanup-ghcr-orphan-manifests
 
-Deletes untagged GHCR Docker manifests older than `retention-days` that are not referenced by any active tagged manifest list or attestation index. Delegates to `cleanup-orphan-manifests.sh` in the action directory. Rate-limit-aware.
+Deletes untagged GHCR Docker manifests older than `retention-days` that are not referenced by any active tagged manifest list or attestation index. Delegates to `cleanup-ghcr-orphan-manifests.sh` in the action directory. Rate-limit-aware.
 
 **Inputs**
 
@@ -288,7 +288,7 @@ Cleans up prerelease git tags, GitHub releases, and Docker image tags that are n
 **Notes:**
 - **Released versions** (final tag `vX.Y.Z` exists): immediately deletes prerelease GitHub releases + git tags (`vX.Y.Z-rc.*`, `vX.Y.Z-rc.*-qa-*`); after the retention period, deletes prerelease Docker image tags.
 - **Superseded prereleases** (no final release yet): after the retention period, deletes older RCs + their status tags + Docker image tags; never deletes the latest RC.
-- **Orphan untagged manifests:** handled by the dedicated [cleanup-orphan-manifests](#cleanup-orphan-manifests) action. Run it after `cleanup-prereleases` to catch manifests freshly orphaned by tag deletion.
+- **Orphan untagged manifests:** handled by the dedicated [cleanup-ghcr-orphan-manifests](#cleanup-ghcr-orphan-manifests) action. Run it after `cleanup-prereleases` to catch manifests freshly orphaned by tag deletion.
 - **Ordering:** run `cleanup-deployments` first (see its Notes).
 
 ### commit-files
@@ -461,7 +461,7 @@ Pure string transform. Splits a newline-separated list of identifiers, trims whi
 |---|---|
 | `formatted` | Bulleted markdown list (one `• <item>` per line). Empty string if no artifacts provided. |
 
-### generate-release-notes
+### generate-prod-release-notes
 
 Generates a production-release title and a markdown notes file (written to a `mktemp` path on the runner filesystem) for the release being cut. Returns both the title and the notes-file path so the caller can pass them to `softprops/action-gh-release` or equivalent. Production-deployment releases only — the `🚀 <release-version> PROD` title shape is hardcoded because every caller to date emits prod-deployed release notes. If a QA / signoff / acceptance variant is ever needed, write a sibling action.
 
