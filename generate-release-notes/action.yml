@@ -1,10 +1,11 @@
-name: 'Generate Prod Release Notes'
-description: 'Generates a production-release title and a markdown notes file for the release being cut. Writes the notes file to a `mktemp` path on the runner filesystem; the path is returned as an output for the caller to pass to `softprops/action-gh-release` or equivalent. Production-deployment releases only — this action hardcodes the `🚀`/`PROD` title shape because every caller to date emits prod-deployed release notes. If a QA / signoff / acceptance variant is ever needed, write a sibling action.'
+name: 'Generate Release Notes'
+description: 'Generates a release title and a markdown notes file for the release being cut. Title shape is `<title-prefix><release-version><title-suffix>`; defaults compose `🚀 <version> PROD` for production. Pass non-default `title-prefix` / `title-suffix` for QA / signoff / acceptance variants. The optional `prerelease-version` input adds a `Promoted From:` line to the notes body — leave empty for non-promotion releases. Writes the notes file to a `mktemp` path on the runner filesystem; the path is returned as an output for the caller to pass to `softprops/action-gh-release` or equivalent.'
 
 inputs:
   prerelease-version:
-    description: 'The prerelease RC tag being promoted (e.g., v1.0.0-rc.1). Shown in the notes body as the version this release was promoted from.'
-    required: true
+    description: 'The prerelease RC tag being promoted (e.g., v1.0.0-rc.1). When non-empty, adds a `Promoted From:` line to the notes body. Leave empty for non-promotion releases.'
+    required: false
+    default: ''
   release-version:
     description: 'The final SemVer release being cut (e.g., v1.0.0). Used as the release title version.'
     required: true
@@ -12,10 +13,18 @@ inputs:
     description: 'JSON array of artifact URLs to include under an Artifacts section of the notes. Empty array or empty string skips the section.'
     required: false
     default: '[]'
+  title-prefix:
+    description: 'Prefix rendered before `release-version` in the title. Default emits a rocket emoji + space for the prod shape; pass an alternate string for QA / signoff variants.'
+    required: false
+    default: '🚀 '
+  title-suffix:
+    description: 'Suffix rendered after `release-version` in the title. Default emits ` PROD` for the prod shape; pass ` QA` / ` SIGNOFF` / etc. for non-prod variants.'
+    required: false
+    default: ' PROD'
 
 outputs:
   title:
-    description: 'Composed release title (e.g., "🚀 v1.0.0 PROD")'
+    description: 'Composed release title (e.g., "🚀 v1.0.0 PROD" with default prefix/suffix)'
     value: ${{ steps.compose.outputs.title }}
   notes-file:
     description: 'Absolute path to a temp file on the runner filesystem, valid only for the duration of the current job. Contents: plain markdown (UTF-8).'
@@ -29,6 +38,8 @@ runs:
       env:
         PRERELEASE_VERSION: ${{ inputs.prerelease-version }}
         RELEASE_VERSION: ${{ inputs.release-version }}
+        TITLE_PREFIX: ${{ inputs.title-prefix }}
+        TITLE_SUFFIX: ${{ inputs.title-suffix }}
         ARTIFACT_URLS: ${{ inputs.artifact-urls }}
         REPOSITORY: ${{ github.repository }}
         SERVER_URL: ${{ github.server_url }}
@@ -38,7 +49,7 @@ runs:
       run: |
         set -euo pipefail
 
-        release_title="🚀 $RELEASE_VERSION PROD"
+        release_title="${TITLE_PREFIX}${RELEASE_VERSION}${TITLE_SUFFIX}"
         short_sha="${COMMIT_SHA:0:7}"
         timestamp=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
 
@@ -47,7 +58,9 @@ runs:
           echo "# $release_title"
           echo
           echo "**Release Version:** $RELEASE_VERSION  "
-          echo "**Promoted From:** $PRERELEASE_VERSION  "
+          if [[ -n "$PRERELEASE_VERSION" ]]; then
+            echo "**Promoted From:** $PRERELEASE_VERSION  "
+          fi
           echo "**Workflow:** [$RUN_ID]($SERVER_URL/$REPOSITORY/actions/runs/$RUN_ID)  "
           echo "**Commit:** [$short_sha]($SERVER_URL/$REPOSITORY/commit/$COMMIT_SHA)  "
           echo "**Actor:** $ACTOR  "

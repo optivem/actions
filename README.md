@@ -49,7 +49,7 @@ Two lint checks enforce the conventions:
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `service-names`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
-| [generate-prod-release-notes](#generate-prod-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
+| [generate-release-notes](#generate-release-notes) | • `prerelease-version`<br>• `release-version`<br>• `artifact-urls` | • `title`<br>• `notes-file` |
 | [get-commit-status](#get-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `repository`<br>• `token` | • `description`<br>• `state`<br>• `target-url` |
 | [get-last-workflow-run](#get-last-workflow-run) | • `workflow-name`<br>• `repository`<br>• `exclude-run-id`<br>• `status`<br>• `conclusion`<br>• `limit`<br>• `token` | • `timestamp` |
 | [publish-tag](#publish-tag) | • `tag`<br>• `commit-sha`<br>• `repository`<br>• `git-host`<br>• `token` | — |
@@ -461,23 +461,25 @@ Pure string transform. Splits a newline-separated list of identifiers, trims whi
 |---|---|
 | `formatted` | Bulleted markdown list (one `• <item>` per line). Empty string if no artifacts provided. |
 
-### generate-prod-release-notes
+### generate-release-notes
 
-Generates a production-release title and a markdown notes file (written to a `mktemp` path on the runner filesystem) for the release being cut. Returns both the title and the notes-file path so the caller can pass them to `softprops/action-gh-release` or equivalent. Production-deployment releases only — the `🚀 <release-version> PROD` title shape is hardcoded because every caller to date emits prod-deployed release notes. If a QA / signoff / acceptance variant is ever needed, write a sibling action.
+Generates a release title and a markdown notes file (written to a `mktemp` path on the runner filesystem) for the release being cut. Title shape is `<title-prefix><release-version><title-suffix>`; defaults compose `🚀 <version> PROD` for production releases — pass non-default `title-prefix` / `title-suffix` for QA / signoff / acceptance variants. The optional `prerelease-version` input adds a `Promoted From:` line to the notes body; leave empty for non-promotion releases. Returns both the title and the notes-file path so the caller can pass them to `softprops/action-gh-release` or equivalent.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `prerelease-version` | yes | — | The prerelease RC tag being promoted (e.g., `v1.0.0-rc.1`). Shown in the notes body as the version this release was promoted from. |
+| `prerelease-version` | no | `''` | The prerelease RC tag being promoted (e.g., `v1.0.0-rc.1`). When non-empty, adds a `Promoted From:` line to the notes body. Leave empty for non-promotion releases. |
 | `release-version` | yes | — | The final SemVer release being cut (e.g., `v1.0.0`). Used as the release title version. |
 | `artifact-urls` | no | `[]` | JSON array of artifact URLs to include under an Artifacts section of the notes. Empty array or empty string skips the section. |
+| `title-prefix` | no | `'🚀 '` | Prefix rendered before `release-version` in the title. Default emits a rocket emoji + space for the prod shape; pass an alternate string for QA / signoff variants. |
+| `title-suffix` | no | `' PROD'` | Suffix rendered after `release-version` in the title. Default emits ` PROD` for the prod shape; pass ` QA` / ` SIGNOFF` / etc. for non-prod variants. |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `title` | Composed release title (e.g., `"🚀 v1.0.0 PROD"`) |
+| `title` | Composed release title (e.g., `"🚀 v1.0.0 PROD"` with default prefix/suffix) |
 | `notes-file` | Absolute path to a temp file on the runner filesystem (plain markdown, UTF-8). Valid only for the duration of the current job. |
 
 ### get-commit-status
