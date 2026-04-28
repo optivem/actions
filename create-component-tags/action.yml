@@ -45,6 +45,7 @@ runs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
         push_target=$(remote_push_target "$TOKEN" "$GIT_HOST" "$REPO")
+        query_url=$(remote_query_url "$TOKEN" "$GIT_HOST" "$REPO")
         if [ -n "$TOKEN" ]; then
           clear_persisted_credentials "$GIT_HOST"
         fi
@@ -65,26 +66,31 @@ runs:
           version=$(cat "$version_file" | tr -d '[:space:]')
           component_tag="${component_name}-v${version}"
 
-          if git ls-remote --tags --exit-code origin "refs/tags/$component_tag" >/dev/null 2>&1; then
+          if git ls-remote --tags --exit-code "$query_url" "refs/tags/$component_tag" >/dev/null 2>&1; then
             echo "Skipped $component_name: tag $component_tag already exists on remote"
             skipped_tags+=("$component_tag")
             continue
           fi
 
           git tag "$component_tag"
-          if git push "$push_target" "$component_tag" 2>/dev/null; then
+          push_stderr=$(mktemp)
+          if git push "$push_target" "$component_tag" 2>"$push_stderr"; then
+            rm -f "$push_stderr"
             echo "Created component tag: $component_tag"
             created_tags+=("$component_tag")
             continue
           fi
 
-          remote_sha=$(git ls-remote --tags origin "refs/tags/$component_tag" | cut -f1)
+          remote_sha=$(git ls-remote --tags "$query_url" "refs/tags/$component_tag" | cut -f1)
           local_sha=$(git rev-parse "$component_tag")
           if [[ -n "$remote_sha" && "$remote_sha" == "$local_sha" ]]; then
+            rm -f "$push_stderr"
             echo "Tag $component_tag created by concurrent run (same commit)"
             created_tags+=("$component_tag")
           else
             echo "::error::Failed to push tag $component_tag (remote: $remote_sha, local: $local_sha)"
+            cat "$push_stderr" >&2
+            rm -f "$push_stderr"
             exit 1
           fi
         done <<< "$COMPONENTS"
