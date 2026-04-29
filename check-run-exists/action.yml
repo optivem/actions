@@ -1,0 +1,56 @@
+name: 'Check Run Exists'
+description: 'Boolean existence check for a successful Check Run with a given name on a given commit. Returns exists=true when at least one matching check run with conclusion=success is present, exists=false when the API definitively reports none. API failure (after gh_retry exhaustion) is indeterminate — the action exits 1 rather than coercing to a false answer. Pairs with create-check-run (write) and resolve-latest-rc-with-check (read latest).'
+
+inputs:
+  ref:
+    description: 'Ref (branch, tag, or SHA) whose check runs are inspected. The GitHub commits-check-runs endpoint resolves refs server-side, so passing an rc tag works.'
+    required: true
+  check-name:
+    description: 'Check Run name to look for (e.g. "qa/signoff").'
+    required: true
+  repository:
+    description: 'Repository in owner/name form. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token used for API calls. Needs checks:read. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exists:
+    description: |
+      'true' when at least one Check Run with the given name and conclusion=success exists on the ref.
+      'false' when the API definitively reports none.
+      API failure (after gh_retry exhaustion) is indeterminate — the action exits 1 instead of coercing to 'false'.
+    value: ${{ steps.check.outputs.exists }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REF: ${{ inputs.ref }}
+        CHECK_NAME: ${{ inputs.check-name }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+
+        check_name_encoded=$(printf '%s' "$CHECK_NAME" | jq -sRr @uri)
+
+        if ! count=$(gh_retry api "repos/${REPOSITORY}/commits/${REF}/check-runs?check_name=${check_name_encoded}&per_page=100" \
+            --jq '[.check_runs[]? | select(.conclusion=="success")] | length' 2>&1); then
+          echo "::error::Could not fetch check runs for ${REPOSITORY}@${REF} after gh_retry exhaustion. Indeterminate — exiting 1 rather than coercing to exists=false. Details: $count"
+          exit 1
+        fi
+
+        if [[ "${count:-0}" -gt 0 ]]; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+          echo "[${CHECK_NAME}] check run exists on ${REF} — exists=true" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "[${CHECK_NAME}] check run does not exist on ${REF} — exists=false" >> "$GITHUB_STEP_SUMMARY"
+        fi

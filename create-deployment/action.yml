@@ -1,0 +1,64 @@
+name: 'Create Deployment'
+description: 'Records a GitHub Deployment Record (POST /repos/{repo}/deployments) on the given ref + environment, then immediately posts a deployment status. Used to mark "this ref reached this environment" in a way the Environments tab and downstream automation (resolve-latest-deployment) can query. Pairs with resolve-latest-deployment (read).'
+
+inputs:
+  ref:
+    description: 'The ref (branch, tag, or SHA) being deployed. Recorded as the deployment ref — pass the rc tag (e.g. monolith-dotnet-v1.0.0-rc.1) so prefix-based lookups (resolve-latest-deployment) can recover it.'
+    required: true
+  environment:
+    description: 'Deployment environment name (e.g. "monolith-dotnet-qa"). Free-form string — auto-creates the environment in GitHub UI on first use.'
+    required: true
+  description:
+    description: 'Human-readable description recorded on both the deployment and its status. Empty -> defaults to "Deploy of <ref>".'
+    required: false
+    default: ''
+  state:
+    description: 'Deployment status state. One of: success, failure, error, in_progress, queued, pending. Default: success.'
+    required: false
+    default: 'success'
+  repository:
+    description: 'Repository in owner/name form. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'GitHub token used for API calls. Needs deployments:write. Defaults to github.token.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  deployment-id:
+    description: 'Numeric ID of the created deployment record.'
+    value: ${{ steps.create.outputs.deployment-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: create
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REF: ${{ inputs.ref }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_DESCRIPTION: ${{ inputs.description }}
+        STATE: ${{ inputs.state }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+
+        DESCRIPTION="${INPUT_DESCRIPTION:-Deploy of $REF}"
+
+        deployment_id=$(jq -nc \
+          --arg ref "$REF" \
+          --arg env "$ENVIRONMENT" \
+          --arg desc "$DESCRIPTION" \
+          '{ref: $ref, environment: $env, description: $desc, auto_merge: false, required_contexts: [], transient_environment: false, production_environment: false}' \
+          | gh_retry api "repos/${REPOSITORY}/deployments" --input - --jq '.id')
+
+        gh_retry api "repos/${REPOSITORY}/deployments/${deployment_id}/statuses" \
+          -X POST \
+          -f state="$STATE" \
+          -f description="$DESCRIPTION" >/dev/null
+
+        echo "deployment-id=${deployment_id}" >> "$GITHUB_OUTPUT"
+        echo "Recorded deployment [${ENVIRONMENT}] state=${STATE} on ref ${REF}" >> "$GITHUB_STEP_SUMMARY"
