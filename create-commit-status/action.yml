@@ -1,12 +1,12 @@
 name: 'Create Commit Status'
-description: 'Creates a commit status record on the current repository (POST /repos/{repo}/statuses/{sha}) — used for CI state or as per-commit metadata'
+description: 'Creates a commit status (POST /repos/{repo}/statuses/{sha}) on the commit identified by `ref` (SHA, branch, or tag). Resolves ref to SHA server-side, so callers can pass an rc tag without a local checkout. Used to record verdict gates (e.g. qa/signoff success/failure) on rc commits. Pairs with get-commit-status (read) and check-commit-status-exists (verify).'
 inputs:
-  commit-sha:
-    description: 'Commit SHA to attach the status to. Empty = current commit (github.sha).'
+  ref:
+    description: 'Ref (SHA, branch, or tag) to attach the status to. Resolved to a commit SHA via the commits API before the status is written. SHAs pass through unchanged. Empty -> uses the current commit (github.sha).'
     required: false
     default: ''
   context:
-    description: 'Status context (label shown on the commit)'
+    description: 'Status context (label shown on the commit). Use <env>/<verb> convention (e.g. "qa/signoff", "acceptance/tested").'
     required: true
   state:
     description: 'Status state: success, failure, pending, or error'
@@ -21,7 +21,7 @@ inputs:
     required: false
     default: ''
   token:
-    description: 'GitHub token used for API calls. Defaults to github.token.'
+    description: 'GitHub token used for API calls. Needs statuses:write + contents:read (for ref resolution). Defaults to github.token.'
     required: false
     default: ${{ github.token }}
 runs:
@@ -30,16 +30,21 @@ runs:
     - shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
-        INPUT_SHA: ${{ inputs.commit-sha }}
+        REF: ${{ inputs.ref }}
         CONTEXT: ${{ inputs.context }}
         STATE: ${{ inputs.state }}
         DESCRIPTION: ${{ inputs.description }}
         INPUT_TARGET_URL: ${{ inputs.target-url }}
         DEFAULT_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        COMMIT_SHA: ${{ github.sha }}
+        DEFAULT_SHA: ${{ github.sha }}
       run: |
+        set -euo pipefail
         source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-        SHA="${INPUT_SHA:-$COMMIT_SHA}"
+        if [ -n "$REF" ]; then
+          SHA=$(gh_retry api "repos/${{ github.repository }}/commits/${REF}" --jq '.sha')
+        else
+          SHA="$DEFAULT_SHA"
+        fi
         TARGET_URL="${INPUT_TARGET_URL:-$DEFAULT_TARGET_URL}"
         gh_retry api "repos/${{ github.repository }}/statuses/$SHA" \
           -f state="$STATE" \

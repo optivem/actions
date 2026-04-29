@@ -44,7 +44,7 @@ Two lint checks enforce the conventions:
 | [compose-prerelease-version](#compose-prerelease-version) | • `base-version`<br>• `suffix`<br>• `build-number`<br>• `prefix` | • `version` |
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
 | [compose-tags](#compose-tags) | • `versions`<br>• `template` | • `tags` |
-| [create-commit-status](#create-commit-status) | • `commit-sha`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
+| [create-commit-status](#create-commit-status) | • `ref`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `service-names`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
@@ -381,18 +381,18 @@ Pure string transform over a keyed list. For each `{key, version}` entry, applie
 
 ### create-commit-status
 
-Calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit status with the given context, state, description, and target URL. Defaults `sha` to `github.sha` and `target-url` to the current workflow run URL.
+Resolves `ref` (SHA, branch, or tag) to a commit SHA via `gh api repos/{repo}/commits/{ref}`, then calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit status with the given context, state, description, and target URL. Defaults `ref` to `github.sha` and `target-url` to the current workflow run URL.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `commit-sha` | no | `` | Commit SHA to attach the status to. Empty = current commit (`github.sha`). |
-| `context` | yes | — | Status context (label shown on the commit) |
+| `ref` | no | `` | Ref (SHA, branch, or tag) to attach the status to. Resolved to a commit SHA before the status is written. SHAs pass through unchanged. Empty = current commit (`github.sha`). |
+| `context` | yes | — | Status context (label shown on the commit). Use `<env>/<verb>` convention (e.g. `qa/signoff`, `acceptance/tested`). |
 | `state` | no | `success` | Status state: `success`, `failure`, `pending`, or `error` |
 | `description` | no | `` | Short human-readable description (often the subject identifier, e.g. the verified upstream SHA) |
 | `target-url` | no | `` | URL the status links to. Empty = link to the current workflow run. |
-| `token` | no | `${{ github.token }}` | GitHub token used for API calls |
+| `token` | no | `${{ github.token }}` | GitHub token used for API calls. Needs `statuses:write` + `contents:read` (for ref resolution). |
 
 ### deploy-docker-compose
 
