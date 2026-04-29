@@ -41,7 +41,6 @@ Two lint checks enforce the conventions:
 | [cleanup-prereleases](#cleanup-prereleases) | • `retention-days`<br>• `container-packages`<br>• `delete-delay-seconds`<br>• `rate-limit-threshold`<br>• `dry-run`<br>• `token` | • `deleted-count`<br>• `dry-run-count` |
 | [commit-files](#commit-files) | • `files`<br>• `branch`<br>• `max-retries`<br>• `token` | • `commits`<br>• `committed` |
 | [compose-docker-image-urls](#compose-docker-image-urls) | • `tag`<br>• `base-image-urls` | • `image-urls` |
-| [compose-prerelease-status](#compose-prerelease-status) | • `prerelease-version`<br>• `environment`<br>• `status` | • `status-tag` |
 | [compose-prerelease-version](#compose-prerelease-version) | • `base-version`<br>• `suffix`<br>• `build-number`<br>• `prefix` | • `version` |
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
 | [compose-tags](#compose-tags) | • `versions`<br>• `template` | • `tags` |
@@ -327,24 +326,6 @@ Pure string helper. Takes a list of base image URLs (JSON array or newline-separ
 | Name | Description |
 |---|---|
 | `image-urls` | JSON array of resolved image URLs with tags |
-
-### compose-prerelease-status
-
-Pure string transform. Concatenates `{prerelease-version}-{environment}-{status}` to compose a status-marker git tag (e.g., `v1.0.0-rc.1` + `qa` + `deployed` → `v1.0.0-rc.1-qa-deployed`). Validates inputs are non-empty and `status` is one of `deployed`, `passed`, `failed`, `approved`, `rejected`.
-
-**Inputs**
-
-| Name | Required | Default | Description |
-|---|---|---|---|
-| `prerelease-version` | yes | — | Prerelease version to build from (e.g., `v1.0.0-rc.1`) |
-| `environment` | yes | — | Environment name (e.g., `qa`, `staging`, `prod`) |
-| `status` | yes | — | Status marker. Must be one of: `deployed`, `passed`, `failed`, `approved`, `rejected`. |
-
-**Outputs**
-
-| Name | Description |
-|---|---|
-| `status-tag` | Composed status-marker tag string (e.g., `v1.0.0-rc.1-qa-deployed`). Not a SemVer version — a git tag marker for pipeline gates. |
 
 ### compose-prerelease-version
 
