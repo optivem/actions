@@ -1,0 +1,47 @@
+name: 'Resolve Project Status Field'
+description: 'Resolves a GitHub ProjectV2 board, a single-select field on it, and that field''s options to their Node IDs. Lookup is by human-readable names — caller passes "Shop Project" / "Status", action returns the IDs needed by other ProjectV2 mutations. Avoids hard-coding opaque hex IDs in workflow files.'
+
+inputs:
+  project-title:
+    description: 'Title of the ProjectV2 board on the owner''s account/org (e.g. "Shop Project").'
+    required: true
+  field-name:
+    description: 'Name of the single-select field on the board (e.g. "Status").'
+    required: false
+    default: 'Status'
+  owner:
+    description: 'Owner login of the project (org or user). Defaults to the workflow''s repository owner.'
+    required: false
+    default: ${{ github.repository_owner }}
+  owner-type:
+    description: 'Owner type: "organization" or "user". Defaults to organization, which is the common case for shared boards.'
+    required: false
+    default: 'organization'
+  token:
+    description: 'Token with `project` (read) scope on the owner. The default GITHUB_TOKEN cannot read org-level projects; pass a PAT or GitHub App token.'
+    required: true
+
+outputs:
+  project-id:
+    description: 'Node ID of the resolved project.'
+    value: ${{ steps.resolve.outputs.project-id }}
+  field-id:
+    description: 'Node ID of the resolved single-select field.'
+    value: ${{ steps.resolve.outputs.field-id }}
+  options-json:
+    description: 'JSON object mapping option name to option ID, for callers that need specific option IDs.'
+    value: ${{ steps.resolve.outputs.options-json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve IDs by name
+      id: resolve
+      shell: bash
+      env:
+        PROJECT_TITLE: ${{ inputs.project-title }}
+        FIELD_NAME: ${{ inputs.field-name }}
+        OWNER: ${{ inputs.owner }}
+        OWNER_TYPE: ${{ inputs.owner-type }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/resolve-project-status-field.sh"

@@ -1,0 +1,38 @@
+name: 'Bulk Update Project Item Status'
+description: 'Advances every item on a GitHub ProjectV2 board where a single-select field currently equals from-option-id, setting it to to-option-id. Operates by Node IDs only — pair with `resolve-project-status-field` to look up IDs by human-readable name. Useful for "advance all tickets in column X to column Y" pipeline-driven board moves.'
+
+inputs:
+  project-id:
+    description: 'Node ID of the ProjectV2 board (e.g. PVT_kwDOAMwK8c4BT1wk).'
+    required: true
+  field-id:
+    description: 'Node ID of the single-select field to mutate (e.g. PVTSSF_...).'
+    required: true
+  from-option-id:
+    description: 'Items currently set to this option ID will be advanced.'
+    required: true
+  to-option-id:
+    description: 'Target option ID — items will be set to this value.'
+    required: true
+  token:
+    description: 'Token with `project` (read+write) scope on the project owner. The default GITHUB_TOKEN cannot write org-level projects; pass a PAT or GitHub App token.'
+    required: true
+
+outputs:
+  items-moved:
+    description: 'Number of items advanced from from-option-id to to-option-id during this run.'
+    value: ${{ steps.update.outputs.items-moved }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Advance items
+      id: update
+      shell: bash
+      env:
+        PROJECT_ID: ${{ inputs.project-id }}
+        FIELD_ID: ${{ inputs.field-id }}
+        FROM_OPTION_ID: ${{ inputs.from-option-id }}
+        TO_OPTION_ID: ${{ inputs.to-option-id }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: bash "${{ github.action_path }}/bulk-update-project-item-status.sh"
