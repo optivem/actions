@@ -1,12 +1,12 @@
-name: 'Resolve Latest Prerelease with Check'
-description: 'Lists prerelease (rc) tags in the calling repo by tag-prefix and returns the highest by rc number whose SHA has at least one successful Check Run with the given name. Used to find the latest "qa-approved" / "acceptance-tested" prerelease once promotion state lives in Check Runs rather than tag suffixes. Pairs with create-check-run (write) and check-run-exists (verify), and parallels resolve-latest-prerelease-tag (same noun, different qualifier).'
+name: 'Resolve Latest Prerelease with Status'
+description: 'Lists prerelease (rc) tags in the calling repo by tag-prefix and returns the highest by rc number whose SHA has at least one success commit-status with the given context. Used to find the latest "qa-approved" / "acceptance-tested" prerelease once promotion state lives in commit-statuses rather than tag suffixes. Pairs with create-commit-status (write) and get-commit-status / check-commit-status-exists (read), and parallels resolve-latest-prerelease-tag (same noun, different qualifier).'
 
 inputs:
   tag-prefix:
     description: 'Required tag prefix (e.g. "monolith-dotnet-v"). Only tags matching the strict pattern <tag-prefix><X.Y.Z>-rc.<N> are considered — legacy status-suffix tags (e.g. -qa-approved) are excluded.'
     required: true
-  check-name:
-    description: 'Name of the Check Run that must be present with conclusion=success on the rc tag''s SHA (e.g. "qa/signoff").'
+  status-context:
+    description: 'The commit-status context that must be present with state=success on the rc tag''s SHA (e.g. "qa/signoff").'
     required: true
   version:
     description: 'Optional. If set, restricts the search to tags matching <tag-prefix><version>-rc.<N>.'
@@ -17,16 +17,13 @@ inputs:
     required: false
     default: ${{ github.repository }}
   token:
-    description: 'GitHub token used for API calls. Needs checks:read. Defaults to github.token.'
+    description: 'GitHub token used for API calls. Needs statuses:read. Defaults to github.token.'
     required: false
     default: ${{ github.token }}
 
 outputs:
   tag:
-    description: 'The latest rc tag whose SHA has a passing Check Run.'
-    value: ${{ steps.resolve.outputs.tag }}
-  base-tag:
-    description: 'Alias of `tag`. Provided for parity with resolve-latest-prerelease-tag, which exposes both `tag` (with optional suffix) and `base-tag` (suffix stripped). Since rc tags here have no suffix, they are equal.'
+    description: 'The latest rc tag whose SHA has a passing commit-status.'
     value: ${{ steps.resolve.outputs.tag }}
 
 runs:
@@ -37,7 +34,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
         TAG_PREFIX: ${{ inputs.tag-prefix }}
-        CHECK_NAME: ${{ inputs.check-name }}
+        STATUS_CONTEXT: ${{ inputs.status-context }}
         VERSION: ${{ inputs.version }}
         REPOSITORY: ${{ inputs.repository }}
       run: |
@@ -63,22 +60,20 @@ runs:
           | sort -k1,1 -nr \
           | awk '{print $2}')
 
-        check_name_encoded=$(printf '%s' "$CHECK_NAME" | jq -sRr @uri)
-
         for tag in "${rc_tags[@]}"; do
           sha=$(git rev-parse "${tag}^{}" 2>/dev/null || git rev-parse "${tag}")
-          approved=$(gh_retry api "repos/${REPOSITORY}/commits/${sha}/check-runs?check_name=${check_name_encoded}&per_page=100" \
-            --jq '[.check_runs[]? | select(.conclusion=="success")] | length')
+          statuses=$(gh_retry api "repos/${REPOSITORY}/commits/${sha}/statuses" --paginate)
+          approved=$(echo "$statuses" | jq --arg ctx "$STATUS_CONTEXT" '[.[] | select(.context==$ctx and .state=="success")] | length')
           if [[ "${approved:-0}" -gt 0 ]]; then
             echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-            echo "Resolved latest rc with passing [${CHECK_NAME}] check: ${tag}" >> "$GITHUB_STEP_SUMMARY"
+            echo "Resolved latest rc with passing [${STATUS_CONTEXT}] commit-status: ${tag}" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
         done
 
         if [[ -n "$VERSION" ]]; then
-          echo "::error::No rc tag matching ${TAG_PREFIX}${VERSION}-rc.<N> has a successful [${CHECK_NAME}] check run"
+          echo "::error::No rc tag matching ${TAG_PREFIX}${VERSION}-rc.<N> has a successful [${STATUS_CONTEXT}] commit-status"
         else
-          echo "::error::No rc tag matching ${TAG_PREFIX}<X.Y.Z>-rc.<N> has a successful [${CHECK_NAME}] check run"
+          echo "::error::No rc tag matching ${TAG_PREFIX}<X.Y.Z>-rc.<N> has a successful [${STATUS_CONTEXT}] commit-status"
         fi
         exit 1

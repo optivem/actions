@@ -59,6 +59,7 @@ Two lint checks enforce the conventions:
 | [resolve-commit](#resolve-commit) | • `repository`<br>• `ref`<br>• `token`<br>• `git-host` | • `sha`<br>• `timestamp` |
 | [resolve-docker-image-digests](#resolve-docker-image-digests) | • `base-image-urls`<br>• `tag` | • `image-digest-urls`<br>• `latest-updated-at` |
 | [resolve-latest-prerelease-tag](#resolve-latest-prerelease-tag) | • `tag-prefix`<br>• `tag-suffix`<br>• `repository`<br>• `token`<br>• `git-host` | • `tag`<br>• `base-tag` |
+| [resolve-latest-prerelease-with-status](#resolve-latest-prerelease-with-status) | • `tag-prefix`<br>• `status-context`<br>• `version`<br>• `repository`<br>• `token` | • `tag` |
 | [resolve-latest-tag-from-sha](#resolve-latest-tag-from-sha) | • `repository`<br>• `commit-sha`<br>• `pattern`<br>• `token`<br>• `git-host` | • `tag` |
 | [tag-docker-images](#tag-docker-images) | • `image-urls`<br>• `tag`<br>• `image-tags`<br>• `registry`<br>• `registry-username`<br>• `token` | • `tagged-image-urls` |
 | [trigger-and-wait-for-workflow](#trigger-and-wait-for-workflow) | • `workflow`<br>• `repository`<br>• `ref`<br>• `workflow-inputs`<br>• `poll-interval`<br>• `rate-limit-threshold`<br>• `timeout-seconds`<br>• `token` | • `run-id` |
@@ -644,6 +645,28 @@ Finds the latest git tag in a repository that matches a given prefix (and option
 |---|---|
 | `tag` | The latest tag matching `tag-prefix` (and `tag-suffix`, if provided) |
 | `base-tag` | The matched tag with `tag-suffix` stripped (equals `tag` when `tag-suffix` is empty) |
+
+### resolve-latest-prerelease-with-status
+
+Walks rc tags matching `<tag-prefix><X.Y.Z>-rc.<N>` (highest rc number first), and for each tag queries `repos/{r}/commits/{sha}/statuses` to find the newest tag whose SHA carries a success commit-status with the given context. Returns the tag; hard-fails when none qualify. Used to find the latest "qa-approved" / "acceptance-tested" prerelease once promotion state lives in commit-statuses rather than tag suffixes. Pairs with `create-commit-status` (write) and `get-commit-status` / `check-commit-status-exists` (read), and parallels `resolve-latest-prerelease-tag` (same noun, different qualifier).
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `tag-prefix` | yes | — | Required tag prefix (e.g. `monolith-dotnet-v`). Only tags matching the strict pattern `<tag-prefix><X.Y.Z>-rc.<N>` are considered — legacy status-suffix tags (e.g. `-qa-approved`) are excluded. |
+| `status-context` | yes | — | The commit-status context that must be present with `state=success` on the rc tag's SHA (e.g. `qa/signoff`). |
+| `version` | no | `` | Optional. If set, restricts the search to tags matching `<tag-prefix><version>-rc.<N>`. |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/name` form |
+| `token` | no | `${{ github.token }}` | GitHub token used for API calls. Needs `statuses:read`. |
+
+**Outputs**
+
+| Name | Description |
+|---|---|
+| `tag` | The latest rc tag whose SHA has a passing commit-status. |
+
+**Notes:** Caller must have run `actions/checkout` with `fetch-depth: 0` (or otherwise fetched tags) — `git tag --list` and `git rev-parse` need the local refs.
 
 ### resolve-latest-tag-from-sha
 
