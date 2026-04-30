@@ -70,21 +70,21 @@ Two lint checks enforce the conventions:
 
 ### bump-patch-versions
 
-For each `{path, signal, value}` entry, reads the VERSION file and — if the matching artifact already exists — computes a patch bump. Each entry picks one signal source: `git-tag` probes a tag on the remote via `git ls-remote`; `ghcr-image` probes a GHCR image manifest. Reads only; writes nothing to disk. Pair with `commit-files` to persist the bumps.
+For each `{path, value}` entry, reads the VERSION file and — if the matching git tag already exists on the remote — computes a patch bump. Probes the tag via `git ls-remote`. Reads only; writes nothing to disk. Pair with `commit-files` to persist the bumps. A legacy `signal: git-tag` field is accepted and ignored for backward compatibility with already-scaffolded student repos; the previously-supported `ghcr-image` signal has been removed.
 
 **Inputs**
 
 | Name | Required | Default | Description |
 |---|---|---|---|
-| `version-files` | yes | — | JSON array of `{"path": string, "signal": "git-tag"\|"ghcr-image", "value": string}` objects. `git-tag`: bump if tag `{value}{current-version}` exists on the remote (e.g. `value="meta-v"` + version `1.0.40` probes tag `meta-v1.0.40`). `ghcr-image`: bump if GHCR image `{value}:v{current-version}` exists (e.g. `value="ghcr.io/optivem/shop/backend-java"` + version `1.5.24` probes that image at `:v1.5.24`). |
-| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format (used for `git-tag` probes) |
-| `token` | no | `${{ github.token }}` | Token for git remote auth and GHCR auth |
+| `version-files` | yes | — | JSON array of `{"path": string, "value": string}` objects. Bumps the file if tag `{value}{current-version}` exists on the remote (e.g. `value="meta-v"` + version `1.0.40` probes tag `meta-v1.0.40`). |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format (used for tag probes) |
+| `token` | no | `${{ github.token }}` | Token for git remote auth |
 
 **Outputs**
 
 | Name | Description |
 |---|---|
-| `bumps` | JSON array of `{path, old-version, new-version, release-signal}` for files that need bumping. `release-signal` is the concrete artifact reference (tag name or `image:tag`). |
+| `bumps` | JSON array of `{path, old-version, new-version, release-signal}` for files that need bumping. `release-signal` is the matched tag name. |
 | `bumped` | `true` if at least one file needs bumping |
 | `summary` | Human-readable summary (one line per file, bumped or skipped) |
 

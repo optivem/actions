@@ -1,25 +1,28 @@
 name: 'Bump Patch Versions'
-description: 'Computes patch-version bumps for VERSION files whose matching release signal already exists. Each VERSION file declares a signal source (git-tag or ghcr-image) and a value — the bump fires when the corresponding artifact exists for the current version. Reads files from the checked-out workspace; writes nothing. Pair with commit-files to persist the bumps.'
+description: 'Computes patch-version bumps for VERSION files whose matching git tag already exists. Each entry declares a tag-prefix `value`; the bump fires when `{value}{current-version}` exists on the remote. Reads files from the checked-out workspace; writes nothing. Pair with commit-files to persist the bumps.'
 
 inputs:
   version-files:
     description: |
-      JSON array of {"path": string, "signal": "git-tag"|"ghcr-image", "value": string} objects.
-        - signal="git-tag": bump if a git tag exists at "{value}{current-version}" on the remote (e.g. value="meta-v" + version="1.0.40" -> probes tag "meta-v1.0.40" via `git ls-remote`).
-        - signal="ghcr-image": bump if a GHCR image exists at "{value}:v{current-version}" (e.g. value="ghcr.io/optivem/shop/backend-java" + version="1.5.24" -> probes that image:v1.5.24).
+      JSON array of {"path": string, "value": string} objects. The `value` is a
+      tag prefix; the action probes "{value}{current-version}" via
+      `git ls-remote` and bumps the file's patch component when the tag exists.
+      Example: value="meta-v" + version="1.0.40" -> probes tag "meta-v1.0.40".
+      A legacy `"signal": "git-tag"` field is accepted and ignored for backward
+      compatibility with already-scaffolded student repos.
     required: true
   repository:
-    description: 'Repository in owner/repo format (used for git-tag probes). Defaults to the current repository.'
+    description: 'Repository in owner/repo format (used for tag probes). Defaults to the current repository.'
     required: false
     default: ${{ github.repository }}
   token:
-    description: 'Token for git remote auth and GHCR auth. Defaults to github.token.'
+    description: 'Token for git remote auth. Defaults to github.token.'
     required: false
     default: ${{ github.token }}
 
 outputs:
   bumps:
-    description: 'JSON array of {path, old-version, new-version, release-signal} for files that need bumping. release-signal is the concrete artifact reference (tag name or image:tag).'
+    description: 'JSON array of {path, old-version, new-version, release-signal} for files that need bumping. release-signal is the matched tag name.'
     value: ${{ steps.bump.outputs.bumps }}
   bumped:
     description: 'true if at least one file needs bumping'
@@ -42,14 +45,11 @@ runs:
         set -euo pipefail
 
         source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
-        source "$GITHUB_ACTION_PATH/../shared/ghcr-probe.sh"
 
         if ! jq -e 'type == "array"' >/dev/null <<<"$VERSION_FILES"; then
-          echo "::error::version-files must be a JSON array of {path, signal, value} objects"
+          echo "::error::version-files must be a JSON array of {path, value} objects"
           exit 1
         fi
-
-        # --- signal probes -----------------------------------------------------
 
         probe_git_tag() {
           local tag=$1
@@ -67,44 +67,23 @@ runs:
           fi
         }
 
-        probe_ghcr_image() {
-          local image_url=$1
-          local tag=$2
-          local path=${image_url#ghcr.io/}
-          local manifest_url="https://ghcr.io/v2/${path}/manifests/${tag}"
-          local bearer
-          bearer=$(ghcr_bearer_for "$path" "$GH_TOKEN" || true)
-          if [ -z "$bearer" ]; then
-            echo "::error::Failed to obtain GHCR token for $path" >&2
-            exit 1
-          fi
-          local code
-          code=$(ghcr_probe_manifest "$manifest_url" "$bearer")
-          case "$code" in
-            200) echo "true"; return ;;
-            404) echo "false"; return ;;
-            401|403)
-              echo "::error::Authentication failed probing ${image_url}:${tag} (HTTP $code)" >&2
-              exit 1
-              ;;
-          esac
-          echo "::error::Unexpected HTTP $code probing ${image_url}:${tag} after retries" >&2
-          exit 1
-        }
-
-        # --- main loop ---------------------------------------------------------
-
         bumps='[]'
         bumped=false
         summary=""
 
         while IFS= read -r entry; do
           path=$(jq -r '.path // empty' <<<"$entry")
-          signal=$(jq -r '.signal // empty' <<<"$entry")
           value=$(jq -r '.value // empty' <<<"$entry")
+          signal=$(jq -r '.signal // empty' <<<"$entry")
 
-          if [ -z "$path" ] || [ -z "$signal" ] || [ -z "$value" ]; then
-            echo "::error::Each entry must have non-empty 'path', 'signal', and 'value' fields. Got: $entry"
+          if [ -z "$path" ] || [ -z "$value" ]; then
+            echo "::error::Each entry must have non-empty 'path' and 'value' fields. Got: $entry"
+            exit 1
+          fi
+
+          # Backward compat: tolerate legacy `signal: git-tag`; reject anything else.
+          if [ -n "$signal" ] && [ "$signal" != "git-tag" ]; then
+            echo "::error::Legacy 'signal' field for $path must be 'git-tag' (or omitted). Got: '$signal'. The 'ghcr-image' signal has been removed."
             exit 1
           fi
 
@@ -118,25 +97,12 @@ runs:
             continue
           fi
 
-          case "$signal" in
-            git-tag)
-              release_signal="${value}${current_version}"
-              exists=$(probe_git_tag "$release_signal")
-              ;;
-            ghcr-image)
-              image_tag="v${current_version}"
-              release_signal="${value}:${image_tag}"
-              exists=$(probe_ghcr_image "$value" "$image_tag")
-              ;;
-            *)
-              echo "::error::Unknown signal '$signal' for $path. Expected 'git-tag' or 'ghcr-image'."
-              exit 1
-              ;;
-          esac
+          release_signal="${value}${current_version}"
+          exists=$(probe_git_tag "$release_signal")
 
           if [[ "$exists" != "true" ]]; then
-            echo "Skipped $path: $current_version (no artifact at $release_signal)"
-            summary="${summary}${path}: skipped (no artifact for $current_version)\n"
+            echo "Skipped $path: $current_version (no tag at $release_signal)"
+            summary="${summary}${path}: skipped (no tag for $current_version)\n"
             continue
           fi
 
