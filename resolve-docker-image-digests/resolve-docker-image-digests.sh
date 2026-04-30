@@ -52,7 +52,7 @@ echo "Trimmed input: '$trimmed'"
 
 image_list=()
 
-if [[ "$trimmed" == \[* && "$trimmed" == *\] ]]; then
+if [[ "${trimmed:0:1}" == "[" && "${trimmed: -1}" == "]" ]]; then
   echo "Detected JSON array format"
   if ! parsed="$(jq -r '.[]' <<<"$trimmed" 2>/dev/null)"; then
     echo "::error::Invalid JSON format in image-urls input"
