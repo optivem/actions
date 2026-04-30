@@ -3,9 +3,8 @@ description: 'Reads the base semantic version (MAJOR.MINOR.PATCH) from a VERSION
 
 inputs:
   file:
-    description: 'Path to the VERSION file'
-    required: false
-    default: 'VERSION'
+    description: 'Path to the VERSION file. Required — must be set explicitly to prevent silently reading the wrong file in monorepo layouts where multiple VERSION files coexist.'
+    required: true
 
 outputs:
   base-version:
