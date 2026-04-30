@@ -271,6 +271,8 @@ When auditing, apply this lens to any custom wrapper: does it forward inputs to 
 
 Every `uses: <owner>/<repo>@<ref>` reference to a marketplace (non-local, non-first-party-internal) action inside an `action.yml` `runs.steps:` block or inside a consumer workflow must pin to the **latest major tag** published upstream. Stale majors silently miss security fixes, bug fixes, Node-runtime upgrades, and (when the ecosystem moves) eventual forced migration under time pressure. The rubric's "no deprecated tools" stance (see repo policy) applies here as a positive duty, not just an avoidance rule.
 
+**Divergence from SHA-pinning.** Industry security guides (OpenSSF Scorecard, GitHub workflow-hardening docs, supply-chain audit tooling) recommend pinning every third-party action to a 40-char commit SHA so a hijacked or maliciously retagged release cannot silently change CI behavior. This rubric deliberately diverges and uses major-tag pinning instead. The trade-off is intentional: this workspace is teaching material with a small, well-known set of marketplace actions, no external CI contributors, and no production secrets that would make a single-action compromise material. Major tags keep lessons readable, keep upgrade cadence simple (bump on major, pick up patches automatically), and avoid the Dependabot/PR churn a SHA-pin policy generates. Re-evaluate if the risk profile changes — external contributors landing code that runs in CI, or production secrets entering workflows — at which point a SHA-pinning pass is the right answer.
+
 **In scope for this dimension:**
 
 - `uses:` refs to GitHub-hosted third-party actions (`actions/*`, `docker/*`, `google-github-actions/*`, `softprops/*`, etc.).
