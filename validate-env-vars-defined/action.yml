@@ -10,24 +10,7 @@ runs:
   using: 'composite'
   steps:
     - name: Ensure Environment Variables Defined
-      run: |
-        missing=()
-
-        while IFS= read -r name; do
-          name=$(echo "$name" | xargs)
-          [ -z "$name" ] && continue
-          value=$(printenv "$name" 2>/dev/null || true)
-          if [ -z "$value" ]; then
-            missing+=("$name")
-          fi
-        done <<< "$VALIDATE_NAMES"
-
-        if [ ${#missing[@]} -gt 0 ]; then
-          echo "::error::Missing required config: ${missing[*]}"
-          exit 1
-        fi
-
-        echo "All required config values are defined."
+      run: bash "$GITHUB_ACTION_PATH/validate.sh"
       shell: bash
       env:
         VALIDATE_NAMES: ${{ inputs.names }}

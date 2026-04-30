@@ -42,3 +42,12 @@ jobs:
 
       - name: Lint workflow files
         run: ./actionlint -color
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint shell scripts (bash -n + shellcheck)
+        run: ./shared/_lint/check-shell-scripts.sh
+
+      - name: Forbid inline run blocks in composite actions
+        run: ./shared/_lint/check-no-inline-run.sh

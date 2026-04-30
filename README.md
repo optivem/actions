@@ -17,13 +17,15 @@ If this repo ever gains an external consumer, revisit this policy and start cutt
 All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothing a bash toolchain doesn't already cover. To avoid paying every cross-cutting concern twice (retry wrappers, lint rules, structured logging, auth), **all production code is bash-only**:
 
 - `action.yml` steps use `shell: bash`.
-- Scripts are `.sh`, not `.ps1`. Inline the bash directly in `action.yml` when practical — it's the prevailing pattern in this repo.
+- Scripts are `.sh`, not `.ps1`. Multi-line shell logic lives in a sibling `.sh` file, not inline in `action.yml`. Each step invokes its script as `run: bash "$GITHUB_ACTION_PATH/<name>.sh"` and passes inputs via the step's `env:` block. This keeps `shellcheck` and `bash -n` authoritative on every line of shell, removes `${{ }}` masking noise from shellcheck output, and forces inputs through env vars (which is the recommended injection-safe pattern). Single-line `run:` commands (e.g. `run: echo "::notice..."`) may stay inline.
 - Use [shared/gh-retry.sh](shared/gh-retry.sh) (`gh_retry` wrapper) for any `gh` CLI calls, and `jq` for JSON handling.
 - UTF-8 shell is assumed. Several actions emit emoji (✅ ❌ 🚀 📦) to `$GITHUB_STEP_SUMMARY`. GitHub-hosted Linux runners default to UTF-8 so this is transparent; any self-hosted runner must run bash under a UTF-8 locale.
 
-Two lint checks enforce the conventions:
+Four lint checks enforce the conventions (all run by `.github/workflows/commit-stage.yml` except where noted):
 - [shared/_lint/check-no-pwsh.sh](shared/_lint/check-no-pwsh.sh) (via `.github/workflows/lint-shell-policy.yml`) fails PRs that contain any `shell: pwsh` or `.ps1` files (except `shared/_test-*` harnesses).
 - [shared/_lint/check-no-raw-gh.sh](shared/_lint/check-no-raw-gh.sh) (via `.github/workflows/lint-gh-usage.yml`) fails PRs that call `gh` without the `gh_retry` wrapper. Whitelist: `gh auth status`, `gh api rate_limit`.
+- [shared/_lint/check-no-inline-run.sh](shared/_lint/check-no-inline-run.sh) fails PRs that keep multi-line `run: |` blocks in any `action.yml`.
+- [shared/_lint/check-shell-scripts.sh](shared/_lint/check-shell-scripts.sh) runs `bash -n` and `shellcheck --severity=warning` on every tracked `*.sh`.
 
 ## Actions
 
