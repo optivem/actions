@@ -14,9 +14,6 @@ while [[ "$page" -le 10 ]]; do
     id="${entry%%|*}"
     ref="${entry##*|}"
     [[ "$ref" =~ $ref_regex ]] || continue
-    if [[ -n "$EXCLUDE_REF_PREFIX" && "$ref" == "$EXCLUDE_REF_PREFIX"* ]]; then
-      continue
-    fi
     # auto_inactive flips earlier successful deployments to `inactive`; check status history, not latest.
     has_success=$(gh_retry api "repos/${REPOSITORY}/deployments/${id}/statuses?per_page=100" --jq '[.[] | select(.state == "success")] | length')
     if [[ "${has_success:-0}" -gt 0 ]]; then

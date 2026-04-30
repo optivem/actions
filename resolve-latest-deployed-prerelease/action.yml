@@ -1,5 +1,5 @@
 name: 'Resolve Latest Deployed Prerelease'
-description: 'Finds the most recent successful deployment in a given environment whose ref matches a strict prerelease <ref-prefix><X.Y.Z>-rc.<N> pattern, optionally excluding refs that start with another prefix (cloud/non-cloud sharing one environment). Returns the deployment ref. Pairs with create-deployment (write), and parallels resolve-latest-prerelease-tag (same noun, different qualifier).'
+description: 'Finds the most recent successful deployment in a given environment whose ref matches a strict prerelease <ref-prefix><X.Y.Z>-rc.<N> pattern. Returns the deployment ref. Pairs with create-deployment (write), and parallels resolve-latest-prerelease-tag (same noun, different qualifier).'
 
 inputs:
   environment:
@@ -8,10 +8,6 @@ inputs:
   ref-prefix:
     description: 'Required prefix on the deployment ref (e.g. "monolith-dotnet-v"). Only deployments whose ref matches "<ref-prefix><X.Y.Z>-rc.<N>" exactly are considered — legacy status-suffix tags (e.g. -qa-deployed) are excluded by the strict regex.'
     required: true
-  exclude-ref-prefix:
-    description: 'Optional. If set, deployments with refs starting with this string are excluded. Useful when cloud and non-cloud variants share one environment but use distinct ref prefixes (e.g. exclude "monolith-dotnet-cloud-v" when looking up the non-cloud variant).'
-    required: false
-    default: ''
   repository:
     description: 'Repository in owner/name form. Defaults to the current repository.'
     required: false
@@ -35,6 +31,5 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         ENVIRONMENT: ${{ inputs.environment }}
         REF_PREFIX: ${{ inputs.ref-prefix }}
-        EXCLUDE_REF_PREFIX: ${{ inputs.exclude-ref-prefix }}
         REPOSITORY: ${{ inputs.repository }}
       run: bash "$GITHUB_ACTION_PATH/resolve.sh"
