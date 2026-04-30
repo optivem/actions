@@ -22,7 +22,7 @@ echo "🔍 Processing base image URLs..."
 base_urls=()
 trimmed="$(printf '%s' "$BASE_IMAGE_URLS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-if [[ "$trimmed" == \[* && "$trimmed" == *\] ]] && parsed="$(jq -r '.[]' <<<"$trimmed" 2>/dev/null)"; then
+if [[ "${trimmed:0:1}" == "[" && "${trimmed: -1}" == "]" ]] && parsed="$(jq -r '.[]' <<<"$trimmed" 2>/dev/null)"; then
   echo "📋 Detected JSON array format"
   while IFS= read -r line; do
     line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"

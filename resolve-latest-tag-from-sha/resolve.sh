@@ -24,6 +24,7 @@ TAG=$(
       print ref
     }
   ' | while IFS= read -r t; do
+    # shellcheck disable=SC2254  # $PATTERN is intentionally a glob for tag matching
     case "$t" in
       $PATTERN) echo "$t" ;;
     esac

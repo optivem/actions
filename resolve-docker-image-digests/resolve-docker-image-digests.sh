@@ -19,7 +19,7 @@ echo "Composing image URLs from base-image-urls with tag: $tag"
 
 base_trimmed="$(printf '%s' "$BASE_IMAGE_URLS" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 base_list=()
-if [[ "$base_trimmed" == \[* && "$base_trimmed" == *\] ]]; then
+if [[ "${base_trimmed:0:1}" == "[" && "${base_trimmed: -1}" == "]" ]]; then
   if ! parsed="$(jq -r '.[]' <<<"$base_trimmed" 2>/dev/null)"; then
     echo "::error::Invalid JSON format in base-image-urls input"
     exit 1
