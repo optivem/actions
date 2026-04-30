@@ -1,5 +1,7 @@
 # optivem/actions
 
+[![commit-stage](https://github.com/optivem/actions/actions/workflows/commit-stage.yml/badge.svg)](https://github.com/optivem/actions/actions/workflows/commit-stage.yml)
+
 ## Versioning policy — stay on `@v1`
 
 This repo is a single-consumer project (only the `optivem` org workspace uses it). We **do not bump the major tag** on breaking input renames or removals — the `@v1` tag gets moved to the new commit, and all callers inside the workspace are updated atomically in the same change.
