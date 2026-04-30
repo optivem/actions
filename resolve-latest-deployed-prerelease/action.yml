@@ -55,8 +55,13 @@ runs:
             if [[ -n "$EXCLUDE_REF_PREFIX" && "$ref" == "$EXCLUDE_REF_PREFIX"* ]]; then
               continue
             fi
-            state=$(gh_retry api "repos/${REPOSITORY}/deployments/${id}/statuses?per_page=1" --jq '.[0].state // ""')
-            if [[ "$state" == "success" ]]; then
+            # A deployment can be flipped to `inactive` after success when a sibling deploy
+            # in the same environment lands with `auto_inactive: true` (GitHub's default).
+            # `inactive` is a liveness marker, not a failure — what we care about is whether
+            # the deploy ever reached `success`.
+            ever_succeeded=$(gh_retry api "repos/${REPOSITORY}/deployments/${id}/statuses?per_page=100" \
+              --jq '[.[] | select(.state == "success")] | length')
+            if [[ "${ever_succeeded:-0}" -gt 0 ]]; then
               echo "ref=${ref}" >> "$GITHUB_OUTPUT"
               echo "Resolved latest deployment in ${ENVIRONMENT}: ${ref}" >> "$GITHUB_STEP_SUMMARY"
               exit 0
