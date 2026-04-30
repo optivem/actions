@@ -1,0 +1,55 @@
+name: commit-stage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commit-stage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse every action manifest
+        # YAML-parse every action.yml — cheapest defence against malformed manifests (catches conflict markers).
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            if ! yq eval '.' "$f" > /dev/null; then
+              echo "::error file=$f::YAML parse failed"
+              fail=1
+            fi
+          done < <(find . -mindepth 2 -maxdepth 2 -name action.yml)
+          exit "$fail"
+
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint --version
+
+      - name: Lint workflow files
+        run: ./actionlint -color
+
+      - name: Lint composite-action manifests
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r f; do
+            if ! ./actionlint -color "$f"; then
+              fail=1
+            fi
+          done < <(find . -mindepth 2 -maxdepth 2 -name action.yml)
+          exit "$fail"
