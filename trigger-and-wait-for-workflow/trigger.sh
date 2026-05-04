@@ -40,9 +40,14 @@ dispatch_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # diagnostic instead of stalling silently up to the job timeout. The
 # notice breadcrumbs bracket the call so a future silent exit has a
 # traceable last-known-good point in the log.
+#
+# Timeout budget must accommodate gh_retry's full retry schedule:
+#   4 attempts × ~30s worst-case per attempt + (5+15+45)s backoff = ~185s.
+# Setting to 240s gives headroom; a hung TCP/TLS call still trips well
+# inside the GitHub Actions job timeout.
 echo "::notice::Dispatching $WORKFLOW to $REPOSITORY@$REF (sha=${ref_sha:0:8}, t=$dispatch_iso)..."
 set +e
-timeout 60 bash -c '
+timeout 240 bash -c '
   source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
   gh_retry workflow run "$WORKFLOW" \
     --repo "$REPOSITORY" \
@@ -52,7 +57,7 @@ timeout 60 bash -c '
 code=$?
 set -e
 if [ "$code" -eq 124 ]; then
-  echo "::error::Dispatch of $WORKFLOW exceeded 60s — gh workflow run hung on network I/O. The run may still have been created server-side; check $REPOSITORY actions for a recent run."
+  echo "::error::Dispatch of $WORKFLOW exceeded 240s — gh workflow run exhausted gh_retry attempts (HTTP 5xx) or hung on network I/O. The run may still have been created server-side; check $REPOSITORY actions for a recent run."
   exit "$code"
 fi
 if [ "$code" -ne 0 ]; then
