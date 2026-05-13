@@ -100,8 +100,22 @@ for image_url in "${image_list[@]}"; do
 
   echo "Resolving image: $image_url"
   echo "Pulling image to get digest..."
-  if ! docker pull "$image_url"; then
-    echo "::error::Failed to pull Docker image: $image_url"
+  pull_attempts=3
+  pull_backoffs=(5 15)
+  pulled=0
+  for attempt in $(seq 1 "$pull_attempts"); do
+    if docker pull "$image_url"; then
+      pulled=1
+      break
+    fi
+    if [[ "$attempt" -lt "$pull_attempts" ]]; then
+      delay="${pull_backoffs[$((attempt - 1))]}"
+      echo "::warning::docker pull attempt $attempt/$pull_attempts failed for $image_url; retrying in ${delay}s"
+      sleep "$delay"
+    fi
+  done
+  if [[ "$pulled" -ne 1 ]]; then
+    echo "::error::Failed to pull Docker image after $pull_attempts attempts: $image_url"
     exit 1
   fi
 
