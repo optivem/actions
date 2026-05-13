@@ -3,6 +3,9 @@ set -euo pipefail
 
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 
+# shellcheck source=../shared/docker-retry.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../shared/docker-retry.sh"
+
 # Env vars are always set by the action.yml (possibly to empty string).
 IMAGE_URLS="${IMAGE_URLS:-}"
 TARGET_TAG="${TARGET_TAG:-}"
@@ -79,7 +82,7 @@ retag_image() {
   # Server-side manifest retag — no image data crosses the runner, multi-arch
   # manifest lists are preserved, and no local docker daemon round trip is
   # needed.
-  if ! docker buildx imagetools create --tag "$new_image_url" "$source_image_url"; then
+  if ! docker_retry buildx imagetools create --tag "$new_image_url" "$source_image_url"; then
     echo "  ❌ Failed to retag image: $source_image_url -> $new_image_url"
     failed_images+=("$source_image_url")
     return

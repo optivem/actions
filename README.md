@@ -21,6 +21,7 @@ All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothin
 - `action.yml` steps use `shell: bash`.
 - Scripts are `.sh`, not `.ps1`. Multi-line shell logic lives in a sibling `.sh` file, not inline in `action.yml`. Each step invokes its script as `run: bash "$GITHUB_ACTION_PATH/<name>.sh"` and passes inputs via the step's `env:` block. This keeps `shellcheck` and `bash -n` authoritative on every line of shell, removes `${{ }}` masking noise from shellcheck output, and forces inputs through env vars (which is the recommended injection-safe pattern). Single-line `run:` commands (e.g. `run: echo "::notice..."`) may stay inline.
 - Use [shared/gh-retry.sh](shared/gh-retry.sh) (`gh_retry` wrapper) for any `gh` CLI calls, and `jq` for JSON handling.
+- Use [shared/docker-retry.sh](shared/docker-retry.sh) (`docker_retry` wrapper) for any `docker` invocation that touches a registry (`pull`, `push`, `buildx imagetools …`, remote `inspect`). Transient daemon errors (`context deadline exceeded`, TLS, 5xx) are retried; hard failures (`unauthorized`, `manifest unknown`) pass through immediately.
 - UTF-8 shell is assumed. Several actions emit emoji (✅ ❌ 🚀 📦) to `$GITHUB_STEP_SUMMARY`. GitHub-hosted Linux runners default to UTF-8 so this is transparent; any self-hosted runner must run bash under a UTF-8 locale.
 
 Four lint checks enforce the conventions (all run by `.github/workflows/commit-stage.yml` except where noted):

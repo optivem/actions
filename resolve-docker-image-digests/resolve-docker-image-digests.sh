@@ -3,6 +3,9 @@ set -euo pipefail
 
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 
+# shellcheck source=../shared/docker-retry.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../shared/docker-retry.sh"
+
 BASE_IMAGE_URLS="${BASE_IMAGE_URLS:-}"
 TAG="${TAG:-latest}"
 
@@ -100,27 +103,13 @@ for image_url in "${image_list[@]}"; do
 
   echo "Resolving image: $image_url"
   echo "Pulling image to get digest..."
-  pull_attempts=3
-  pull_backoffs=(5 15)
-  pulled=0
-  for attempt in $(seq 1 "$pull_attempts"); do
-    if docker pull "$image_url"; then
-      pulled=1
-      break
-    fi
-    if [[ "$attempt" -lt "$pull_attempts" ]]; then
-      delay="${pull_backoffs[$((attempt - 1))]}"
-      echo "::warning::docker pull attempt $attempt/$pull_attempts failed for $image_url; retrying in ${delay}s"
-      sleep "$delay"
-    fi
-  done
-  if [[ "$pulled" -ne 1 ]]; then
-    echo "::error::Failed to pull Docker image after $pull_attempts attempts: $image_url"
+  if ! docker_retry pull "$image_url"; then
+    echo "::error::Failed to pull Docker image: $image_url"
     exit 1
   fi
 
   echo "Resolving digest..."
-  if ! inspect_json="$(docker inspect "$image_url")"; then
+  if ! inspect_json="$(docker_retry inspect "$image_url")"; then
     echo "::error::Failed to inspect Docker image: $image_url"
     exit 1
   fi

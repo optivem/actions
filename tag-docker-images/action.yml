@@ -36,11 +36,15 @@ runs:
   using: 'composite'
   steps:
     - name: Log in to Container Registry
-      uses: docker/login-action@v4
+      uses: Wandalen/wretry.action@v3
       with:
-        registry: ${{ inputs.registry }}
-        username: ${{ inputs.registry-username }}
-        password: ${{ inputs.token }}
+        action: docker/login-action@v4
+        attempt_limit: 3
+        attempt_delay: 10000
+        with: |
+          registry: ${{ inputs.registry }}
+          username: ${{ inputs.registry-username }}
+          password: ${{ inputs.token }}
 
     - name: Tag Docker Images
       id: tag-images
