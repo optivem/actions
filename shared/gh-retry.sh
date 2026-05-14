@@ -29,7 +29,7 @@ _GH_RETRY_ATTEMPTS=4
 _GH_RETRY_DELAYS=(5 15 45)
 
 # shellcheck disable=SC2034  # referenced via grep -E
-_GH_RETRY_RETRYABLE='HTTP 5[0-9][0-9]|timeout|timed out|i/o timeout|connection reset|connection refused|\bEOF\b|was closed|TLS handshake|tls:.*handshake|temporary failure in name resolution|no such host|Bad Gateway|Service Unavailable|Gateway Timeout|server error'
+_GH_RETRY_RETRYABLE='HTTP 5[0-9][0-9]|timeout|timed out|i/o timeout|connection reset|connection refused|\bEOF\b|was closed|TLS handshake|tls:.*handshake|temporary failure in name resolution|no such host|Bad Gateway|Service Unavailable|Gateway Timeout|server error|Something went wrong while executing your query'
 # shellcheck disable=SC2034
 _GH_RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|HTTP 403.*rate limit'
 
