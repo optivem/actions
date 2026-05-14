@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=../shared/docker-retry.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../shared/docker-retry.sh"
+
 echo "🚀 Starting system version $VERSION for $ENVIRONMENT..."
 echo ""
 
@@ -13,6 +16,14 @@ if [[ -n "$IMAGE_URLS" ]]; then
   done
   echo ""
 fi
+
+echo "📥 Pulling images (with retry)..."
+if [[ -n "$COMPOSE_FILE" ]]; then
+  docker_retry compose -f "$COMPOSE_FILE" pull
+else
+  docker_retry compose pull
+fi
+echo ""
 
 echo "🐳 Running docker compose up..."
 
