@@ -24,6 +24,9 @@
 #
 # Set `DOCKER_RETRY_DISABLE=1` to bypass the retry loop.
 
+# shellcheck source=./retry-core.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry-core.sh"
+
 _DOCKER_RETRY_ATTEMPTS=4
 _DOCKER_RETRY_DELAYS=(5 15 45)
 
@@ -37,68 +40,7 @@ docker_retry() {
         docker "$@"
         return $?
     fi
-
-    local attempt=1
-    local code=0
-    local stdout_file stderr_file
-    stdout_file=$(mktemp -t docker-retry-out.XXXXXX)
-    stderr_file=$(mktemp -t docker-retry-err.XXXXXX)
-
-    while (( attempt <= _DOCKER_RETRY_ATTEMPTS )); do
-        : >"$stdout_file"
-        : >"$stderr_file"
-        docker "$@" >"$stdout_file" 2>"$stderr_file"
-        code=$?
-
-        if (( code == 0 )); then
-            cat "$stdout_file"
-            [[ -s "$stderr_file" ]] && cat "$stderr_file" >&2
-            rm -f "$stdout_file" "$stderr_file"
-            return 0
-        fi
-
-        local stderr_content
-        stderr_content=$(cat "$stderr_file")
-
-        # Hard-fail pass-through (auth, manifest unknown, 4xx). Never retry.
-        if grep -Eqi "$_DOCKER_RETRY_HARD_FAIL" <<<"$stderr_content"; then
-            cat "$stdout_file"
-            cat "$stderr_file" >&2
-            rm -f "$stdout_file" "$stderr_file"
-            return "$code"
-        fi
-
-        # Not a known transient pattern → pass through (preserves exit code
-        # for callers that use it as a probe).
-        if ! grep -Eqi "$_DOCKER_RETRY_RETRYABLE" <<<"$stderr_content"; then
-            cat "$stdout_file"
-            cat "$stderr_file" >&2
-            rm -f "$stdout_file" "$stderr_file"
-            return "$code"
-        fi
-
-        local snippet
-        snippet=$(head -n1 "$stderr_file" | tr -d '\r')
-
-        if (( attempt < _DOCKER_RETRY_ATTEMPTS )); then
-            local delay_idx=$(( attempt - 1 ))
-            if (( delay_idx >= ${#_DOCKER_RETRY_DELAYS[@]} )); then
-                delay_idx=$(( ${#_DOCKER_RETRY_DELAYS[@]} - 1 ))
-            fi
-            local sleep_s=${_DOCKER_RETRY_DELAYS[$delay_idx]}
-            echo "::notice::[docker-retry] attempt $attempt failed (exit $code): $snippet -- retrying in ${sleep_s}s" >&2
-            sleep "$sleep_s"
-        else
-            echo "::warning::[docker-retry] exhausted $_DOCKER_RETRY_ATTEMPTS attempts (exit $code): $snippet" >&2
-            cat "$stdout_file"
-            cat "$stderr_file" >&2
-            rm -f "$stdout_file" "$stderr_file"
-            return "$code"
-        fi
-
-        (( attempt++ ))
-    done
-
-    rm -f "$stdout_file" "$stderr_file"
-    return "$code"
+    _RETRY_CORE_ATTEMPTS="$_DOCKER_RETRY_ATTEMPTS"
+    _RETRY_CORE_DELAYS=("${_DOCKER_RETRY_DELAYS[@]}")
+    retry_with_policy "$_DOCKER_RETRY_RETRYABLE" "$_DOCKER_RETRY_HARD_FAIL" docker-retry -- docker "$@"
 }
