@@ -114,6 +114,33 @@ out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" arg1
 assert_eq "exit code" "0" "$code"
 assert_eq "stdout" "fake-stdout-0" "$out"
 
+# Standalone-call regression: real callers like start.sh invoke retry_run as a
+# top-level statement under `set -euo pipefail`. If errexit fires inside the
+# loop on a failed "$@", retries never happen and stderr is never flushed —
+# the symptom is a silent non-zero exit. Driving the call in a child bash
+# preserves the bug surface (the test-script's own conditional wrapping would
+# mask it).
+echo "Test 8: standalone call under set -e completes all retries and surfaces stderr"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|i/o timeout;1|i/o timeout;1|i/o timeout;1|i/o timeout'
+combined=$(bash -c '
+    set -euo pipefail
+    source "'"$HERE"'/retry-core.sh"
+    _RETRY_CORE_DELAYS=(0 0 0)
+    retry_with_policy "'"$TRANSIENT"'" "'"$HARDFAIL"'" test-prefix -- "'"$fake_bin"'"
+' 2>&1) && code=0 || code=$?
+assert_eq "exit code" "1" "$code"
+assert_eq "attempt count" "4" "$(<"$fake_state")"
+if grep -q "i/o timeout" <<<"$combined"; then
+    echo "  PASS stderr surfaced"
+    (( pass++ )) || true
+else
+    echo "  FAIL stderr surfaced"
+    echo "    expected substring: i/o timeout"
+    echo "    actual output:      $combined"
+    (( fail++ )) || true
+fi
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 if (( fail > 0 )); then

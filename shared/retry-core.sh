@@ -44,8 +44,15 @@ retry_with_policy() {
     while (( attempt <= attempts )); do
         : >"$stdout_file"
         : >"$stderr_file"
-        "$@" >"$stdout_file" 2>"$stderr_file"
-        code=$?
+        # `if/then/else/fi` keeps `set -e` (inherited from callers like start.sh)
+        # from exiting the script the moment "$@" returns non-zero — without the
+        # conditional, errexit fires before `code=$?` runs, so retries never
+        # happen and the captured stdout/stderr never reach the log.
+        if "$@" >"$stdout_file" 2>"$stderr_file"; then
+            code=0
+        else
+            code=$?
+        fi
 
         if (( code == 0 )); then
             cat "$stdout_file"
