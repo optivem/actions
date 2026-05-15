@@ -1,0 +1,25 @@
+name: 'Run command with retry'
+description: |
+  Wrap a shell command in retry semantics. 4 attempts with 5s/15s/45s
+  backoff. Retries on HTTP 5xx, network blips, and known transient phrases
+  across gh/docker/sonar/git tools. Fails fast on HTTP 4xx and known
+  hard-fail patterns (manifest unknown, project not found, auth errors).
+
+inputs:
+  command:
+    description: 'Shell command to run with retry.'
+    required: true
+  working-directory:
+    description: 'Directory to cd into before running the command. Defaults to the repo root.'
+    required: false
+    default: '.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run with retry
+      shell: bash
+      env:
+        CMD: ${{ inputs.command }}
+        WD: ${{ inputs.working-directory }}
+      run: bash "${{ github.action_path }}/run.sh"
