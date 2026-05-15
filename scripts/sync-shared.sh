@@ -14,7 +14,7 @@
 #   - ../gh-optivem/.github/scripts/  (internal tool, not student-facing)
 #
 # Shop no longer vendors retry helpers — it consumes them via
-# `uses: optivem/actions/retry@main` instead. See
+# `uses: optivem/actions/retry@v1` instead. See
 # plans/20260515-0723-shop-zero-retry-scripts.md.
 #
 # Each vendored copy gets a banner pinning it to the canonical file's current

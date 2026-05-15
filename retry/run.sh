@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh — entry point for the optivem/actions/retry@main composite.
+# run.sh — entry point for the optivem/actions/retry@v1 composite.
 # Reads CMD + WD from env (set by action.yml), then dispatches through
 # shared/retry.sh.
 

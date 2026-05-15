@@ -2,7 +2,7 @@
 # retry.sh — unified retry wrapper for any shell command that hits an external
 # service (gh CLI, docker registry, sonarscanner, git push/fetch, etc.).
 #
-# Used by the `optivem/actions/retry@main` composite. Replaces the four
+# Used by the `optivem/actions/retry@v1` composite. Replaces the four
 # tool-specific wrappers (gh-retry.sh, docker-retry.sh, sonar-retry.sh,
 # git-retry.sh) — the transient + hard-fail regexes below are the union of
 # all four, deduplicated. Concepts match across tools; only the specific
