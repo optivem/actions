@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=../shared/git-retry.sh
+source "$GITHUB_ACTION_PATH/../shared/git-retry.sh"
+
 if [ -z "$SHA" ]; then
   echo "::error::Input 'commit-sha' is required and was empty"
   exit 1
@@ -11,7 +14,7 @@ if [ -z "$BASE_BRANCH" ]; then
   exit 1
 fi
 
-git fetch origin "$BASE_BRANCH" --quiet
+git_fetch_retry origin "$BASE_BRANCH" --quiet
 
 # git merge-base --is-ancestor exits 0 (ancestor), 1 (not ancestor), or
 # 128/other (error: bad SHA, missing ref, etc.). Distinguish all three —

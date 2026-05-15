@@ -5,6 +5,8 @@ set -euo pipefail
 source "$GITHUB_ACTION_PATH/../shared/remote-url.sh"
 # shellcheck source=../shared/clear-persisted-credentials.sh
 source "$GITHUB_ACTION_PATH/../shared/clear-persisted-credentials.sh"
+# shellcheck source=../shared/git-retry.sh
+source "$GITHUB_ACTION_PATH/../shared/git-retry.sh"
 
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -33,7 +35,7 @@ else
   git tag "$TAG"
 fi
 
-if git push "$push_target" "$TAG"; then
+if git_push_retry "$push_target" "$TAG"; then
   echo "Created and pushed tag $TAG at $target_sha" >> "$GITHUB_STEP_SUMMARY"
   exit 0
 fi

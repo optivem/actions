@@ -8,7 +8,7 @@
 #
 #   bash optivem/actions/scripts/sync-shared.sh
 #
-# Vendored helpers: retry-core.sh, gh-retry.sh, docker-retry.sh, sonar-retry.sh
+# Vendored helpers: retry-core.sh, gh-retry.sh, docker-retry.sh, sonar-retry.sh, git-retry.sh
 # Targets:
 #   - ../shop/.github/workflows/scripts/
 #   - ../gh-optivem/.github/scripts/
@@ -35,7 +35,7 @@ ACTIONS_ROOT="$(cd "$HERE/.." && pwd)"
 ACADEMY_ROOT="$(cd "$ACTIONS_ROOT/.." && pwd)"
 SHARED_DIR="$ACTIONS_ROOT/shared"
 
-HELPERS=(retry-core gh-retry docker-retry sonar-retry)
+HELPERS=(retry-core gh-retry docker-retry sonar-retry git-retry)
 TARGETS=(
     "$ACADEMY_ROOT/shop/.github/workflows/scripts"
     "$ACADEMY_ROOT/gh-optivem/.github/scripts"
