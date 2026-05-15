@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# shellcheck source=../shared/gh-retry.sh
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 # The default status="completed" filter prevents picking a sibling run
 # that is still queued or in_progress as the "previous" run — its
@@ -18,7 +18,7 @@ source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
 # The default limit covers concurrent triggers (push + schedule +
 # dispatch arriving together) plus headroom for recent failures or
 # in-progress siblings that get filtered out before the last match.
-timestamp=$(gh_retry run list \
+timestamp=$(retry_run gh run list \
   --repo "${REPOSITORY}" \
   --workflow "$WORKFLOW_NAME" \
   --limit "${LIMIT}" \

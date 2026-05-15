@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# shellcheck source=../shared/gh-retry.sh
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 echo "Waiting for $WORKFLOW (commit: $COMMIT_SHA, timeout: ${TIMEOUT_SECONDS}s)..."
 
 DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))
@@ -26,7 +26,7 @@ while [ "$attempt" -le "$MAX_DISCOVERY_ATTEMPTS" ]; do
   fi
 
   # --- Find run by commit SHA ---
-  run_id=$(gh_retry run list \
+  run_id=$(retry_run gh run list \
     --workflow="$WORKFLOW" \
     --repo "$REPOSITORY" \
     --limit 5 \
@@ -44,8 +44,8 @@ while [ "$attempt" -le "$MAX_DISCOVERY_ATTEMPTS" ]; do
     fi
     set +e
     timeout "$remaining_secs" bash -c '
-      source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-      gh_retry run watch "$RUN_ID" --repo "$REPOSITORY" --exit-status --interval "$WATCH_INTERVAL"
+      source "$GITHUB_ACTION_PATH/../shared/retry.sh"
+      retry_run gh run watch "$RUN_ID" --repo "$REPOSITORY" --exit-status --interval "$WATCH_INTERVAL"
     '
     code=$?
     set -e

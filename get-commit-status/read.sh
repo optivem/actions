@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# shellcheck source=../shared/gh-retry.sh
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 if [ -n "$STATE_FILTER" ]; then
   JQ="[.[] | select(.context==\"$CONTEXT\" and .state==\"$STATE_FILTER\")][0]"
 else
   JQ="[.[] | select(.context==\"$CONTEXT\")][0]"
 fi
-STATUS_JSON=$(gh_retry api "repos/$REPO/commits/$SHA/statuses" --jq "$JQ")
+STATUS_JSON=$(retry_run gh api "repos/$REPO/commits/$SHA/statuses" --jq "$JQ")
 if [ -z "$STATUS_JSON" ] || [ "$STATUS_JSON" = "null" ]; then
   echo "description=" >> "$GITHUB_OUTPUT"
   echo "state=" >> "$GITHUB_OUTPUT"

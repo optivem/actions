@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 case "$OWNER_TYPE" in
   organization) ROOT_FIELD='organization' ;;
@@ -21,7 +21,7 @@ esac
 
 # Single round-trip: walk the owner's projects, then for the matching one pull
 # the named single-select field and its options.
-response=$(gh_retry api graphql \
+response=$(retry_run gh api graphql \
   -F owner="$OWNER" \
   -f query="
     query(\$owner: String!) {

@@ -20,13 +20,12 @@ All actions in this repo run on GitHub-hosted Linux runners, so pwsh buys nothin
 
 - `action.yml` steps use `shell: bash`.
 - Scripts are `.sh`, not `.ps1`. Multi-line shell logic lives in a sibling `.sh` file, not inline in `action.yml`. Each step invokes its script as `run: bash "$GITHUB_ACTION_PATH/<name>.sh"` and passes inputs via the step's `env:` block. This keeps `shellcheck` and `bash -n` authoritative on every line of shell, removes `${{ }}` masking noise from shellcheck output, and forces inputs through env vars (which is the recommended injection-safe pattern). Single-line `run:` commands (e.g. `run: echo "::notice..."`) may stay inline.
-- Use [shared/gh-retry.sh](shared/gh-retry.sh) (`gh_retry` wrapper) for any `gh` CLI calls, and `jq` for JSON handling.
-- Use [shared/docker-retry.sh](shared/docker-retry.sh) (`docker_retry` wrapper) for any `docker` invocation that touches a registry (`pull`, `push`, `buildx imagetools …`, remote `inspect`). Transient daemon errors (`context deadline exceeded`, TLS, 5xx) are retried; hard failures (`unauthorized`, `manifest unknown`) pass through immediately.
+- Use [shared/retry.sh](shared/retry.sh) (`retry_run` wrapper) for any external-service call (`gh`, `docker`, `git push`/`fetch`, sonarscanner). Transient errors (HTTP 5xx, TLS/DNS/connection blips, `context deadline exceeded`) are retried with 4 attempts / 5s→15s→45s backoff; hard failures (4xx, `unauthorized`, `manifest unknown`, `repository not found`) pass through immediately. Use `jq` for JSON handling.
 - UTF-8 shell is assumed. Several actions emit emoji (✅ ❌ 🚀 📦) to `$GITHUB_STEP_SUMMARY`. GitHub-hosted Linux runners default to UTF-8 so this is transparent; any self-hosted runner must run bash under a UTF-8 locale.
 
 Four lint checks enforce the conventions (all run by `.github/workflows/commit-stage.yml` except where noted):
 - [shared/_lint/check-no-pwsh.sh](shared/_lint/check-no-pwsh.sh) (via `.github/workflows/lint-shell-policy.yml`) fails PRs that contain any `shell: pwsh` or `.ps1` files (except `shared/_test-*` harnesses).
-- [shared/_lint/check-no-raw-gh.sh](shared/_lint/check-no-raw-gh.sh) (via `.github/workflows/lint-gh-usage.yml`) fails PRs that call `gh` without the `gh_retry` wrapper. Whitelist: `gh auth status`, `gh api rate_limit`.
+- [shared/_lint/check-no-raw-gh.sh](shared/_lint/check-no-raw-gh.sh) (via `.github/workflows/lint-gh-usage.yml`) fails PRs that call `gh` without the `retry_run` wrapper. Whitelist: `gh auth status`, `gh api rate_limit`.
 - [shared/_lint/check-no-inline-run.sh](shared/_lint/check-no-inline-run.sh) fails PRs that keep multi-line `run: |` blocks in any `action.yml`.
 - [shared/_lint/check-shell-scripts.sh](shared/_lint/check-shell-scripts.sh) runs `bash -n` and `shellcheck --severity=warning` on every tracked `*.sh`.
 
@@ -117,7 +116,7 @@ Walks tag patterns in priority order, resolves the most recent matching tag as a
 
 ### check-commit-status-exists
 
-Boolean existence check for a success commit-status on `head-sha` matching `(context, description=commit-sha)`. Returns `exists=true` when the status is present, `exists=false` when the API definitively reports no matching status. API failure (after `gh_retry` exhaustion) is indeterminate — the action exits 1 rather than coercing to a false answer (see the no-swallow rule in [claude/CLAUDE.md](../claude/CLAUDE.md)). Caller picks the `status-context` label; the action only reports presence. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
+Boolean existence check for a success commit-status on `head-sha` matching `(context, description=commit-sha)`. Returns `exists=true` when the status is present, `exists=false` when the API definitively reports no matching status. API failure (after `retry_run` exhaustion) is indeterminate — the action exits 1 rather than coercing to a false answer (see the no-swallow rule in [claude/CLAUDE.md](../claude/CLAUDE.md)). Caller picks the `status-context` label; the action only reports presence. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).
 
 **Inputs**
 
@@ -387,7 +386,7 @@ Pure string transform over a keyed list. For each `{key, version}` entry, applie
 
 ### create-commit-status
 
-Resolves `ref` (SHA, branch, or tag) to a commit SHA via `gh api repos/{repo}/commits/{ref}`, then calls `gh api repos/{repo}/statuses/{sha}` (via `gh_retry`) to POST a commit status with the given context, state, description, and target URL. Defaults `ref` to `github.sha` and `target-url` to the current workflow run URL.
+Resolves `ref` (SHA, branch, or tag) to a commit SHA via `gh api repos/{repo}/commits/{ref}`, then calls `gh api repos/{repo}/statuses/{sha}` (via `retry_run`) to POST a commit status with the given context, state, description, and target URL. Defaults `ref` to `github.sha` and `target-url` to the current workflow run URL.
 
 **Inputs**
 
@@ -725,7 +724,7 @@ Exactly one mode must be used. Both modes set or neither set → fails fast with
 
 ### trigger-and-wait-for-workflow
 
-Probes the GitHub rate limit (and sleeps until reset if below threshold), dispatches a `workflow_dispatch` workflow via `gh workflow run` (through `gh_retry`), then captures the triggered run's ID by polling the workflow's runs endpoint and filtering client-side on `event=workflow_dispatch`, `head_sha` matching the resolved ref, and `created_at >= dispatch time` — robust against the API-indexing race and concurrent dispatches by other actors. Finally `gh run watch --exit-status`es the run to fail the step if the triggered run fails.
+Probes the GitHub rate limit (and sleeps until reset if below threshold), dispatches a `workflow_dispatch` workflow via `gh workflow run` (through `retry_run`), then captures the triggered run's ID by polling the workflow's runs endpoint and filtering client-side on `event=workflow_dispatch`, `head_sha` matching the resolved ref, and `created_at >= dispatch time` — robust against the API-indexing race and concurrent dispatches by other actors. Finally `gh run watch --exit-status`es the run to fail the step if the triggered run fails.
 
 **Inputs**
 
@@ -790,7 +789,7 @@ For each `{name, url}` in the input array, polls the URL with `curl -f` up to `m
 
 ### wait-for-workflow
 
-Polls `gh run list` (via `gh_retry`) for runs of a given workflow, filters by `headSha == <commit-sha>` until a match is found, then `gh run watch --exit-status`es the run to fail the step if it fails. Sibling of `trigger-and-wait-for-workflow` — use that when you need to dispatch the workflow yourself; use this when a commit push has already triggered it.
+Polls `gh run list` (via `retry_run`) for runs of a given workflow, filters by `headSha == <commit-sha>` until a match is found, then `gh run watch --exit-status`es the run to fail the step if it fails. Sibling of `trigger-and-wait-for-workflow` — use that when you need to dispatch the workflow yourself; use this when a commit push has already triggered it.
 
 **Inputs**
 

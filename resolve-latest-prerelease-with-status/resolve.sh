@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# shellcheck source=../shared/gh-retry.sh
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 # Caller must have run actions/checkout with fetch-depth: 0 (or fetched
 # tags by another mechanism) — git tag --list and git rev-parse below
@@ -24,7 +24,7 @@ mapfile -t rc_tags < <(git tag --list "$glob" \
 
 for tag in "${rc_tags[@]}"; do
   sha=$(git rev-parse "${tag}^{}" 2>/dev/null || git rev-parse "${tag}")
-  statuses=$(gh_retry api "repos/${REPOSITORY}/commits/${sha}/statuses" --paginate)
+  statuses=$(retry_run gh api "repos/${REPOSITORY}/commits/${sha}/statuses" --paginate)
   approved=$(echo "$statuses" | jq --arg ctx "$STATUS_CONTEXT" '[.[] | select(.context==$ctx and .state=="success")] | length')
   if [[ "${approved:-0}" -gt 0 ]]; then
     echo "tag=${tag}" >> "$GITHUB_OUTPUT"

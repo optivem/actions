@@ -1,5 +1,5 @@
 name: 'Check Commit Status Exists'
-description: 'Boolean existence check for a success commit-status on head-sha matching (context, description=sha). Returns exists=true when the status is present, exists=false when the API definitively reports no matching status. API failure (after gh_retry exhaustion) is indeterminate — the action exits 1 rather than coercing to a false answer. Caller picks the context label; the action only reports presence. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).'
+description: 'Boolean existence check for a success commit-status on head-sha matching (context, description=sha). Returns exists=true when the status is present, exists=false when the API definitively reports no matching status. API failure (after retry exhaustion) is indeterminate — the action exits 1 rather than coercing to a false answer. Caller picks the context label; the action only reports presence. Pairs with `create-commit-status` (write) and `get-commit-status` (read state).'
 
 inputs:
   commit-sha:
@@ -26,7 +26,7 @@ outputs:
     description: |
       'true' when a success commit-status exists on head-sha with matching context + description.
       'false' when the API definitively reports no matching status.
-      API failure (after gh_retry exhaustion) is indeterminate — the action exits 1 instead of coercing to 'false'.
+      API failure (after retry exhaustion) is indeterminate — the action exits 1 instead of coercing to 'false'.
     value: ${{ steps.check.outputs.exists }}
   created-at:
     description: 'ISO 8601 createdAt of the matching success status, if one was found. Empty otherwise.'

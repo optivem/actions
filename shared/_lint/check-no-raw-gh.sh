@@ -3,7 +3,7 @@
 #
 # Policy (see README.md "Calling `gh` — use the retry wrapper"):
 #   Every `gh <verb>` invocation in production code must go through
-#   `gh_retry` (shared/gh-retry.sh) so transient 5xx/network errors are
+#   `retry_run gh` (shared/retry.sh) so transient 5xx/network errors are
 #   retried transparently. The only exceptions are purely local probes:
 #     - `gh auth status`
 #     - `gh api rate_limit` (read-only, used by caller-side rate-limit checks)
@@ -53,14 +53,14 @@ for file in "${files[@]}"; do
       continue
     fi
 
-    echo "::error file=${file},line=${lineno}::Raw 'gh' call — must use 'gh_retry' (source shared/gh-retry.sh). Whitelist is 'gh auth status' and 'gh api rate_limit'."
+    echo "::error file=${file},line=${lineno}::Raw 'gh' call — must use 'retry_run gh' (source shared/retry.sh). Whitelist is 'gh auth status' and 'gh api rate_limit'."
     errors=$((errors + 1))
   done < <(grep -nE '\bgh[[:space:]]+(api|release|workflow|run|repo|pr|issue)\b' "$file" || true)
 done
 
 if (( errors > 0 )); then
-  echo "::error::Raw gh usage violations: $errors. Wrap with gh_retry — see shared/gh-retry.sh."
+  echo "::error::Raw gh usage violations: $errors. Wrap with retry_run gh — see shared/retry.sh."
   exit 1
 fi
 
-echo "gh-usage lint passed: all gh calls in scanned files use gh_retry (or the read-only whitelist)."
+echo "gh-usage lint passed: all gh calls in scanned files use retry_run gh (or the read-only whitelist)."

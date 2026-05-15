@@ -4,8 +4,8 @@ set -euo pipefail
 echo "Waiting for run $RUN_ID (timeout: ${TIMEOUT_SECONDS}s)..."
 set +e
 timeout "$TIMEOUT_SECONDS" bash -c '
-  source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
-  gh_retry run watch "$RUN_ID" \
+  source "$GITHUB_ACTION_PATH/../shared/retry.sh"
+  retry_run gh run watch "$RUN_ID" \
     --repo "$REPOSITORY" \
     --exit-status \
     --interval "$POLL_INTERVAL"

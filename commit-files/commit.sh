@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# shellcheck source=../shared/gh-retry.sh
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 echo "Committing files to $REPOSITORY@$BRANCH via Contents API..."
 
@@ -45,7 +45,7 @@ for i in $(seq 0 $((count - 1))); do
 
     # Read current SHA (if file exists) for optimistic-concurrency PUT.
     current_sha=""
-    if get_out=$(gh_retry api "repos/$REPOSITORY/contents/$path?ref=$BRANCH" 2>&1); then
+    if get_out=$(retry_run gh api "repos/$REPOSITORY/contents/$path?ref=$BRANCH" 2>&1); then
       current_sha=$(jq -r '.sha' <<<"$get_out")
     elif grep -Eqi '404|Not Found' <<<"$get_out"; then
       current_sha=""
@@ -63,7 +63,7 @@ for i in $(seq 0 $((count - 1))); do
 
     tmp_file=$(mktemp)
     printf '%s' "$body" > "$tmp_file"
-    if put_out=$(gh_retry api --method PUT "repos/$REPOSITORY/contents/$path" --input "$tmp_file" 2>&1); then
+    if put_out=$(retry_run gh api --method PUT "repos/$REPOSITORY/contents/$path" --input "$tmp_file" 2>&1); then
       rm -f "$tmp_file"
       commit_sha=$(jq -r '.commit.sha' <<<"$put_out")
       content_sha=$(jq -r '.content.sha' <<<"$put_out")

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# shellcheck source=../shared/gh-retry.sh
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 if [[ -z "$HEAD_SHA" ]]; then
   echo "::error::head-sha is empty"
@@ -12,8 +12,8 @@ echo "Head SHA: $HEAD_SHA"
 echo "Commit SHA (matched against description): $COMMIT_SHA"
 echo "Status context: $STATUS_CONTEXT"
 
-if ! statuses=$(gh_retry api "repos/${REPOSITORY}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
-  echo "::error::Could not fetch commit statuses for ${REPOSITORY}@${HEAD_SHA} after gh_retry exhaustion. Indeterminate — exiting 1 rather than coercing to exists=false. Details: $statuses"
+if ! statuses=$(retry_run gh api "repos/${REPOSITORY}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
+  echo "::error::Could not fetch commit statuses for ${REPOSITORY}@${HEAD_SHA} after retry exhaustion. Indeterminate — exiting 1 rather than coercing to exists=false. Details: $statuses"
   exit 1
 fi
 

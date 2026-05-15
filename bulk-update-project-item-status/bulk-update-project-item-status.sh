@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-source "$GITHUB_ACTION_PATH/../shared/gh-retry.sh"
+source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 moved=0
 cursor=""
@@ -25,7 +25,7 @@ while :; do
   # Pull items + each item's status field value. fieldValues(first: 20) is wide
   # enough for any practical project — boards rarely have more than a handful
   # of fields. Filter to the matching field-id client-side.
-  response=$(gh_retry api graphql -f query="
+  response=$(retry_run gh api graphql -f query="
     query {
       node(id: \"$PROJECT_ID\") {
         ... on ProjectV2 {
@@ -68,7 +68,7 @@ while :; do
     item_id="${entry%%$'\t'*}"
     label="${entry#*$'\t'}"
     echo "Advancing $label  (item $item_id)"
-    gh_retry api graphql \
+    retry_run gh api graphql \
       -F projectId="$PROJECT_ID" \
       -F itemId="$item_id" \
       -F fieldId="$FIELD_ID" \

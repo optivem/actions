@@ -12,8 +12,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-# shellcheck source=../shared/gh-retry.sh
-source "$SCRIPT_DIR/../shared/gh-retry.sh"
+# shellcheck source=../shared/retry.sh
+source "$SCRIPT_DIR/../shared/retry.sh"
 
 : "${RETENTION_DAYS:=30}"
 : "${CONTAINER_PACKAGES:=}"
@@ -90,7 +90,7 @@ for package in "${package_list[@]}"; do
   echo "Package $package:"
 
   # Fetch versions for this package.
-  if ! versions_raw=$(gh_retry api "/orgs/$owner/packages/container/$package/versions" --paginate 2>/dev/null); then
+  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>/dev/null); then
     echo "  Warning: Could not list versions for package $package; skipping"
     continue
   fi
@@ -148,7 +148,7 @@ for package in "${package_list[@]}"; do
     fi
 
     wait_for_rate_limit_budget
-    if gh_retry api --method DELETE "/orgs/$owner/packages/container/$package/versions/$untagged_id" >/dev/null 2>&1; then
+    if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$untagged_id" >/dev/null 2>&1; then
       echo "  Deleted orphan manifest: $untagged_digest (id $untagged_id)"
       deleted_count=$((deleted_count + 1))
     else
