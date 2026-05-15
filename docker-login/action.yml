@@ -1,0 +1,25 @@
+name: 'Docker Login'
+description: 'Logs in to a container registry using docker login, wrapped with docker-retry.sh so transient registry 5xx / DNS / TLS blips are retried with exponential backoff. Replaces the Wandalen/wretry.action@v3 + docker/login-action@v4 combo. When registry is empty, logs in to Docker Hub.'
+
+inputs:
+  registry:
+    description: 'Container registry server (e.g. "ghcr.io"). Leave empty for Docker Hub.'
+    required: false
+    default: ''
+  username:
+    description: 'Registry username.'
+    required: true
+  password:
+    description: 'Registry password or token. Read via --password-stdin so it never appears in the process list.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Log in
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        USERNAME: ${{ inputs.username }}
+        PASSWORD: ${{ inputs.password }}
+      run: bash "${{ github.action_path }}/login.sh"
