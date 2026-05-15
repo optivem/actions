@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
-# sync-shared.sh — vendor retry helpers from optivem/actions/shared/ into the
-# downstream repos that need self-contained runtime copies.
+# sync-shared.sh — vendor the unified retry helper from
+# optivem/actions/shared/ into the downstream repos that still need a
+# self-contained runtime copy.
 #
 # Run from anywhere; the script resolves paths relative to itself. Re-run
-# after editing the canonical retry-core.sh or any of the tool-specific
-# wrappers, then commit each downstream repo via /commit.
+# after editing the canonical retry.sh or retry-core.sh, then commit each
+# downstream repo via /commit.
 #
 #   bash optivem/actions/scripts/sync-shared.sh
 #
-# Vendored helpers: retry-core.sh, gh-retry.sh, docker-retry.sh, sonar-retry.sh, git-retry.sh
+# Vendored helpers: retry-core.sh, retry.sh
 # Targets:
-#   - ../shop/.github/workflows/scripts/
-#   - ../gh-optivem/.github/scripts/
+#   - ../gh-optivem/.github/scripts/  (internal tool, not student-facing)
+#
+# Shop no longer vendors retry helpers — it consumes them via
+# `uses: optivem/actions/retry@main` instead. See
+# plans/20260515-0723-shop-zero-retry-scripts.md.
 #
 # Each vendored copy gets a banner pinning it to the canonical file's current
 # git blob SHA, immediately after the shebang line:
@@ -35,9 +39,8 @@ ACTIONS_ROOT="$(cd "$HERE/.." && pwd)"
 ACADEMY_ROOT="$(cd "$ACTIONS_ROOT/.." && pwd)"
 SHARED_DIR="$ACTIONS_ROOT/shared"
 
-HELPERS=(retry-core gh-retry docker-retry sonar-retry git-retry)
+HELPERS=(retry-core retry)
 TARGETS=(
-    "$ACADEMY_ROOT/shop/.github/workflows/scripts"
     "$ACADEMY_ROOT/gh-optivem/.github/scripts"
 )
 
