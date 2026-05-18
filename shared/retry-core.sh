@@ -20,6 +20,12 @@
 #   - On non-zero with stderr matching neither: pass through (unknown failure
 #     mode — don't retry blindly).
 #
+# stdin caveat: the retry loop calls "$@" once per attempt. If the caller
+# pipes stdin to `retry_run` (e.g. `printf '%s' "$pw" | retry_run docker
+# login --password-stdin`), stdin is consumed on attempt 1 and empty on
+# every retry. Wrap stdin-feeding commands in a shell function and retry
+# the function instead — see docker-login/login.sh for the pattern.
+#
 # Wrappers can override `_RETRY_CORE_ATTEMPTS` / `_RETRY_CORE_DELAYS` per call
 # from their own knobs (`_GH_RETRY_DELAYS`, etc.) so existing test harnesses
 # that tweak those knobs keep working unchanged.
