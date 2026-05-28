@@ -82,6 +82,9 @@ run_case "gh transient: HTTP 502 → 502 → 0 (3 attempts)" \
 run_case "docker transient: context deadline exceeded → 0 (2 attempts)" \
     '1|context deadline exceeded;0|' 0 2
 
+run_case "docker transient: daemon registry unknown → 0 (2 attempts)" \
+    '1|Error response from daemon: Get "https://registry-1.docker.io/v2/": unknown:;0|' 0 2
+
 run_case "sonar transient: Error 503 on https:// → 0 (2 attempts)" \
     '1|Error 503 on https://sonarcloud.io;0|' 0 2
 
