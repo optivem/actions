@@ -107,6 +107,31 @@ out=$(retry_with_policy "$TRANSIENT" "" test-prefix -- "$fake_bin" 2>/dev/null) 
 assert_eq "exit code" "0" "$code"
 assert_eq "attempt count" "2" "$(<"$fake_state")"
 
+echo "Test 6b: force-retry override wins over hard-fail → retries past a 4xx"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|HTTP 403 Forbidden while provisioning;0|'
+export _RETRY_CORE_FORCE_RETRY='provisioning'
+out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/dev/null) && code=0 || code=$?
+unset _RETRY_CORE_FORCE_RETRY
+assert_eq "exit code" "0" "$code"
+assert_eq "attempt count" "2" "$(<"$fake_state")"
+
+echo "Test 6c: force-retry override unset → 4xx still hard-fails (1 attempt)"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|HTTP 403 Forbidden while provisioning;0|'
+out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/dev/null) && code=0 || code=$?
+assert_eq "exit code" "1" "$code"
+assert_eq "attempt count" "1" "$(<"$fake_state")"
+
+echo "Test 6d: force-retry override exhausts when failure persists"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|HTTP 403 Forbidden while provisioning'
+export _RETRY_CORE_FORCE_RETRY='provisioning'
+out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/dev/null) && code=0 || code=$?
+unset _RETRY_CORE_FORCE_RETRY
+assert_eq "exit code" "1" "$code"
+assert_eq "attempt count" "4" "$(<"$fake_state")"
+
 echo "Test 7: command with args is forwarded correctly"
 echo 0 >"$fake_state"
 export CORE_FAKE_SEQ='0|'

@@ -10,6 +10,13 @@
 #
 # Behaviour:
 #   - On exit 0: stdout → caller's stdout, stderr → caller's stderr, return 0.
+#   - On non-zero with output matching `_RETRY_CORE_FORCE_RETRY` (optional
+#     override): retry, even if the output would otherwise match <hard_fail_re>.
+#     For known-transient infra calls that phrase their failure like a hard-fail
+#     (e.g. SonarCloud's JRE-provisioning endpoint, which 403s under load and
+#     prints `HTTP 403 Forbidden` — indistinguishable by regex from a genuine
+#     auth 403). Checked BEFORE hard-fail so the override wins; default empty
+#     (no override).
 #   - On non-zero with output matching <hard_fail_re>: pass through immediately
 #     (preserves exit code for callers using rc as a probe — e.g. 4xx, auth,
 #     "not found").
@@ -76,16 +83,26 @@ retry_with_policy() {
         local match_content
         match_content=$(cat "$stdout_file" "$stderr_file")
 
+        # Force-retry override: known-transient infra calls whose output looks
+        # like a hard-fail (e.g. SonarCloud JRE provisioning printing `HTTP 403
+        # Forbidden`). Checked first so it wins over hard-fail and routes the
+        # failure down the retry path below regardless of <transient_re>.
+        local force_match=0
+        if [[ -n "${_RETRY_CORE_FORCE_RETRY:-}" ]] \
+            && grep -Eqi "${_RETRY_CORE_FORCE_RETRY}" <<<"$match_content"; then
+            force_match=1
+        fi
+
         # Hard-fail pass-through: 4xx, auth, "not found". Never retry — burns quota.
-        if [[ -n "$hard_fail_re" ]] && grep -Eqi "$hard_fail_re" <<<"$match_content"; then
+        if (( ! force_match )) && [[ -n "$hard_fail_re" ]] && grep -Eqi "$hard_fail_re" <<<"$match_content"; then
             cat "$stdout_file"
             cat "$stderr_file" >&2
             rm -f "$stdout_file" "$stderr_file"
             return "$code"
         fi
 
-        # Not a known transient → pass through (preserves rc for probes).
-        if ! grep -Eqi "$transient_re" <<<"$match_content"; then
+        # Not a known transient (and not force-retried) → pass through (preserves rc for probes).
+        if (( ! force_match )) && ! grep -Eqi "$transient_re" <<<"$match_content"; then
             cat "$stdout_file"
             cat "$stderr_file" >&2
             rm -f "$stdout_file" "$stderr_file"

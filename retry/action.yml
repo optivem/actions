@@ -3,7 +3,9 @@ description: |
   Wrap a shell command in retry semantics. 4 attempts with 5s/15s/45s
   backoff. Retries on HTTP 5xx, network blips, and known transient phrases
   across gh/docker/sonar/git tools. Fails fast on HTTP 4xx and known
-  hard-fail patterns (manifest unknown, project not found, auth errors).
+  hard-fail patterns (manifest unknown, project not found, auth errors) —
+  except a small set of hard-fail-shaped-but-transient phrasings (e.g.
+  SonarCloud JRE-provisioning 403) which are still retried.
 
 inputs:
   command:

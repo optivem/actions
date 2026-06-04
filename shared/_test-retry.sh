@@ -112,6 +112,13 @@ run_case "sonar transient: axios 503 phrasing → 0 (2 attempts)" \
 run_case "sonar transient on stdout: bootstrapper 403 → 0 (2 attempts)" \
     '1||[ERROR] Bootstrapper: An error occurred: AxiosError: Request failed with status code 403;0|' 0 2
 
+# Force-retry override: the Gradle Sonar plugin's JRE-provisioning 403 prints
+# the literal `HTTP 403 Forbidden`, which matches the hard-fail list — but the
+# `_RETRY_FORCE_RETRY` override (`/analysis/jres`, `Failed to query JRE
+# metadata`) must reclaim it as transient and retry.
+run_case "sonar transient: Gradle JRE-metadata 403 → 0 (2 attempts)" \
+    '1|Failed to query JRE metadata: GET https://api.sonarcloud.io/analysis/jres?os=linux&arch=x86_64 failed with HTTP 403 Forbidden. Please check the property sonar.token or the environment variable SONAR_TOKEN.;0|' 0 2
+
 run_case "git transient: Could not resolve host → 0 (2 attempts)" \
     '1|fatal: unable to access: Could not resolve host github.com;0|' 0 2
 
@@ -139,6 +146,11 @@ run_case "sonar hard-fail: Project key X does not exist → 1 attempt" \
 
 run_case "sonar hard-fail: Not authorized → 1 attempt" \
     '1|ERROR: Not authorized. Analyzing this project requires authentication' 1 1
+
+# Override is narrow: a genuine auth 403 that is NOT the JRE-provisioning call
+# must still fail fast (the force-retry override only reclaims /analysis/jres).
+run_case "sonar hard-fail: analysis-submission HTTP 403 Forbidden → 1 attempt" \
+    '1|ERROR: Failed to upload report: HTTP 403 Forbidden' 1 1
 
 run_case "git hard-fail: remote rejected → 1 attempt" \
     '1|! [remote rejected] main -> main (pre-receive hook declined)' 1 1
