@@ -10,15 +10,20 @@
 #
 # Behaviour:
 #   - On exit 0: stdout → caller's stdout, stderr → caller's stderr, return 0.
-#   - On non-zero with stderr matching <hard_fail_re>: pass through immediately
+#   - On non-zero with output matching <hard_fail_re>: pass through immediately
 #     (preserves exit code for callers using rc as a probe — e.g. 4xx, auth,
 #     "not found").
-#   - On non-zero with stderr matching <transient_re>: sleep per
+#   - On non-zero with output matching <transient_re>: sleep per
 #     `_RETRY_CORE_DELAYS`, retry up to `_RETRY_CORE_ATTEMPTS` times. After
 #     exhaustion, pass through the last attempt's output and emit
 #     `::warning::[<prefix>] exhausted N attempts ...`.
-#   - On non-zero with stderr matching neither: pass through (unknown failure
+#   - On non-zero with output matching neither: pass through (unknown failure
 #     mode — don't retry blindly).
+#
+# Classification matches the union of stdout + stderr: some tools log their
+# failure diagnostics to stdout (e.g. the SonarScanner JS bootstrapper writes
+# its `[ERROR] Bootstrapper: ...` lines to stdout), so a stderr-only match
+# would miss them and never retry a genuinely transient failure.
 #
 # stdin caveat: the retry loop calls "$@" once per attempt. If the caller
 # pipes stdin to `retry_run` (e.g. `printf '%s' "$pw" | retry_run docker
@@ -67,11 +72,12 @@ retry_with_policy() {
             return 0
         fi
 
-        local stderr_content
-        stderr_content=$(cat "$stderr_file")
+        # Classify against both streams — see header note on stdout-logging tools.
+        local match_content
+        match_content=$(cat "$stdout_file" "$stderr_file")
 
         # Hard-fail pass-through: 4xx, auth, "not found". Never retry — burns quota.
-        if [[ -n "$hard_fail_re" ]] && grep -Eqi "$hard_fail_re" <<<"$stderr_content"; then
+        if [[ -n "$hard_fail_re" ]] && grep -Eqi "$hard_fail_re" <<<"$match_content"; then
             cat "$stdout_file"
             cat "$stderr_file" >&2
             rm -f "$stdout_file" "$stderr_file"
@@ -79,15 +85,18 @@ retry_with_policy() {
         fi
 
         # Not a known transient → pass through (preserves rc for probes).
-        if ! grep -Eqi "$transient_re" <<<"$stderr_content"; then
+        if ! grep -Eqi "$transient_re" <<<"$match_content"; then
             cat "$stdout_file"
             cat "$stderr_file" >&2
             rm -f "$stdout_file" "$stderr_file"
             return "$code"
         fi
 
+        # Snippet for the retry/exhaustion log: prefer stderr, fall back to
+        # stdout for tools that report failures there.
         local snippet
         snippet=$(head -n1 "$stderr_file" | tr -d '\r')
+        [[ -z "$snippet" ]] && snippet=$(head -n1 "$stdout_file" | tr -d '\r')
 
         if (( attempt < attempts )); then
             local delay_idx=$(( attempt - 1 ))

@@ -34,8 +34,17 @@ _RETRY_DELAYS=(5 15 45)
 # Union of transient patterns from gh-retry, docker-retry, sonar-retry,
 # git-retry. Deduplicated; broader phrasings absorb narrower ones (e.g.
 # `HTTP 5[0-9][0-9]` covers `HTTP 502|503|504` from git-retry).
+#
+# `Request failed with status code 5[0-9][0-9]` and `Bootstrapper: An error
+# occurred` cover the SonarScanner JS bootstrapper, which reports HTTP failures
+# as axios errors ("Request failed with status code NNN") rather than the
+# `HTTP NNN` phrasing the other tools use. Its JRE-provisioning call to
+# SonarCloud intermittently 403s under concurrent load; that surfaces as a
+# bootstrapper error with no "Unauthorized"/"Forbidden" word, so it lands in
+# transient here while a genuine auth failure (which does print those words)
+# still hits the hard-fail list below.
 # shellcheck disable=SC2034  # referenced via grep -E
-_RETRY_RETRYABLE='HTTP 5[0-9][0-9]|Error 5[0-9][0-9] on https://|received unexpected HTTP status:? 5[0-9][0-9]|RPC failed.*HTTP 5[0-9][0-9]|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout|server error|Something went wrong while executing your query|Endpoint request timed out|context deadline exceeded|Client\.Timeout|Operation timed out|timeout|timed out|i/o timeout|net/http: TLS handshake timeout|connection reset|Connection reset by peer|connection refused|\bEOF\b|unexpected EOF|was closed|http2: server sent GOAWAY|TLS handshake|tls:.*handshake|server certificate verification failed|temporary failure in name resolution|no such host|Could not resolve host|unable to access|Error response from daemon: Get "[^"]+": unknown'
+_RETRY_RETRYABLE='HTTP 5[0-9][0-9]|Error 5[0-9][0-9] on https://|received unexpected HTTP status:? 5[0-9][0-9]|RPC failed.*HTTP 5[0-9][0-9]|Request failed with status code 5[0-9][0-9]|Bootstrapper: An error occurred|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout|server error|Something went wrong while executing your query|Endpoint request timed out|context deadline exceeded|Client\.Timeout|Operation timed out|timeout|timed out|i/o timeout|net/http: TLS handshake timeout|connection reset|Connection reset by peer|connection refused|\bEOF\b|unexpected EOF|was closed|http2: server sent GOAWAY|TLS handshake|tls:.*handshake|server certificate verification failed|temporary failure in name resolution|no such host|Could not resolve host|unable to access|Error response from daemon: Get "[^"]+": unknown'
 
 # Union of hard-fail patterns. `HTTP 4[0-9][0-9]` absorbs explicit 401/403
 # from sonar/git. Tool-specific phrasings retained because some appear

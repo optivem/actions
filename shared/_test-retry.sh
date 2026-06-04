@@ -30,9 +30,19 @@ if (( idx >= ${#seq[@]} )); then
 fi
 entry="${seq[$idx]}"
 code="${entry%%|*}"
-stderr="${entry#*|}"
-if [[ -n "$stderr" && "$stderr" != "$entry" ]]; then
+# Entry format: code|stderr  or  code|stderr|stdout (stdout field optional).
+# Parsed pipe-safely so the optional 3rd field is backward-compatible with
+# the existing 2-field cases.
+rest="${entry#*|}"
+[[ "$rest" == "$entry" ]] && rest=""
+stderr="${rest%%|*}"
+stdout_extra=""
+[[ "$rest" == *"|"* ]] && stdout_extra="${rest#*|}"
+if [[ -n "$stderr" ]]; then
     printf '%s\n' "$stderr" >&2
+fi
+if [[ -n "$stdout_extra" ]]; then
+    printf '%s\n' "$stdout_extra"
 fi
 printf 'fake-stdout-%d\n' "$counter"
 echo $(( counter + 1 )) >"$FAKE_STATE"
@@ -90,6 +100,17 @@ run_case "sonar transient: Error 503 on https:// → 0 (2 attempts)" \
 
 run_case "sonar transient: Endpoint request timed out → 0 (2 attempts)" \
     '1|Endpoint request timed out;0|' 0 2
+
+run_case "sonar transient: JS bootstrapper JRE-provisioning 403 → 0 (2 attempts)" \
+    '1|[ERROR] Bootstrapper: An error occurred: AxiosError: Request failed with status code 403;0|' 0 2
+
+run_case "sonar transient: axios 503 phrasing → 0 (2 attempts)" \
+    '1|AxiosError: Request failed with status code 503;0|' 0 2
+
+# stdout-stream classification: the SonarScanner JS bootstrapper logs its
+# failure to stdout, not stderr. The signature must still be detected there.
+run_case "sonar transient on stdout: bootstrapper 403 → 0 (2 attempts)" \
+    '1||[ERROR] Bootstrapper: An error occurred: AxiosError: Request failed with status code 403;0|' 0 2
 
 run_case "git transient: Could not resolve host → 0 (2 attempts)" \
     '1|fatal: unable to access: Could not resolve host github.com;0|' 0 2
