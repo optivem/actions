@@ -119,6 +119,13 @@ run_case "sonar transient on stdout: bootstrapper 403 → 0 (2 attempts)" \
 run_case "sonar transient: Gradle JRE-metadata 403 → 0 (2 attempts)" \
     '1|Failed to query JRE metadata: GET https://api.sonarcloud.io/analysis/jres?os=linux&arch=x86_64 failed with HTTP 403 Forbidden. Please check the property sonar.token or the environment variable SONAR_TOKEN.;0|' 0 2
 
+# Same JRE-provisioning 403, but from the standalone sonar-scanner-cli: a
+# different endpoint (`scanner.sonarcloud.io/jres/`) and phrasing (`HttpException
+# ... failed with HTTP 403 Forbidden`) that the `/analysis/jres` clause misses.
+# The `scanner.sonarcloud.io/jres` clause must reclaim it as transient.
+run_case "sonar transient: scanner-cli JRE-download 403 → 0 (2 attempts)" \
+    '1|org.sonarsource.scanner.lib.internal.http.HttpException: GET https://scanner.sonarcloud.io/jres/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz failed with HTTP 403 Forbidden;0|' 0 2
+
 run_case "git transient: Could not resolve host → 0 (2 attempts)" \
     '1|fatal: unable to access: Could not resolve host github.com;0|' 0 2
 

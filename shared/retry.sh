@@ -72,8 +72,16 @@ _RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|HTTP 403.*rate limit|[Uu]nauthorized|Forbidde
 # enforced; a genuinely bad token still hard-fails on the analysis submission
 # (`Not authorized` / `insufficient_scope`), and even if it also 403s here the
 # only cost is exhausting the retries (~65s) before the same non-zero exit.
+#
+# `scanner.sonarcloud.io/jres`: the standalone `sonar-scanner-cli` does the
+# same JRE provisioning against a *different* endpoint and phrasing —
+# `HttpException: GET https://scanner.sonarcloud.io/jres/OpenJDK...tar.gz failed
+# with HTTP 403 Forbidden`. The path is `/jres/`, not `/analysis/jres`, so the
+# clauses above miss it and it lands in the hard-fail list (`HTTP 4xx` +
+# `Forbidden`) and fails fast. Same provisioning-call reasoning applies, so
+# force-retry it too.
 # shellcheck disable=SC2034
-_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres'
+_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres'
 
 retry_run() {
     if [[ "${RETRY_DISABLE:-0}" == "1" ]]; then
