@@ -80,8 +80,17 @@ _RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|HTTP 403.*rate limit|[Uu]nauthorized|Forbidde
 # clauses above miss it and it lands in the hard-fail list (`HTTP 4xx` +
 # `Forbidden`) and fails fast. Same provisioning-call reasoning applies, so
 # force-retry it too.
+#
+# `binaries.sonarsource.com`: SonarSource's binary CDN that serves the scanner
+# distribution zip (`sonar-scanner-cli-X.Y.Z-linux-x64.zip`). It intermittently
+# 403s on transient CDN/edge hiccups — the original trigger of this whole retry
+# plan (acceptance run `26935724762`, where the *same commit* passed the same
+# download 20 min earlier). It is a pure binary-download CDN, never an auth
+# boundary, so *any* 403 naming this host is transient and safe to retry. A
+# genuine auth 403 is raised against the analysis-submission endpoint (and prints
+# `Not authorized`/`insufficient_scope`), not this host, so it still hard-fails.
 # shellcheck disable=SC2034
-_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres'
+_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres|binaries\.sonarsource\.com'
 
 retry_run() {
     if [[ "${RETRY_DISABLE:-0}" == "1" ]]; then

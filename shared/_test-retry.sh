@@ -126,6 +126,12 @@ run_case "sonar transient: Gradle JRE-metadata 403 → 0 (2 attempts)" \
 run_case "sonar transient: scanner-cli JRE-download 403 → 0 (2 attempts)" \
     '1|org.sonarsource.scanner.lib.internal.http.HttpException: GET https://scanner.sonarcloud.io/jres/OpenJDK21U-jre_x64_linux_hotspot_21.0.9_10.tar.gz failed with HTTP 403 Forbidden;0|' 0 2
 
+# Transient CDN binary-download 403 from binaries.sonarsource.com (the original
+# trigger of this plan). `HTTP 403 Forbidden` matches the hard-fail list, so the
+# `binaries.sonarsource.com` force-retry clause must reclaim it as transient.
+run_case "sonar transient: scanner-cli binary-download 403 → 0 (2 attempts)" \
+    '1|org.sonarsource.scanner.lib.internal.http.HttpException: GET https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.0.1.6346-linux-x64.zip failed with HTTP 403 Forbidden;0|' 0 2
+
 run_case "git transient: Could not resolve host → 0 (2 attempts)" \
     '1|fatal: unable to access: Could not resolve host github.com;0|' 0 2
 
