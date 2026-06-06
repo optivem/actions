@@ -61,21 +61,11 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-      run: |
-        set -euo pipefail
-        SRC="${RUNNER_TEMP}/gh-optivem"
-        # Binary must be named exactly `gh-optivem` for `gh extension install <dir>`.
-        ( cd "$SRC" && go build -o gh-optivem . )
-        # Remove any prior install (released or local) so the local build wins.
-        gh extension remove optivem 2>/dev/null || true
-        gh extension install "$SRC"
+      run: bash "$GITHUB_ACTION_PATH/build-and-install.sh"
 
     # --- Record which gh-optivem was actually installed (both paths) ------
     - name: Record installed gh-optivem version
       shell: bash
-      run: |
-        set -euo pipefail
-        VER="$(gh optivem --version 2>&1 || true)"
-        SRC="${{ inputs.ref == '' && 'latest release' || format('source @ {0}', inputs.ref) }}"
-        echo "Installed gh-optivem ($SRC): $VER"
-        echo "- Installed gh-optivem (**$SRC**): \`$VER\`" >> "$GITHUB_STEP_SUMMARY"
+      env:
+        REF: ${{ inputs.ref }}
+      run: bash "$GITHUB_ACTION_PATH/record-version.sh"
