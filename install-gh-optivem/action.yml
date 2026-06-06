@@ -1,0 +1,81 @@
+name: 'Install gh-optivem CLI extension'
+description: |
+  Install the gh-optivem `gh` CLI extension.
+
+  Default (ref empty): install the latest published release via
+  `gh extension install optivem/gh-optivem` — this mirrors the real
+  student/teacher flow and is the behavior on every scheduled/push/normal run.
+
+  Opt-in (ref set): build gh-optivem from source at the given branch/tag/SHA and
+  install that local build instead. Used only by the meta-prerelease dry-run to
+  validate shop against unreleased gh-optivem (the shop-side mirror of
+  gh-optivem's own `debug-shop-head`). A source build is required because
+  `gh extension install --pin` needs a release asset at the ref and `main` has
+  none — so we clone + `go build` + install the local dir, the same dance as
+  gh-optivem's own scripts/install.sh.
+
+inputs:
+  ref:
+    description: 'gh-optivem git ref (branch/tag/SHA) to build from source. Empty = install the latest published release.'
+    required: false
+    default: ''
+  github-token:
+    description: 'Token exported as GH_TOKEN for `gh extension install`.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    # --- Default path: latest published release ---------------------------
+    # Wrapped in retry to survive transient release-asset CDN 5xx, matching the
+    # inline `gh extension install` steps this action replaces.
+    - name: Install released gh-optivem
+      if: ${{ inputs.ref == '' }}
+      uses: optivem/actions/retry@v1
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      with:
+        command: gh extension install optivem/gh-optivem
+
+    # --- Opt-in path: build from source at `ref` --------------------------
+    # Clone first so setup-go can read the toolchain from the cloned go.mod —
+    # the build then always matches gh-optivem's pinned Go version. Full clone
+    # (not --branch) so an arbitrary SHA is checkoutable, not just branch/tag.
+    - name: Clone gh-optivem at ref
+      if: ${{ inputs.ref != '' }}
+      uses: optivem/actions/retry@v1
+      with:
+        command: >-
+          git clone https://github.com/optivem/gh-optivem "${{ runner.temp }}/gh-optivem"
+          && git -C "${{ runner.temp }}/gh-optivem" checkout "${{ inputs.ref }}"
+
+    - name: Setup Go
+      if: ${{ inputs.ref != '' }}
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ${{ runner.temp }}/gh-optivem/go.mod
+        cache: false
+
+    - name: Build and install gh-optivem from source
+      if: ${{ inputs.ref != '' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        SRC="${RUNNER_TEMP}/gh-optivem"
+        # Binary must be named exactly `gh-optivem` for `gh extension install <dir>`.
+        ( cd "$SRC" && go build -o gh-optivem . )
+        # Remove any prior install (released or local) so the local build wins.
+        gh extension remove optivem 2>/dev/null || true
+        gh extension install "$SRC"
+
+    # --- Record which gh-optivem was actually installed (both paths) ------
+    - name: Record installed gh-optivem version
+      shell: bash
+      run: |
+        set -euo pipefail
+        VER="$(gh optivem --version 2>&1 || true)"
+        SRC="${{ inputs.ref == '' && 'latest release' || format('source @ {0}', inputs.ref) }}"
+        echo "Installed gh-optivem ($SRC): $VER"
+        echo "- Installed gh-optivem (**$SRC**): \`$VER\`" >> "$GITHUB_STEP_SUMMARY"
