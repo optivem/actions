@@ -155,7 +155,7 @@ wait_for_rate_limit_budget
 echo "Fetching all deployments..."
 
 # --paginate concatenates JSON arrays; `jq -s 'add'` merges into one array.
-deployments_json=$(retry_run gh api "/repos/$REPOSITORY/deployments" --paginate 2>/dev/null | jq -s 'add // []' || echo '[]')
+deployments_json=$(retry_run gh api "/repos/$REPOSITORY/deployments" --paginate | jq -s 'add // []' || echo '[]')
 
 total=$(jq 'length' <<<"$deployments_json")
 if (( total == 0 )); then

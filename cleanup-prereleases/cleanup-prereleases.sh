@@ -82,7 +82,7 @@ echo "Fetching all GitHub releases (single API call)..."
 
 # Pre-index by tag_name: { tag -> { id, created_at, is_prerelease, is_draft } }
 # jq builds the dictionary; we look up fields via jq later.
-if all_releases_raw=$(retry_run gh api "repos/$REPOSITORY/releases" --paginate 2>/dev/null); then
+if all_releases_raw=$(retry_run gh api "repos/$REPOSITORY/releases" --paginate); then
   all_releases=$(echo "$all_releases_raw" | jq -s 'add // [] | map({key: .tag_name, value: {id: .id, created_at: .created_at, is_prerelease: .prerelease, is_draft: .draft}}) | from_entries')
   release_count=$(jq 'length' <<<"$all_releases")
   echo "  Found $release_count releases"
@@ -105,7 +105,7 @@ fi
 
 for package in "${package_list[@]}"; do
   echo "Fetching Docker versions for package: $package..."
-  if versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>/dev/null); then
+  if versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate); then
     docker_versions_json[$package]=$(echo "$versions_raw" | jq -s 'add // []')
     vcount=$(jq 'length' <<<"${docker_versions_json[$package]}")
     echo "  Found $vcount versions"

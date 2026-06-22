@@ -90,7 +90,7 @@ for package in "${package_list[@]}"; do
   echo "Package $package:"
 
   # Fetch versions for this package.
-  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>/dev/null); then
+  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate); then
     echo "  Warning: Could not list versions for package $package; skipping"
     continue
   fi
