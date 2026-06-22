@@ -28,11 +28,14 @@ fi
 # sibling's run instead of ours. Resolved BEFORE dispatch — accept the
 # tiny race where ref moves between resolve and dispatch (in practice,
 # workflows protected by concurrency: groups serialise this).
-ref_sha=$(gh api "repos/$REPOSITORY/commits/$REF" --jq .sha 2>/dev/null)
+ref_err=$(mktemp)
+ref_sha=$(gh api "repos/$REPOSITORY/commits/$REF" --jq .sha 2>"$ref_err") || true
 if [ -z "$ref_sha" ]; then
-  echo "::error::Could not resolve $REPOSITORY@$REF to a SHA before dispatch"
+  echo "::error::Could not resolve $REPOSITORY@$REF to a SHA before dispatch: $(cat "$ref_err")" >&2
+  rm -f "$ref_err"
   exit 1
 fi
+rm -f "$ref_err"
 dispatch_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # --- Trigger workflow ---

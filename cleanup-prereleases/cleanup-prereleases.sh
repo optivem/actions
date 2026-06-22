@@ -159,8 +159,8 @@ remove_git_tag() {
     return
   fi
 
-  if ! git push origin --delete "refs/tags/$tag" 2>/dev/null; then
-    echo "  Warning: Could not delete remote tag $tag (may not exist on remote)"
+  if ! push_err=$(git push origin --delete "refs/tags/$tag" 2>&1); then
+    echo "  Warning: Could not delete remote tag $tag (may not exist on remote): $push_err"
   fi
   git tag -d "$tag" 2>/dev/null || true
 
@@ -190,7 +190,7 @@ remove_github_release() {
   fi
 
   wait_for_rate_limit_budget
-  if retry_run gh release delete "$tag" --repo "$REPOSITORY" --yes --cleanup-tag >/dev/null 2>&1; then
+  if retry_run gh release delete "$tag" --repo "$REPOSITORY" --yes --cleanup-tag >/dev/null; then
     echo "  Deleted GitHub release: $tag"
     deleted_count=$((deleted_count + 1))
   else
@@ -232,7 +232,7 @@ remove_docker_image_tag() {
   fi
 
   wait_for_rate_limit_budget
-  if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$version_id" >/dev/null 2>&1; then
+  if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$version_id" >/dev/null; then
     echo "  Deleted Docker image tag: $package:$tag"
     deleted_count=$((deleted_count + 1))
   else
@@ -479,7 +479,7 @@ for tag_name in "${release_tag_names[@]}"; do
 
   # Delete by release ID (drafts have no tag, so by-tag delete is unreliable).
   wait_for_rate_limit_budget
-  if retry_run gh api --method DELETE "repos/$REPOSITORY/releases/$rel_id" >/dev/null 2>&1; then
+  if retry_run gh api --method DELETE "repos/$REPOSITORY/releases/$rel_id" >/dev/null; then
     echo "  Deleted release: $tag_name"
     deleted_count=$((deleted_count + 1))
   else

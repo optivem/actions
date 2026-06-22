@@ -148,7 +148,7 @@ for package in "${package_list[@]}"; do
     fi
 
     wait_for_rate_limit_budget
-    if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$untagged_id" >/dev/null 2>&1; then
+    if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$untagged_id" >/dev/null; then
       echo "  Deleted orphan manifest: $untagged_digest (id $untagged_id)"
       deleted_count=$((deleted_count + 1))
     else

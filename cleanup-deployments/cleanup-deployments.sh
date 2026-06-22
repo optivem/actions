@@ -214,13 +214,13 @@ remove_deployment() {
   # Mark inactive first — GitHub rejects DELETE on an active deployment.
   wait_for_rate_limit_budget
   if ! retry_run gh api --method POST "/repos/$REPOSITORY/deployments/$id/statuses" \
-      -f state=inactive >/dev/null 2>&1; then
+      -f state=inactive >/dev/null; then
     echo "  Warning: Could not mark deployment ${id} inactive — skipping delete"
     return
   fi
 
   wait_for_rate_limit_budget
-  if retry_run gh api --method DELETE "/repos/$REPOSITORY/deployments/$id" >/dev/null 2>&1; then
+  if retry_run gh api --method DELETE "/repos/$REPOSITORY/deployments/$id" >/dev/null; then
     echo "  Deleted deployment ${id} (env=${env}, sha=${short_sha}) — ${reason}"
     deleted_count=$((deleted_count + 1))
   else
