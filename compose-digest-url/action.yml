@@ -1,0 +1,26 @@
+name: 'Compose Digest URL'
+description: 'String-composition helper. Joins a base image URL and a digest into an immutable `{base}@{digest}` reference. Registry-agnostic — no registry lookup (see `resolve-docker-image-digests` for that). Digest sibling of `compose-docker-image-urls`.'
+
+inputs:
+  base-image-url:
+    description: 'Base image URL without tag or digest (e.g., ghcr.io/owner/repo/image)'
+    required: true
+  digest:
+    description: 'Image digest in `sha256:...` form (e.g., docker/build-push-action push step `digest` output)'
+    required: true
+
+outputs:
+  digest-url:
+    description: 'Immutable digest reference: `{base-image-url}@{digest}`'
+    value: ${{ steps.compose.outputs.digest-url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compose Digest URL
+      id: compose
+      shell: bash
+      env:
+        BASE_IMAGE_URL: ${{ inputs.base-image-url }}
+        DIGEST: ${{ inputs.digest }}
+      run: bash "${{ github.action_path }}/compose-digest-url.sh"
