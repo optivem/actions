@@ -34,25 +34,48 @@ while [ "$attempt" -le "$MAX_DISCOVERY_ATTEMPTS" ]; do
     --jq "[.[] | select(.headSha == \"$COMMIT_SHA\")] | .[0].databaseId")
 
   if [ -n "$run_id" ] && [ "$run_id" != "null" ]; then
-    echo "Found run $run_id on attempt $attempt, watching..."
+    echo "Found run $run_id on attempt $attempt, polling for completion..."
     echo "run_id=$run_id" >> $GITHUB_OUTPUT
-    export RUN_ID="$run_id"
-    remaining_secs=$(( DEADLINE - $(date +%s) ))
-    if [ "$remaining_secs" -le 0 ]; then
-      echo "::error::Timed out after ${TIMEOUT_SECONDS}s before watch could start for run $run_id."
-      exit 124
-    fi
-    set +e
-    timeout "$remaining_secs" bash -c '
-      source "$GITHUB_ACTION_PATH/../shared/retry.sh"
-      retry_run gh run watch "$RUN_ID" --repo "$REPOSITORY" --exit-status --interval "$WATCH_INTERVAL"
-    '
-    code=$?
-    set -e
-    if [ "$code" -eq 124 ]; then
-      echo "::error::Workflow $WORKFLOW (run $run_id) exceeded timeout of ${TIMEOUT_SECONDS}s."
-    fi
-    exit "$code"
+
+    # Poll the run's status until completion or the overall DEADLINE. A single
+    # failed poll (transient API/network outage — e.g. `dial tcp ...:443: i/o
+    # timeout`) is NON-FATAL: warn and retry on the next interval, so an outage
+    # shorter than the timeout cannot fail a run that actually succeeded.
+    # (Replaces a streaming `gh run watch` whose `retry_run` cap gave up long
+    # before TIMEOUT_SECONDS was ever reached.)
+    while :; do
+      if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+        echo "::error::Workflow $WORKFLOW (run $run_id) exceeded timeout of ${TIMEOUT_SECONDS}s."
+        exit 124
+      fi
+
+      set +e
+      result=$(retry_run gh run view "$run_id" --repo "$REPOSITORY" \
+        --json status,conclusion --jq '[.status, .conclusion] | @tsv')
+      poll_code=$?
+      set -e
+
+      if [ "$poll_code" -ne 0 ]; then
+        echo "::warning::Poll for run $run_id failed transiently (exit $poll_code). Retrying in ${WATCH_INTERVAL}s (timeout in $(( DEADLINE - $(date +%s) ))s)..."
+        sleep "$WATCH_INTERVAL"
+        continue
+      fi
+
+      status=${result%%$'\t'*}
+      conclusion=${result#*$'\t'}
+
+      if [ "$status" = "completed" ]; then
+        if [ "$conclusion" = "success" ]; then
+          echo "Run $run_id completed successfully."
+          exit 0
+        fi
+        echo "::error::Workflow $WORKFLOW (run $run_id) completed with conclusion '$conclusion'."
+        exit 1
+      fi
+
+      echo "Run $run_id status='$status' (not yet completed), polling again in ${WATCH_INTERVAL}s..."
+      sleep "$WATCH_INTERVAL"
+    done
   fi
 
   echo "Run not found yet (attempt $attempt/$MAX_DISCOVERY_ATTEMPTS), waiting ${POLL_INTERVAL}s..."
