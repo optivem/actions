@@ -5,7 +5,9 @@
 # whether a GHCR image tag exists, then call the two exported functions:
 #
 #   source "$GITHUB_ACTION_PATH/../shared/ghcr-probe.sh"
-#   bearer=$(ghcr_bearer_for "$path" "$GH_TOKEN" || true)
+#   bearer_out=$(ghcr_bearer_for "$path" "$GH_TOKEN") || true
+#   bearer=$(sed -n '1p' <<<"$bearer_out")
+#   bearer_status=$(sed -n '2p' <<<"$bearer_out")
 #   code=$(ghcr_probe_manifest "$manifest_url" "$bearer")
 #
 # Both functions are pure protocol primitives — they perform the OCI two-step
@@ -32,20 +34,35 @@ _GHCR_PROBE_ACCEPT='application/vnd.oci.image.index.v1+json,application/vnd.oci.
 #
 # Exchange a GitHub token for a GHCR OCI bearer scoped to read the given
 # repository path (e.g. "optivem/shop/backend"). When TOKEN is empty, requests
-# an anonymous bearer — works for public packages. Prints the bearer to stdout
-# and returns 0 on success; returns non-zero on curl failure (caller should
-# default the bearer to empty and decide how to react).
+# an anonymous bearer — works for public packages.
+#
+# Prints exactly two lines to stdout: the bearer token (empty on any failure)
+# followed by the token-exchange HTTP status code ("000" if curl failed at the
+# network layer, e.g. DNS/connection failure, before a response was received).
+# Returns 0 only on a clean 200 with a present `.token` field; returns 1 for
+# every other case, so the caller must branch on the second line to tell apart
+# 200-with-missing-token (malformed response) from 401 (invalid/expired token),
+# 403 (valid token, wrong scope), and any other code or network failure
+# (indeterminate — treat as fail-hard, not retried).
 ghcr_bearer_for() {
     local scope_path="$1"
     local token="${2:-}"
     local url="https://ghcr.io/token?service=ghcr.io&scope=repository:${scope_path}:pull"
-    local body
+    local response status body bearer
+
     if [ -n "$token" ]; then
-        body=$(curl -sS -u "x-access-token:${token}" "$url") || return 1
+        response=$(curl -sS -w '\n%{http_code}' -u "x-access-token:${token}" "$url") || response=$'\n000'
     else
-        body=$(curl -sS "$url") || return 1
+        response=$(curl -sS -w '\n%{http_code}' "$url") || response=$'\n000'
     fi
-    jq -r '.token // empty' <<<"$body"
+
+    status="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    bearer=$(jq -r '.token // empty' <<<"$body" 2>/dev/null || true)
+
+    printf '%s\n%s\n' "$bearer" "$status"
+
+    [ "$status" = "200" ] && [ -n "$bearer" ]
 }
 
 # ghcr_probe_manifest URL BEARER

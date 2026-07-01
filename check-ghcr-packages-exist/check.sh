@@ -32,9 +32,24 @@ while IFS= read -r line; do
   path=${image_url#ghcr.io/}
   manifest_url="https://ghcr.io/v2/${path}/manifests/${effective_tag}"
 
-  bearer=$(ghcr_bearer_for "$path" "$GH_TOKEN" || true)
+  bearer_out=$(ghcr_bearer_for "$path" "$GH_TOKEN") || true
+  bearer=$(sed -n '1p' <<<"$bearer_out")
+  bearer_status=$(sed -n '2p' <<<"$bearer_out")
   if [ -z "$bearer" ]; then
-    echo "::error::Failed to obtain GHCR registry token for $path. Token missing or invalid — verify the workflow has 'permissions: packages: read' and any custom token secret is current."
+    case "$bearer_status" in
+      401)
+        echo "::error::GHCR token exchange returned HTTP 401 for $path — token is invalid or expired. Rotate the token or re-authenticate."
+        ;;
+      403)
+        echo "::error::GHCR token exchange returned HTTP 403 for $path — token lacks 'read:packages' scope for this package. Grant the scope, or ensure the package owner allows this workflow to read it."
+        ;;
+      200)
+        echo "::error::GHCR token exchange returned HTTP 200 for $path but the response had no token field (malformed response) — investigate GHCR."
+        ;;
+      *)
+        echo "::error::GHCR token exchange returned HTTP $bearer_status for $path after retries — indeterminate failure (network error or unexpected response), treat as failure."
+        ;;
+    esac
     exit 1
   fi
 
