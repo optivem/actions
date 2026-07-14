@@ -45,14 +45,17 @@ for i in $(seq 0 $((count - 1))); do
 
     # Read current SHA (if file exists) for optimistic-concurrency PUT.
     current_sha=""
-    if get_out=$(retry_run gh api "repos/$REPOSITORY/contents/$path?ref=$BRANCH" 2>&1); then
+    get_err_file=$(mktemp)
+    if get_out=$(retry_run gh api "repos/$REPOSITORY/contents/$path?ref=$BRANCH" 2>"$get_err_file"); then
       current_sha=$(jq -r '.sha' <<<"$get_out")
-    elif grep -Eqi '404|Not Found' <<<"$get_out"; then
+    elif grep -Eqi '404|Not Found' <<<"$get_out"$'\n'"$(cat "$get_err_file")"; then
       current_sha=""
     else
-      echo "::error::Failed to read $path from $REPOSITORY@$BRANCH: $get_out"
+      echo "::error::Failed to read $path from $REPOSITORY@$BRANCH: $get_out $(cat "$get_err_file")"
+      rm -f "$get_err_file"
       exit 1
     fi
+    rm -f "$get_err_file"
 
     body=$(jq -n \
       --arg message "$message" \
@@ -63,8 +66,9 @@ for i in $(seq 0 $((count - 1))); do
 
     tmp_file=$(mktemp)
     printf '%s' "$body" > "$tmp_file"
-    if put_out=$(retry_run gh api --method PUT "repos/$REPOSITORY/contents/$path" --input "$tmp_file" 2>&1); then
-      rm -f "$tmp_file"
+    put_err_file=$(mktemp)
+    if put_out=$(retry_run gh api --method PUT "repos/$REPOSITORY/contents/$path" --input "$tmp_file" 2>"$put_err_file"); then
+      rm -f "$tmp_file" "$put_err_file"
       commit_sha=$(jq -r '.commit.sha' <<<"$put_out")
       content_sha=$(jq -r '.content.sha' <<<"$put_out")
       html_url=$(jq -r '.commit.html_url' <<<"$put_out")
@@ -79,12 +83,14 @@ for i in $(seq 0 $((count - 1))); do
       committed=true
     else
       rm -f "$tmp_file"
-      if grep -Eqi 'does not match|409|422' <<<"$put_out" && (( attempt < MAX_RETRIES )); then
+      put_combined="$put_out"$'\n'"$(cat "$put_err_file")"
+      rm -f "$put_err_file"
+      if grep -Eqi 'does not match|409|422' <<<"$put_combined" && (( attempt < MAX_RETRIES )); then
         delay=$((2 ** attempt))
         echo "::warning::SHA conflict on $path (attempt $attempt/$MAX_RETRIES), retrying in ${delay}s..."
         sleep "$delay"
       else
-        echo "::error::Failed to commit $path after $attempt attempt(s): $put_out"
+        echo "::error::Failed to commit $path after $attempt attempt(s): $put_combined"
         exit 1
       fi
     fi

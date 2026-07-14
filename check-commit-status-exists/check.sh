@@ -12,10 +12,13 @@ echo "Head SHA: $HEAD_SHA"
 echo "Commit SHA (matched against description): $COMMIT_SHA"
 echo "Status context: $STATUS_CONTEXT"
 
-if ! statuses=$(retry_run gh api "repos/${REPOSITORY}/commits/${HEAD_SHA}/statuses" --paginate 2>&1); then
-  echo "::error::Could not fetch commit statuses for ${REPOSITORY}@${HEAD_SHA} after retry exhaustion. Indeterminate — exiting 1 rather than coercing to exists=false. Details: $statuses"
+statuses_err_file=$(mktemp)
+if ! statuses=$(retry_run gh api "repos/${REPOSITORY}/commits/${HEAD_SHA}/statuses" --paginate 2>"$statuses_err_file"); then
+  echo "::error::Could not fetch commit statuses for ${REPOSITORY}@${HEAD_SHA} after retry exhaustion. Indeterminate — exiting 1 rather than coercing to exists=false. Details: $statuses $(cat "$statuses_err_file")"
+  rm -f "$statuses_err_file"
   exit 1
 fi
+rm -f "$statuses_err_file"
 
 match_created_at=$(echo "$statuses" | jq -r --arg ctx "$STATUS_CONTEXT" --arg sha "$COMMIT_SHA" '
   map(select(.context == $ctx and .description == $sha and .state == "success"))

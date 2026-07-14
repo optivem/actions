@@ -27,6 +27,14 @@
 # hard-fail list.
 #
 # Set `RETRY_DISABLE=1` to bypass the retry loop entirely.
+#
+# jq-parsing caveat: retry-core.sh writes a live `::notice::[<prefix>] attempt
+# N failed ... retrying in Ns` line to stderr on every retried-but-eventually-
+# successful attempt. If a caller captures `retry_run`'s output with `2>&1`
+# into a variable that then gets parsed as structured data (jq, etc.), that
+# notice text lands ahead of the real payload and corrupts the parse whenever
+# a retry happened before success. Capture stdout and stderr into separate
+# variables/files instead when the result will be parsed as structured data.
 
 # shellcheck source=./retry-core.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry-core.sh"
