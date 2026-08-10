@@ -97,8 +97,28 @@ _RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|HTTP 403.*rate limit|[Uu]nauthorized|Forbidde
 # boundary, so *any* 403 naming this host is transient and safe to retry. A
 # genuine auth 403 is raised against the analysis-submission endpoint (and prints
 # `Not authorized`/`insufficient_scope`), not this host, so it still hard-fails.
+#
+# `exceeded a secondary rate limit`: GHCR reports a *throttle* using authz
+# vocabulary — `error pulling image configuration: ... denied: permission_denied:
+# Error from intermediary with HTTP status code 403 "Forbidden"` with the real
+# reason only in the JSON body (`You have exceeded a secondary rate limit.
+# Please wait a few minutes before you try again.`). That phrasing collides with
+# `denied: permission` and `Forbidden` in the hard-fail list, so without this
+# override a throttled `docker compose pull` fails fast with zero attempts
+# (observed: gh-optivem run 31365614953, deploy step dead in 1799ms). A rate
+# limit is a "come back later", not an authz decision, so it belongs in the
+# retry path. The clause is keyed on the rate-limit sentence, not on the 403 —
+# a genuine GHCR auth denial carries no such wording and still hard-fails.
+#
+# This override is shared across tools, so it also reclaims GitHub's *secondary*
+# rate limit for `gh` calls — deliberately. Secondary limits are short-term
+# abuse throttles whose documented remedy is exactly "wait and retry", whereas
+# the *primary* limit (`HTTP 403: API rate limit exceeded`, hourly quota
+# exhausted) stays hard-fail via `HTTP 403.*rate limit`: retrying that one
+# cannot succeed within the backoff window and only burns quota. The two are
+# distinguished by wording, so the split holds.
 # shellcheck disable=SC2034
-_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres|binaries\.sonarsource\.com'
+_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres|binaries\.sonarsource\.com|exceeded a secondary rate limit'
 
 retry_run() {
     if [[ "${RETRY_DISABLE:-0}" == "1" ]]; then

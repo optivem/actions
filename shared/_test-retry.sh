@@ -132,6 +132,14 @@ run_case "sonar transient: scanner-cli JRE-download 403 → 0 (2 attempts)" \
 run_case "sonar transient: scanner-cli binary-download 403 → 0 (2 attempts)" \
     '1|org.sonarsource.scanner.lib.internal.http.HttpException: GET https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-8.0.1.6346-linux-x64.zip failed with HTTP 403 Forbidden;0|' 0 2
 
+# GHCR reports a secondary rate limit using authz vocabulary — `denied:
+# permission_denied` + `HTTP status code 403 "Forbidden"` — which matches the
+# hard-fail list. The `exceeded a secondary rate limit` force-retry clause must
+# reclaim it as transient, or a throttled `docker compose pull` dies with zero
+# attempts (gh-optivem run 31365614953).
+run_case "docker transient: GHCR secondary rate-limit 403 → 0 (2 attempts)" \
+    '1|error pulling image configuration: download failed after attempts=1: denied: permission_denied: Error from intermediary with HTTP status code 403 "Forbidden" - with-body: {"message": "You have exceeded a secondary rate limit. Please wait a few minutes before you try again."};0|' 0 2
+
 run_case "git transient: Could not resolve host → 0 (2 attempts)" \
     '1|fatal: unable to access: Could not resolve host github.com;0|' 0 2
 
@@ -153,6 +161,12 @@ run_case "docker hard-fail: manifest unknown → 1 attempt" \
 
 run_case "docker hard-fail: denied: requested access → 1 attempt" \
     '1|denied: requested access to the resource is denied' 1 1
+
+# The secondary-rate-limit override is narrow: a genuine GHCR authz denial uses
+# the same `denied: permission_denied` / `Forbidden` vocabulary but carries no
+# rate-limit wording, so it must still fail fast rather than burn 5 attempts.
+run_case "docker hard-fail: GHCR permission_denied without rate-limit wording → 1 attempt" \
+    '1|error pulling image configuration: download failed after attempts=1: denied: permission_denied: Error from intermediary with HTTP status code 403 "Forbidden"' 1 1
 
 run_case "sonar hard-fail: Project key X does not exist → 1 attempt" \
     '1|ERROR: Project key gh-optivem does not exist on this server' 1 1
