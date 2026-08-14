@@ -54,8 +54,15 @@ _RETRY_DELAYS=(5 15 45)
 # bootstrapper error with no "Unauthorized"/"Forbidden" word, so it lands in
 # transient here while a genuine auth failure (which does print those words)
 # still hits the hard-fail list below.
+# `unexpected end of JSON input`: jq's generic parse-failure text, emitted by
+# `gh api ... --jq ...` calls when the HTTP response body is truncated or
+# empty. This is a transient network symptom that `gh api --jq` collapses
+# into an opaque jq error rather than a distinguishable HTTP/network failure —
+# not evidence of a real API/auth problem. Observed: gh-optivem run
+# 31709529616, "Record QA Deployment" jobs (dotnet/monolith, typescript/
+# monorepo, java/monorepo) via create-deployment/create.sh:18.
 # shellcheck disable=SC2034  # referenced via grep -E
-_RETRY_RETRYABLE='HTTP 5[0-9][0-9]|Error 5[0-9][0-9] on https://|received unexpected HTTP status:? 5[0-9][0-9]|RPC failed.*HTTP 5[0-9][0-9]|Request failed with status code 5[0-9][0-9]|Bootstrapper: An error occurred|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout|server error|Something went wrong while executing your query|Endpoint request timed out|context deadline exceeded|Client\.Timeout|Operation timed out|timeout|timed out|i/o timeout|net/http: TLS handshake timeout|connection reset|Connection reset by peer|connection refused|\bEOF\b|unexpected EOF|was closed|http2: server sent GOAWAY|TLS handshake|tls:.*handshake|server certificate verification failed|temporary failure in name resolution|no such host|Could not resolve host|unable to access|Error response from daemon: Get "[^"]+": unknown'
+_RETRY_RETRYABLE='HTTP 5[0-9][0-9]|Error 5[0-9][0-9] on https://|received unexpected HTTP status:? 5[0-9][0-9]|RPC failed.*HTTP 5[0-9][0-9]|Request failed with status code 5[0-9][0-9]|Bootstrapper: An error occurred|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout|server error|Something went wrong while executing your query|Endpoint request timed out|context deadline exceeded|Client\.Timeout|Operation timed out|timeout|timed out|i/o timeout|net/http: TLS handshake timeout|connection reset|Connection reset by peer|connection refused|\bEOF\b|unexpected EOF|was closed|http2: server sent GOAWAY|TLS handshake|tls:.*handshake|server certificate verification failed|temporary failure in name resolution|no such host|Could not resolve host|unable to access|Error response from daemon: Get "[^"]+": unknown|unexpected end of JSON input'
 
 # Union of hard-fail patterns. `HTTP 4[0-9][0-9]` absorbs explicit 401/403
 # from sonar/git. Tool-specific phrasings retained because some appear
@@ -117,8 +124,21 @@ _RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|HTTP 403.*rate limit|[Uu]nauthorized|Forbidde
 # exhausted) stays hard-fail via `HTTP 403.*rate limit`: retrying that one
 # cannot succeed within the backoff window and only burns quota. The two are
 # distinguished by wording, so the split holds.
+#
+# `\[remote rejected\].*\((Internal Server Error|Bad Gateway|Service
+# Unavailable|Gateway Timeout)\)`: git phrases *any* server-side push
+# rejection — transient or permanent — as `[remote rejected] <ref> -> <ref>
+# (<reason>)`. That always collides with `! \[remote rejected\]` in the
+# hard-fail list above, even when `<reason>` is itself a transient 5xx
+# already present in `_RETRY_RETRYABLE`, because the hard-fail check runs
+# before the transient check in retry-core.sh. Force-retry reclaims only the
+# reasons that are themselves known-transient server errors; a genuine
+# rejection reason (e.g. `pre-receive hook declined`) carries none of these
+# words and still hard-fails. Observed: gh-optivem run 31709529616, job
+# "Publish Release Tag" (publish-tag/tag.sh:38) — `remote: Internal Server
+# Error` / `! [remote rejected] v1.0.187 -> v1.0.187 (Internal Server Error)`.
 # shellcheck disable=SC2034
-_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres|binaries\.sonarsource\.com|exceeded a secondary rate limit'
+_RETRY_FORCE_RETRY='Failed to query JRE metadata|/analysis/jres|scanner\.sonarcloud\.io/jres|binaries\.sonarsource\.com|exceeded a secondary rate limit|\[remote rejected\].*\((Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout)\)'
 
 retry_run() {
     if [[ "${RETRY_DISABLE:-0}" == "1" ]]; then

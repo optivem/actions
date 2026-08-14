@@ -143,6 +143,22 @@ run_case "docker transient: GHCR secondary rate-limit 403 → 0 (2 attempts)" \
 run_case "git transient: Could not resolve host → 0 (2 attempts)" \
     '1|fatal: unable to access: Could not resolve host github.com;0|' 0 2
 
+# git phrases *any* server-side push rejection as `[remote rejected] <ref> ->
+# <ref> (<reason>)`, which collides with the `! \[remote rejected\]` hard-fail
+# pattern even when <reason> is itself a transient 5xx. The force-retry
+# override must reclaim it (gh-optivem run 31709529616, publish-tag/tag.sh:38).
+run_case "git transient: remote rejected (Internal Server Error) → 0 (2 attempts)" \
+    '1|! [remote rejected] v1.0.187 -> v1.0.187 (Internal Server Error);0|' 0 2
+
+run_case "git transient: remote rejected (Bad Gateway) → 0 (2 attempts)" \
+    '1|! [remote rejected] main -> main (Bad Gateway);0|' 0 2
+
+# jq's generic parse-failure text for a truncated/empty gh api response body —
+# a transient network symptom, not evidence of a real API/auth problem
+# (gh-optivem run 31709529616, create-deployment/create.sh:18).
+run_case "gh transient: unexpected end of JSON input → 0 (2 attempts)" \
+    '1|jq: error (at <unknown>): unexpected end of JSON input;0|' 0 2
+
 run_case "git transient: RPC failed ... HTTP 503 → 0 (2 attempts)" \
     '1|error: RPC failed -- HTTP 503 curl 22 The requested URL returned error 503;0|' 0 2
 
