@@ -30,7 +30,10 @@ entry="${seq[$idx]}"
 code="${entry%%|*}"
 stderr="${entry#*|}"
 if [[ -n "$stderr" && "$stderr" != "$entry" ]]; then
-    printf '%s\n' "$stderr" >&2
+    # %b (not %s) so fixtures can embed `\n` and emit multi-line output —
+    # needed for stack-trace cases, since `read -ra` below stops at the first
+    # real newline and so cannot carry one in the sequence string.
+    printf '%b\n' "$stderr" >&2
 fi
 printf 'fake-stdout-%d\n' "$counter"
 echo $(( counter + 1 )) >"$FAKE_STATE"
@@ -131,6 +134,55 @@ out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/d
 unset _RETRY_CORE_FORCE_RETRY
 assert_eq "exit code" "1" "$code"
 assert_eq "attempt count" "4" "$(<"$fake_state")"
+
+# Stack-frame stripping. A frame is a code identifier, not a failure message,
+# so a method name containing a policy keyword must not decide the verdict.
+# Regression for gh-optivem run 35261501113, where the frame
+# `...DefaultScannerWsClient.failIfUnauthorized(...)` matched the hard-fail
+# token `[Uu]nauthorized` and beat a genuine transient 500 — zero retries.
+# Here `failIfDenied` plays the same role against this harness's `denied`
+# hard-fail token.
+echo "Test 6e: transient message + hard-fail keyword in a frame → retries"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|HTTP 502 Bad Gateway\n\tat com.example.http.Client.failIfDenied(Client.java:88)\n\t... 87 common frames omitted;0|'
+out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/dev/null) && code=0 || code=$?
+assert_eq "exit code" "0" "$code"
+assert_eq "attempt count" "2" "$(<"$fake_state")"
+
+# The same keyword in the MESSAGE must still hard-fail — stripping frames
+# must not weaken genuine hard-fail detection.
+echo "Test 6f: hard-fail keyword in the message → still 1 attempt despite frames"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|HTTP 403 denied by policy\n\tat com.example.http.Client.call(Client.java:58)'
+out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/dev/null) && code=0 || code=$?
+assert_eq "exit code" "1" "$code"
+assert_eq "attempt count" "1" "$(<"$fake_state")"
+
+# All-frames output filters down to an empty classification input. `grep -Ev`
+# exits 1 there; if that status escaped, the callers' inherited `set -e` would
+# abort the loop. Empty must classify as "matches neither" → pass through.
+echo "Test 6g: output that is entirely frames → pass through, no set -e abort"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='7|\tat com.example.http.Client.failIfDenied(Client.java:88)\n\t... 3 common frames omitted'
+out=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>/dev/null) && code=0 || code=$?
+assert_eq "exit code" "7" "$code"
+assert_eq "attempt count" "1" "$(<"$fake_state")"
+
+# Frames are removed from classification only — the operator must still get
+# the complete trace on the pass-through branch.
+echo "Test 6h: full unfiltered trace still reaches the caller"
+echo 0 >"$fake_state"
+export CORE_FAKE_SEQ='1|HTTP 403 denied by policy\n\tat com.example.http.Client.call(Client.java:58)'
+combined=$(retry_with_policy "$TRANSIENT" "$HARDFAIL" test-prefix -- "$fake_bin" 2>&1) && code=0 || code=$?
+if grep -q "at com.example.http.Client.call" <<<"$combined"; then
+    echo "  PASS frame preserved in output"
+    (( pass++ )) || true
+else
+    echo "  FAIL frame preserved in output"
+    echo "    expected substring: at com.example.http.Client.call"
+    echo "    actual output:      $combined"
+    (( fail++ )) || true
+fi
 
 echo "Test 7: command with args is forwarded correctly"
 echo 0 >"$fake_state"

@@ -68,8 +68,18 @@ _RETRY_RETRYABLE='HTTP 5[0-9][0-9]|Error 5[0-9][0-9] on https://|received unexpe
 # from sonar/git. Tool-specific phrasings retained because some appear
 # without an HTTP code (docker `manifest unknown`, sonar `Project key ... does
 # not exist`, git `pre-receive hook declined`).
+#
+# `Error 4[0-9][0-9] on https://` is the scanner engine's own phrasing, mirror
+# of the transient `Error 5[0-9][0-9] on https://` above — `HTTP 4[0-9][0-9]`
+# does NOT cover it. Until gh-optivem run 35261501113 this gap was invisible:
+# a genuine `HttpException: Error 401 on https://sonarcloud.io/batch/...`
+# matched neither list, and only failed fast because every scanner stack trace
+# contains the frame `...DefaultScannerWsClient.failIfUnauthorized`, which
+# collided with `[Uu]nauthorized` below. retry-core.sh now strips frames from
+# classification (they are identifiers, not messages), so this clause is what
+# keeps real scanner auth failures hard-failing on their own merit.
 # shellcheck disable=SC2034
-_RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|HTTP 403.*rate limit|[Uu]nauthorized|Forbidden|Not authorized|Permission denied|denied: permission|denied: requested access|requested access to the resource is denied|insufficient_scope|manifest unknown|name unknown|repository name not known|Project key .* does not exist|Project .* not found|repository .* not found|! \[remote rejected\]|pre-receive hook declined|fatal: protocol|fatal: bad refspec'
+_RETRY_HARD_FAIL='HTTP 4[0-9][0-9]|Error 4[0-9][0-9] on https://|HTTP 403.*rate limit|[Uu]nauthorized|Forbidden|Not authorized|Permission denied|denied: permission|denied: requested access|requested access to the resource is denied|insufficient_scope|manifest unknown|name unknown|repository name not known|Project key .* does not exist|Project .* not found|repository .* not found|! \[remote rejected\]|pre-receive hook declined|fatal: protocol|fatal: bad refspec'
 
 # Force-retry override: phrasings that match the hard-fail list above but are
 # in fact known-transient infra calls. Checked BEFORE hard-fail (see

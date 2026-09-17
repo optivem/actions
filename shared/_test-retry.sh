@@ -39,10 +39,13 @@ stderr="${rest%%|*}"
 stdout_extra=""
 [[ "$rest" == *"|"* ]] && stdout_extra="${rest#*|}"
 if [[ -n "$stderr" ]]; then
-    printf '%s\n' "$stderr" >&2
+    # %b (not %s) so fixtures can embed `\n` and emit multi-line output —
+    # needed for stack-trace cases, since `read -ra` above stops at the first
+    # real newline and so cannot carry one in the sequence string.
+    printf '%b\n' "$stderr" >&2
 fi
 if [[ -n "$stdout_extra" ]]; then
-    printf '%s\n' "$stdout_extra"
+    printf '%b\n' "$stdout_extra"
 fi
 printf 'fake-stdout-%d\n' "$counter"
 echo $(( counter + 1 )) >"$FAKE_STATE"
@@ -106,6 +109,23 @@ run_case "sonar transient: JS bootstrapper JRE-provisioning 403 → 0 (2 attempt
 
 run_case "sonar transient: axios 503 phrasing → 0 (2 attempts)" \
     '1|AxiosError: Request failed with status code 503;0|' 0 2
+
+# Regression for gh-optivem run 35261501113. The scanner engine reports HTTP
+# failures as a Java stack trace, and `DefaultScannerWsClient.failIfUnauthorized`
+# sits on `DefaultScannerWsClient.call` — the path EVERY scanner web-service
+# call takes. That frame's method name matched `[Uu]nauthorized` in the
+# hard-fail list and beat the genuine `Error 500 on https://` transient, so a
+# routine SonarCloud 500 failed the commit stage after one 40s attempt with
+# zero retries. Classification now ignores frames, so the message decides.
+run_case "sonar transient: scanner-cli 500 under a failIfUnauthorized frame → 0 (2 attempts)" \
+    '1|Caused by: com.sonarsource.scanner.engine.webapi.client.HttpException: Error 500 on https://sonarcloud.io/batch/project.protobuf?key=optivem_gh-optivem : {"errors":[{"msg":"An unexpected error occurred. Please try again later."}]}\n\tat com.sonarsource.scanner.engine.webapi.client.BaseResponse.failIfNotSuccessful(BaseResponse.java:22)\n\tat org.sonar.scanner.http.DefaultScannerWsClient.failIfUnauthorized(DefaultScannerWsClient.java:88)\n\tat org.sonar.scanner.http.DefaultScannerWsClient.call(DefaultScannerWsClient.java:58)\n\t... 89 common frames omitted;0|' 0 2
+
+# Companion to the above: the scanner engine phrases auth failures as
+# `Error 4NN on https://`, which `HTTP 4[0-9][0-9]` does not cover. Before the
+# `Error 4[0-9][0-9] on https://` clause this matched NEITHER list and only
+# failed fast via the same accidental frame match removed above.
+run_case "sonar hard-fail: scanner-cli Error 401 on https:// → 1 attempt" \
+    '1|com.sonarsource.scanner.engine.webapi.client.HttpException: Error 401 on https://sonarcloud.io/batch/project.protobuf?key=optivem_gh-optivem : {"errors":[{"msg":"Insufficient privileges"}]}' 1 1
 
 # stdout-stream classification: the SonarScanner JS bootstrapper logs its
 # failure to stdout, not stderr. The signature must still be detected there.
