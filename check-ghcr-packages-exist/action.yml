@@ -1,5 +1,5 @@
 name: 'Check GHCR Packages Exist'
-description: 'Probes GHCR packages to determine whether a tag exists for each. Uses OCI HEAD /manifests/{tag} — works uniformly for user- and org-owned repos and for public and private packages. Two usage shapes: (1) preflight gate — pass URL-only lines and read the any-of "exist" output; (2) per-image probe — pass "image:tag" lines (mixed per-line tags allowed) and read the keyed "results" output. Definitive only: HTTP 200 → exists=true, HTTP 404 → exists=false. Anything else (401/403, 5xx after retries, network failure, token-exchange failure) is indeterminate and the action exits 1 with an actionable error — see the no-swallow rule in claude/CLAUDE.md.'
+description: 'Probes GHCR packages to determine whether a tag exists for each. Uses OCI HEAD /manifests/{tag} — works uniformly for user- and org-owned repos and for public and private packages. Two usage shapes: (1) preflight gate — pass URL-only lines; for a single image read "exist", but for a multi-image gate read "results" and require no "exists":false entry, because "exist" is any-of and lets a partial publish through; (2) per-image probe — pass "image:tag" lines (mixed per-line tags allowed) and read the keyed "results" output. Definitive only: HTTP 200 → exists=true, HTTP 404 → exists=false. Anything else (401/403, 5xx after retries, network failure, token-exchange failure) is indeterminate and the action exits 1 with an actionable error — see the no-swallow rule in claude/CLAUDE.md.'
 
 inputs:
   image-urls:
@@ -16,7 +16,7 @@ inputs:
 
 outputs:
   exist:
-    description: 'true if any probed package returned HTTP 200 for the probed tag (any-of-published signal); false if every probe returned HTTP 404. Indeterminate cases never reach this output — the action exits 1 instead.'
+    description: 'true if any probed package returned HTTP 200 for the probed tag (any-of-published signal); false if every probe returned HTTP 404. Do not use it to gate on multiple images — use "results" for an all-of check. Indeterminate cases never reach this output — the action exits 1 instead.'
     value: ${{ steps.check.outputs.exist }}
   results:
     description: 'JSON array of {"image": string, "tag": string, "exists": boolean} objects, one entry per input line. "image" is the URL without any ":tag" suffix; "tag" is the effective tag probed (per-line override if given, else the "tag" input default). Preserves input order. Only emitted when every probe was definitive — otherwise the action exits 1.'
