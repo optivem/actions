@@ -33,12 +33,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event.inputs.hotfix_version }}
-          name: 'Hotfix ${{ github.event.inputs.hotfix_version }}'
-          body: |
+      - name: Write release notes
+        id: release-notes
+        env:
+          NOTES: |
             🚨 **Hotfix Release**
 
             This is a hotfix release containing critical bug fixes.
@@ -46,5 +44,15 @@ jobs:
             **Docker Images:**
             - `ghcr.io/myorg/app:${{ github.event.inputs.hotfix_version }}`
             - `ghcr.io/myorg/api:${{ github.event.inputs.hotfix_version }}`
-          draft: false
+        run: |
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          printf '%s\n' "$NOTES" > "$notes_file"
+          echo "notes-file=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: optivem/actions/create-github-release@v1
+        with:
+          tag: ${{ github.event.inputs.hotfix_version }}
+          title: 'Hotfix ${{ github.event.inputs.hotfix_version }}'
+          notes-file: ${{ steps.release-notes.outputs.notes-file }}
           prerelease: true

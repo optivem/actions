@@ -247,7 +247,6 @@ Version pins below are current as of rubric v9 (2026-04-23). Re-validate against
 | `setup-dotnet` (1:1 pass-through) | `actions/setup-dotnet` | `@v5` | Direct call; single `dotnet-version` input maps identically. |
 | `setup-java-gradle` (two-step composite, hardcoded distribution) | `actions/setup-java` + `gradle/actions/setup-gradle` | `@v5` + `@v6` | Inline both steps in the workflow; `distribution: temurin` becomes a caller-visible choice. |
 | `setup-node` (setup + `npm ci` conflated) | `actions/setup-node` + `npm ci` | `@v6` | Keep `cache: 'npm'` + `cache-dependency-path` on `setup-node`; move `npm ci` to a separate caller step. Separates "setup" from "build". |
-| `create-github-release` (thin `gh release create/edit`) | `softprops/action-gh-release` | `@v3` | Idempotent by default when `tag_name` exists; preserves existing assets unless `files:` is set. Input mapping: `tag`→`tag_name`, `title`→`name`, `notes-file`→`body_path`, `is-prerelease`→`prerelease`. Output: consume `steps.<id>.outputs.url`. |
 | `deploy-to-cloud-run` (thin `gcloud run deploy`) | `google-github-actions/deploy-cloudrun` | `@v3` | Google's official action covers all current inputs 1:1 (`service`, `image`, `region`, `project_id`, `env_vars`, `secrets`, sizing flags, `--allow-unauthenticated` via `flags`). Lift the embedded readiness poll (`wait-for-endpoints`) into a separate caller step. |
 
 When auditing, apply this lens to any custom wrapper: does it forward inputs to a mainstream action without adding material logic? If yes, delete. Extend the table above when new mainstream actions subsume further custom wrappers in this repo.
@@ -262,6 +261,7 @@ When auditing, apply this lens to any custom wrapper: does it forward inputs to 
 **Does NOT apply to:**
 
 - Concerns with no maintained mainstream action (e.g. `wait-for-endpoints`, `commit-files` via Contents API with SHA preconditions, org-specific prerelease-retention actions). Pass the "material logic" test → keep.
+- `create-github-release` — reinstated 2026-10-21 after `softprops/action-gh-release@v3` failed a prod-stage with `error finalizing release: HttpError` ×3 → `Too many retries`: it swallows the real HTTP status and leaves an orphaned draft (create-draft-then-finalize). The local action makes one `gh release create` call under `retry_run`, surfaces the real API error, and publishes an existing draft on re-run. That is material logic (retry + error transparency + draft recovery) → keep.
 - Wrappers that exist for a documented, time-bounded reason (migration bridge, deprecation shim). Flag these with an expected removal date and revisit on each audit.
 - Unmaintained "alternatives" (last release >18 months old, open security advisories, single-maintainer with no backup). `convictional/trigger-workflow-and-wait` is the canonical example — do not recommend migration to unmaintained actions (see the "no deprecated tools" rule in repo policy).
 
@@ -349,7 +349,7 @@ Three conceptual tiers. Only the third gets a prefix.
 
   Rationale: "commit status" means the same thing on GitHub, GitLab, Gitea, and Bitbucket, and nothing else in software uses the compound — so prefixing with `github` would falsely narrow the name without adding clarity. "Release" or "workflow" alone is ambiguous across domains, so the prefix earns its keep.
 
-  † `create-github-release` is retained here as a naming-pattern illustration only. This repo no longer ships it as a local action — per §1.8 it has been replaced by direct calls to `softprops/action-gh-release@v2`. The name remains the canonical example of a Tier 3 concept that needs the `github` segment.
+  † `create-github-release` is retained here as a naming-pattern illustration only. It is shipped as a local action (see the §1.8 exception for why it is not replaced by `softprops/action-gh-release`). The name is also the canonical example of a Tier 3 concept that needs the `github` segment.
 
   *Porting caveat for Tier 3:* a Tier 3 concept may not have identical shape on other platforms. `create-github-release` ports to an Azure DevOps "Release" but Azure Releases model deployment stages, which GitHub Releases do not; `has-update-since-last-github-workflow-run` ports to GitLab as pipeline-runs, which contain jobs rather than runs. Treat Tier 3 renames as **"start here", not "done"** — the rename is the first step; inputs/outputs may also shift when the target concept has a different shape.
 
@@ -529,7 +529,7 @@ The orthogonal concerns (maps onto Twelve-Factor Factor V — build / release / 
 | **Artifact construction** | build | Docker images / npm packages / Maven JARs / NuGet / zip bundles | For Docker: `docker/build-push-action@v6` (see §1.6 — build/tag/push collapse into one Marketplace step). For npm/Maven: dedicated primitives per ecosystem. |
 | **Artifact release tagging** | release | `docker tag :v{version}` / `npm publish --tag` / Maven release plugin | For Docker: `docker/metadata-action@v5` feeding `docker/build-push-action@v6` (§1.6). For other ecosystems: future `tag-npm-package`, `publish-maven-artifact`. |
 | **Git tag creation** | release | `git tag` + `git push` / Contents API / `gh release create` (coupled) | `publish-tag`, `validate-tag-exists` |
-| **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `softprops/action-gh-release@v2` (GitHub) — per §1.8 the repo no longer ships a local `create-github-release`. |
+| **Release record** | release | GitHub Release / GitLab Release / Bitbucket Downloads / none | `create-github-release` (GitHub) — local action, kept under the §1.8 exception. |
 | **Commit of generated files** | release | `git push` / Contents API / merge-request PR | `commit-files` |
 | **Status / approval signalling** | release | GitHub commit statuses / GitLab commit statuses / Slack messages / email | `create-commit-status` |
 
@@ -588,7 +588,7 @@ A concrete ordering for a Docker + GitHub release:
 ```
 docker/build-push-action@v6             # 1. artifact exists but nothing references it yet
 publish-tag                             # 2. tag points at an already-published image
-softprops/action-gh-release@v2          # 3. release references an already-existing tag
+create-github-release                   # 3. release references an already-existing tag
 notify / announce                       # 4. only after the release record is real
 ```
 
@@ -611,10 +611,10 @@ Actions that silently succeed on a genuine no-op are fine; actions that *fail* o
 (external)  docker/build-push-action@v6        # concern: artifact type & push  (see §1.6)
 actions/
   publish-tag/action.yml                       # concern: git tag creation
-(external)  softprops/action-gh-release@v2     # concern: release record        (see §1.8)
+(local)     create-github-release              # concern: release record        (see §1.8)
 ```
 
-Image build + tag + push is owned by the Marketplace composite, not a local primitive (§1.6). Release-record creation is owned by `softprops/action-gh-release` per §1.8, not a local `create-github-release` wrapper. The remaining local primitive (`publish-tag`) accepts only the inputs for its own concern (`tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
+Image build + tag + push is owned by the Marketplace composite, not a local primitive (§1.6). Release-record creation is owned by the local `create-github-release` action (kept under the §1.8 exception). The remaining local primitive (`publish-tag`) accepts only the inputs for its own concern (`tag` and `sha`, not `image-url` or `release-notes`). The caller composes them in reversibility order:
 
 ```yaml
 jobs:
@@ -635,7 +635,7 @@ jobs:
         with: { push: true, tags: ${{ steps.meta.outputs.tags }}, provenance: mode=max, sbom: true }
       - uses: optivem/actions/publish-tag@v1     # 2. movable
         with: { tag: v${{ inputs.version }}, sha: ${{ github.sha }} }
-      - uses: softprops/action-gh-release@v2     # 3. user-visible (per §1.8 — no local wrapper)
+      - uses: optivem/actions/create-github-release@v1   # 3. user-visible (§1.8 exception)
         with:
           tag_name: v${{ inputs.version }}
           body: ${{ inputs.notes }}

@@ -1,5 +1,5 @@
 name: 'Generate Release Notes'
-description: 'Generates a release title and a markdown notes file for the release being cut. Title shape is `<title-prefix><release-version><title-suffix>`; defaults compose `🚀 <version> PROD` for production. Pass non-default `title-prefix` / `title-suffix` for QA / signoff / acceptance variants. The optional `prerelease-version` input adds a `Promoted From:` line to the notes body — leave empty for non-promotion releases. Writes the notes file to a `mktemp` path on the runner filesystem; the path is returned as an output for the caller to pass to `softprops/action-gh-release` or equivalent.'
+description: 'Generates a release title and a markdown notes file for the release being cut. Title shape is `<title-prefix><release-version><title-suffix>`; defaults compose `🚀 <version> PROD` for production. Pass non-default `title-prefix` / `title-suffix` for QA / signoff / acceptance variants. The optional `prerelease-version` input adds a `Promoted From:` line to the notes body — leave empty for non-promotion releases. Writes the notes file to a `mktemp` path on the runner filesystem; the path is returned as an output for the caller to pass to `create-github-release`.'
 
 inputs:
   prerelease-version:

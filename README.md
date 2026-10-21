@@ -49,6 +49,7 @@ Four lint checks enforce the conventions (all run by `.github/workflows/commit-s
 | [compose-release-version](#compose-release-version) | • `prerelease-version` | • `version` |
 | [compose-tags](#compose-tags) | • `versions`<br>• `template` | • `tags` |
 | [create-commit-status](#create-commit-status) | • `ref`<br>• `context`<br>• `state`<br>• `description`<br>• `target-url`<br>• `token` | — |
+| [create-github-release](#create-github-release) | • `tag`<br>• `title`<br>• `notes-file`<br>• `prerelease`<br>• `generate-notes`<br>• `repository`<br>• `token` | — |
 | [deploy-docker-compose](#deploy-docker-compose) | • `environment`<br>• `version`<br>• `image-urls`<br>• `service-names`<br>• `compose-file`<br>• `working-directory` | — |
 | [evaluate-run-gate](#evaluate-run-gate) | • `skip-conditions` | • `should-run`<br>• `skip-reason` |
 | [format-artifact-list](#format-artifact-list) | • `artifacts` | • `formatted` |
@@ -399,6 +400,22 @@ Resolves `ref` (SHA, branch, or tag) to a commit SHA via `gh api repos/{repo}/co
 | `target-url` | no | `` | URL the status links to. Empty = link to the current workflow run. |
 | `token` | no | `${{ github.token }}` | GitHub token used for API calls. Needs `statuses:write` + `contents:read` (for ref resolution). |
 
+### create-github-release
+
+Creates and publishes a GitHub Release for a tag (creating the tag at the default branch HEAD if it does not exist) in a single API call, so failures surface the real HTTP error and leave no orphaned draft. Re-run safe — if a release for the tag already exists (including a draft), it is published and its title/notes updated instead.
+
+**Inputs**
+
+| Name | Required | Default | Description |
+|---|---|---|---|
+| `tag` | yes | — | Tag name of the release (e.g., `v1.0.3`) |
+| `title` | yes | — | Release title |
+| `notes-file` | yes | — | Path to a markdown file with the release notes |
+| `prerelease` | no | `false` | Mark the release as a prerelease (`true`/`false`) |
+| `generate-notes` | no | `false` | Append GitHub auto-generated notes below the notes file (`true`/`false`); only applied on create |
+| `repository` | no | `${{ github.repository }}` | Repository in `owner/repo` format |
+| `token` | no | `${{ github.token }}` | Token with `contents:write` on the repository |
+
 ### deploy-docker-compose
 
 Runs `docker compose up -d` (optionally with `-f <compose-file>`) from a working directory — the local-deployment stepping stone from the Farley deploy vocabulary. The `environment` and `version` inputs are logged for operator visibility. Each `(image-urls[i], service-names[i])` pair is exported as `SYSTEM_IMAGE_<UPPER(name)>=<url>` so compose files can SHA-pin via `${SYSTEM_IMAGE_<NAME>:-...}` substitution; counts must match exactly or the action fails loud. Pair with `wait-for-endpoints` to verify readiness after deployment.
@@ -449,7 +466,7 @@ Pure string transform. Splits a newline-separated list of identifiers, trims whi
 
 ### generate-release-notes
 
-Generates a release title and a markdown notes file (written to a `mktemp` path on the runner filesystem) for the release being cut. Title shape is `<title-prefix><release-version><title-suffix>`; defaults compose `🚀 <version> PROD` for production releases — pass non-default `title-prefix` / `title-suffix` for QA / signoff / acceptance variants. The optional `prerelease-version` input adds a `Promoted From:` line to the notes body; leave empty for non-promotion releases. Returns both the title and the notes-file path so the caller can pass them to `softprops/action-gh-release` or equivalent.
+Generates a release title and a markdown notes file (written to a `mktemp` path on the runner filesystem) for the release being cut. Title shape is `<title-prefix><release-version><title-suffix>`; defaults compose `🚀 <version> PROD` for production releases — pass non-default `title-prefix` / `title-suffix` for QA / signoff / acceptance variants. The optional `prerelease-version` input adds a `Promoted From:` line to the notes body; leave empty for non-promotion releases. Returns both the title and the notes-file path so the caller can pass them to `create-github-release`.
 
 **Inputs**
 

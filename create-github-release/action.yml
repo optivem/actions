@@ -1,0 +1,41 @@
+name: 'Create GitHub Release'
+description: 'Creates and publishes a GitHub Release for a tag (creating the tag at the default branch HEAD if it does not exist) in a single API call, so failures surface the real HTTP error and leave no orphaned draft. Re-run safe — if a release for the tag already exists (including a draft), it is published and its title/notes updated instead.'
+inputs:
+  tag:
+    description: 'Tag name of the release (e.g., v1.0.3)'
+    required: true
+  title:
+    description: 'Release title'
+    required: true
+  notes-file:
+    description: 'Path to a markdown file with the release notes'
+    required: true
+  prerelease:
+    description: 'Mark the release as a prerelease (true/false)'
+    required: false
+    default: 'false'
+  generate-notes:
+    description: 'Append GitHub auto-generated notes (changes since the previous release) below the notes file (true/false). Only applied when the release is created.'
+    required: false
+    default: 'false'
+  repository:
+    description: 'Repository in owner/repo format. Defaults to the current repository.'
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: 'Token with contents:write on the repository. Defaults to the workflow-scoped GITHUB_TOKEN.'
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TAG: ${{ inputs.tag }}
+        TITLE: ${{ inputs.title }}
+        NOTES_FILE: ${{ inputs.notes-file }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        GENERATE_NOTES: ${{ inputs.generate-notes }}
+        REPO: ${{ inputs.repository }}
+      run: bash "$GITHUB_ACTION_PATH/create-release.sh"
