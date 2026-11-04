@@ -1,6 +1,6 @@
 # optivem/actions
 
-[![commit-stage](https://github.com/optivem/actions/actions/workflows/commit-stage.yml/badge.svg)](https://github.com/optivem/actions/actions/workflows/commit-stage.yml)
+[![commit-stage](https://github.com/optivem/actions/actions/workflows/commit-stage.yml/badge.svg?event=push)](https://github.com/optivem/actions/actions/workflows/commit-stage.yml)
 
 ## Versioning policy — stay on `@v1`
 
