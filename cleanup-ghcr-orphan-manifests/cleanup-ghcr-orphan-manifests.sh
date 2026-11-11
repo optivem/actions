@@ -91,7 +91,7 @@ for package in "${package_list[@]}"; do
 
   # Fetch versions for this package.
   versions_err=$(mktemp)
-  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>"$versions_err"); then
+  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/${package//\//%2F}/versions" --paginate 2>"$versions_err"); then
     # Fail hard: a skipped package would silently leave its orphans behind.
     cat "$versions_err" >&2
     if grep -q 'HTTP 404' "$versions_err"; then
@@ -158,7 +158,7 @@ for package in "${package_list[@]}"; do
     fi
 
     wait_for_rate_limit_budget
-    if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$untagged_id" >/dev/null; then
+    if retry_run gh api --method DELETE "/orgs/$owner/packages/container/${package//\//%2F}/versions/$untagged_id" >/dev/null; then
       echo "  Deleted orphan manifest: $untagged_digest (id $untagged_id)"
       deleted_count=$((deleted_count + 1))
     else

@@ -106,7 +106,7 @@ fi
 for package in "${package_list[@]}"; do
   echo "Fetching Docker versions for package: $package..."
   versions_err=$(mktemp)
-  if versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>"$versions_err"); then
+  if versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/${package//\//%2F}/versions" --paginate 2>"$versions_err"); then
     cat "$versions_err" >&2
     rm -f "$versions_err"
     docker_versions_json[$package]=$(echo "$versions_raw" | jq -s 'add // []')
@@ -242,7 +242,7 @@ remove_docker_image_tag() {
   fi
 
   wait_for_rate_limit_budget
-  if retry_run gh api --method DELETE "/orgs/$owner/packages/container/$package/versions/$version_id" >/dev/null; then
+  if retry_run gh api --method DELETE "/orgs/$owner/packages/container/${package//\//%2F}/versions/$version_id" >/dev/null; then
     echo "  Deleted Docker image tag: $package:$tag"
     deleted_count=$((deleted_count + 1))
   else
