@@ -34,6 +34,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 # shellcheck source=../shared/retry.sh
 source "$SCRIPT_DIR/../shared/retry.sh"
 
+# jq.exe under Windows Git Bash ends lines with CRLF; strip the \r so local
+# runs parse the same values as CI (a stray \r corrupts digests and URLs).
+jq() { command jq "$@" | tr -d '\r'; }
+
 : "${KEEP_COUNT:=3}"
 : "${PROTECTED_ENVIRONMENTS:=*-production,production}"
 : "${DELETE_DELAY_SECONDS:=10}"
@@ -67,12 +71,22 @@ is_protected() {
 
 wait_for_rate_limit_budget() {
   (( RATE_LIMIT_THRESHOLD <= 0 )) && return
-  local remaining reset now wait_secs
-  remaining=$(gh api rate_limit --jq '.resources.core.remaining' 2>/dev/null || echo "")
-  [[ -z "$remaining" ]] && return
+  local rl rl_err remaining reset now wait_secs
+  # Best-effort: a failed probe must not abort the cleanup, but it must say why
+  # the budget check was skipped instead of failing silently.
+  rl_err=$(mktemp)
+  if ! rl=$(gh api rate_limit --jq '.resources.core | "\(.remaining) \(.reset)"' 2>"$rl_err"); then
+    echo "::warning::Rate-limit probe failed; continuing without the budget check: $(cat "$rl_err")"
+    rm -f "$rl_err"
+    return
+  fi
+  rm -f "$rl_err"
+  read -r remaining reset <<<"$rl"
+  if ! [[ "$remaining" =~ ^[0-9]+$ && "$reset" =~ ^[0-9]+$ ]]; then
+    echo "::warning::Rate-limit probe returned unexpected output '$rl'; continuing without the budget check"
+    return
+  fi
   (( remaining >= RATE_LIMIT_THRESHOLD )) && return
-  reset=$(gh api rate_limit --jq '.resources.core.reset' 2>/dev/null || echo "")
-  [[ -z "$reset" ]] && return
   now=$(date +%s)
   wait_secs=$((reset - now + 5))
   (( wait_secs <= 0 )) && return
