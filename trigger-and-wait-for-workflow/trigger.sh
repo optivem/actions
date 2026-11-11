@@ -134,12 +134,30 @@ if [ -z "$run_id" ]; then
 fi
 
 # --- Diagnostics: did $REF move between resolve and dispatch? ---
+# Read-after-write lag: straight after dispatch, GET /runs/{id} for the id
+# the dispatch API just returned can 404 for a few seconds before GitHub
+# makes the run visible (shop meta-prerelease-stage run 43009532540).
+# retry_run treats 4xx as hard-fail, so poll here on HTTP 404 ONLY —
+# every 3s, up to 60s — then fail loudly. Any other error fails at once.
 run_err=$(mktemp)
-if ! run_sha=$(retry_run gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq .head_sha 2>"$run_err"); then
-  echo "::error::Could not read dispatched run $run_id of $WORKFLOW: $(cat "$run_err")"
-  rm -f "$run_err"
-  exit 1
-fi
+read_deadline=$(( $(date +%s) + 60 ))
+while :; do
+  if run_sha=$(retry_run gh api "repos/$REPOSITORY/actions/runs/$run_id" --jq .head_sha 2>"$run_err"); then
+    break
+  fi
+  if ! grep -q 'HTTP 404' "$run_err"; then
+    echo "::error::Could not read dispatched run $run_id of $WORKFLOW: $(cat "$run_err")"
+    rm -f "$run_err"
+    exit 1
+  fi
+  if [ "$(date +%s)" -ge "$read_deadline" ]; then
+    echo "::error::Dispatched run $run_id of $WORKFLOW in $REPOSITORY is still HTTP 404 after 60s. The dispatch API returned this run id but GitHub never made the run visible; check $REPOSITORY actions for run $run_id. Last error: $(cat "$run_err")"
+    rm -f "$run_err"
+    exit 1
+  fi
+  echo "::notice::Dispatched run $run_id of $WORKFLOW not visible yet (HTTP 404); retrying in 3s..."
+  sleep 3
+done
 rm -f "$run_err"
 if [ "$run_sha" != "$ref_sha" ]; then
   echo "::warning::$REF moved during dispatch: $WORKFLOW run $run_id is on ${run_sha:0:8}, not ${ref_sha:0:8} (resolved before dispatch). Proceeding with the run that was created."
