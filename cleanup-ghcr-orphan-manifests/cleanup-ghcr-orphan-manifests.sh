@@ -90,10 +90,20 @@ for package in "${package_list[@]}"; do
   echo "Package $package:"
 
   # Fetch versions for this package.
-  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate); then
-    echo "  Warning: Could not list versions for package $package; skipping"
-    continue
+  versions_err=$(mktemp)
+  if ! versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>"$versions_err"); then
+    # Fail hard: a skipped package would silently leave its orphans behind.
+    cat "$versions_err" >&2
+    if grep -q 'HTTP 404' "$versions_err"; then
+      echo "::error::Package $package not found in GHCR ($owner) — check container-packages"
+    else
+      echo "::error::Could not list versions for GHCR package $package ($owner) — check the token has read:packages and the package grants this repo access"
+    fi
+    rm -f "$versions_err"
+    exit 1
   fi
+  cat "$versions_err" >&2
+  rm -f "$versions_err"
   versions=$(echo "$versions_raw" | jq -s 'add // []')
   vcount=$(jq 'length' <<<"$versions")
   echo "  Versions: $vcount"

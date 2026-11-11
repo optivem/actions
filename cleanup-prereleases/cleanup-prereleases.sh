@@ -105,13 +105,23 @@ fi
 
 for package in "${package_list[@]}"; do
   echo "Fetching Docker versions for package: $package..."
-  if versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate); then
+  versions_err=$(mktemp)
+  if versions_raw=$(retry_run gh api "/orgs/$owner/packages/container/$package/versions" --paginate 2>"$versions_err"); then
+    cat "$versions_err" >&2
+    rm -f "$versions_err"
     docker_versions_json[$package]=$(echo "$versions_raw" | jq -s 'add // []')
     vcount=$(jq 'length' <<<"${docker_versions_json[$package]}")
     echo "  Found $vcount versions"
   else
-    docker_versions_json[$package]='[]'
-    echo "  Warning: Could not list versions for package $package"
+    # Fail hard: a skipped package would silently leave its Docker tags behind.
+    cat "$versions_err" >&2
+    if grep -q 'HTTP 404' "$versions_err"; then
+      echo "::error::Package $package not found in GHCR ($owner) — check container-packages"
+    else
+      echo "::error::Could not list versions for GHCR package $package ($owner) — check the token has read:packages and the package grants this repo access"
+    fi
+    rm -f "$versions_err"
+    exit 1
   fi
 done
 
@@ -250,6 +260,10 @@ get_tag_prefix() {
   fi
 }
 
+# Placeholder key for unprefixed tags in prefix-keyed associative arrays.
+# Not a valid prefix (get_tag_prefix only returns [a-z][a-z0-9-]*).
+NO_PREFIX_KEY="__none__"
+
 # ── Step 3: Categorize git tags (local, no API calls) ────────────────
 echo "Categorizing tags..."
 
@@ -373,16 +387,21 @@ for version in "${sorted_prerelease_versions[@]}"; do
     continue
   fi
 
-  # Group RCs by pipeline prefix.
+  # Group RCs by pipeline prefix. Unprefixed tags (e.g. "v1.0.0-rc.1") have an
+  # empty prefix, and bash rejects "" as an associative-array subscript
+  # ("bad array subscript"), so they are stored under a placeholder key.
   declare -A rcs_by_prefix=()
   for rc in $rc_tags_str; do
     prefix=$(get_tag_prefix "$rc")
-    existing="${rcs_by_prefix[$prefix]:-}"
-    rcs_by_prefix[$prefix]="${existing:+$existing }$rc"
+    prefix_key="${prefix:-$NO_PREFIX_KEY}"
+    existing="${rcs_by_prefix[$prefix_key]:-}"
+    rcs_by_prefix[$prefix_key]="${existing:+$existing }$rc"
   done
 
-  for prefix in "${!rcs_by_prefix[@]}"; do
-    prefix_rcs_str="${rcs_by_prefix[$prefix]}"
+  for prefix_key in "${!rcs_by_prefix[@]}"; do
+    prefix_rcs_str="${rcs_by_prefix[$prefix_key]}"
+    prefix="$prefix_key"
+    [[ "$prefix_key" == "$NO_PREFIX_KEY" ]] && prefix=""
     prefix_rc_count=$(echo "$prefix_rcs_str" | wc -w)
     if (( prefix_rc_count <= 1 )); then
       continue
