@@ -111,30 +111,45 @@ for package in "${package_list[@]}"; do
 
   # Exchange the GH token for a registry pull token (works for both public
   # and private packages on GHCR).
-  reg_token=$(curl -fsS -u "$owner:$GH_TOKEN" \
-    "https://ghcr.io/token?scope=repository:$pkg_path:pull&service=ghcr.io" 2>/dev/null \
-    | jq -r '.token // empty')
+  # Fail hard on any failure: without a token no manifest can be inspected.
+  if ! token_json=$(retry_run curl -fsS -u "$owner:$GH_TOKEN" \
+    "https://ghcr.io/token?scope=repository:$pkg_path:pull&service=ghcr.io"); then
+    echo "::error::Could not obtain a GHCR registry token for $pkg_path — check the token has read:packages and the package grants this repo access"
+    exit 1
+  fi
+  reg_token=$(jq -r '.token // empty' <<<"$token_json")
   if [[ -z "$reg_token" ]]; then
-    echo "  Warning: could not obtain registry token for $pkg_path; skipping orphan cleanup"
-    continue
+    echo "::error::GHCR token exchange for $pkg_path returned no token (malformed response)"
+    exit 1
   fi
 
   # For each tagged version, fetch its manifest. If the manifest is an
   # OCI/Docker index (manifest list, used for multi-arch and for SBOM /
   # provenance attestations), collect the children's digests — these are
   # *referenced* by an active tag and MUST NOT be deleted.
+  #
+  # Fail hard if any manifest can't be fetched or parsed: treating a failed
+  # fetch as "no children" would leave live children unprotected, and the
+  # delete loop below would remove them, breaking the tagged image.
   declare -A protected_digests=()
   tagged_count=0
   while IFS= read -r tagged_digest; do
     [[ -z "$tagged_digest" ]] && continue
     tagged_count=$((tagged_count + 1))
-    while IFS= read -r child; do
-      [[ -n "$child" ]] && protected_digests["$child"]=1
-    done < <(curl -fsS \
+    if ! manifest_json=$(retry_run curl -fsS \
       -H "Authorization: Bearer $reg_token" \
       -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json" \
-      "https://ghcr.io/v2/$pkg_path/manifests/$tagged_digest" 2>/dev/null \
-      | jq -r '.manifests[]?.digest // empty' 2>/dev/null)
+      "https://ghcr.io/v2/$pkg_path/manifests/$tagged_digest"); then
+      echo "::error::Could not fetch manifest $pkg_path@$tagged_digest — aborting so its child manifests aren't deleted as orphans"
+      exit 1
+    fi
+    if ! children=$(jq -r '.manifests[]?.digest // empty' <<<"$manifest_json"); then
+      echo "::error::Manifest $pkg_path@$tagged_digest isn't valid JSON — aborting so its child manifests aren't deleted as orphans"
+      exit 1
+    fi
+    while IFS= read -r child; do
+      [[ -n "$child" ]] && protected_digests["$child"]=1
+    done <<<"$children"
   done < <(jq -r '.[] | select((.metadata.container.tags | length) > 0) | .name' <<<"$versions")
 
   echo "  Tagged versions inspected: $tagged_count, protected child digests: ${#protected_digests[@]}"
