@@ -5,9 +5,22 @@ set -euo pipefail
 source "$GITHUB_ACTION_PATH/../shared/retry.sh"
 
 # --- Rate limit check (skip retry wrapper — local probe) ---
-remaining=$(gh api rate_limit --jq ".resources.core.remaining" 2>/dev/null || echo "999")
-if [ "$remaining" -lt "$RATE_LIMIT_THRESHOLD" ]; then
-  reset=$(gh api rate_limit --jq ".resources.core.reset" 2>/dev/null || echo "0")
+# Advisory only: a failed probe must not fail the job, but it must say why the
+# budget check was skipped instead of hiding the error.
+rl_err=$(mktemp)
+if ! rl=$(gh api rate_limit --jq '.resources.core | "\(.remaining) \(.reset)"' 2>"$rl_err"); then
+  echo "::warning::Rate-limit probe failed; continuing without the budget check: $(cat "$rl_err")"
+  rl=""
+fi
+rm -f "$rl_err"
+remaining=""
+reset=""
+if [ -n "$rl" ]; then
+  read -r remaining reset <<<"$rl"
+fi
+if [ -n "$rl" ] && ! [[ "$remaining" =~ ^[0-9]+$ && "$reset" =~ ^[0-9]+$ ]]; then
+  echo "::warning::Rate-limit probe returned unexpected output '$rl'; continuing without the budget check."
+elif [ -n "$rl" ] && [ "$remaining" -lt "$RATE_LIMIT_THRESHOLD" ]; then
   wait=$(( reset - $(date +%s) + 5 ))
   if [ "$wait" -gt 0 ]; then
     echo "::warning::Rate limit low ($remaining remaining). Waiting ${wait}s for reset..."
